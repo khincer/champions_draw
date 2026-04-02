@@ -20,7 +20,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-n+qve@erc12_y91wk8+8rw(g^j(hnl@jjagmrjm1lt3vs_-j-p'
+SECRET_KEY = '----------------------'
+
+API_URL = 'https://v3.football.api-sports.io'
+API_KEY = '-----------------------'
+TIMEOUT = 10  # seconds
+LEAGUE_ID = 2  # UEFA Champions League
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True

@@ -1,0 +1,705 @@
+{
+  "season": {
+    "name": "2025-26",
+    "competition": "UCL",
+    "api_football_league_id": 2,
+    "api_football_season": 2025
+  },
+  "metadata": {
+    "provider": "api-football",
+    "generated_at": "2026-04-02T00:09:26.294950+00:00",
+    "team_count": 36,
+    "resolved_count": 34,
+    "unresolved_count": 2,
+    "unresolved_teams": [
+      "Bodo/Glimt",
+      "Union SG"
+    ]
+  },
+  "entries": [
+    {
+      "rank": 1,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Arsenal",
+        "short_name": "ARS",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 42,
+        "api_football_name": "Arsenal",
+        "api_football_logo": "https://media.api-sports.io/football/teams/42.png",
+        "uefa_reference_name": "Arsenal"
+      },
+      "uefa_club_coefficient": "98.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 2,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Bayern München",
+        "short_name": "BAY",
+        "association": {
+          "name": "Germany",
+          "code": "GER"
+        },
+        "api_football_id": 157,
+        "api_football_name": "Bayern München",
+        "api_football_logo": "https://media.api-sports.io/football/teams/157.png",
+        "uefa_reference_name": "Bayern Munchen"
+      },
+      "uefa_club_coefficient": "135.25",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 3,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Liverpool",
+        "short_name": "LIV",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 40,
+        "api_football_name": "Liverpool",
+        "api_football_logo": "https://media.api-sports.io/football/teams/40.png",
+        "uefa_reference_name": "Liverpool"
+      },
+      "uefa_club_coefficient": "125.5",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 4,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Tottenham",
+        "short_name": "TOT",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 47,
+        "api_football_name": "Tottenham",
+        "api_football_logo": "https://media.api-sports.io/football/teams/47.png",
+        "uefa_reference_name": "Tottenham"
+      },
+      "uefa_club_coefficient": "70.25",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 5,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Barcelona",
+        "short_name": "BAR",
+        "association": {
+          "name": "Spain",
+          "code": "ESP"
+        },
+        "api_football_id": 529,
+        "api_football_name": "Barcelona",
+        "api_football_logo": "https://media.api-sports.io/football/teams/529.png",
+        "uefa_reference_name": "Barcelona"
+      },
+      "uefa_club_coefficient": "103.25",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 6,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Chelsea",
+        "short_name": "CHE",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 49,
+        "api_football_name": "Chelsea",
+        "api_football_logo": "https://media.api-sports.io/football/teams/49.png",
+        "uefa_reference_name": "Chelsea"
+      },
+      "uefa_club_coefficient": "109.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 7,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Sporting CP",
+        "short_name": "SPO",
+        "association": {
+          "name": "Portugal",
+          "code": "POR"
+        },
+        "api_football_id": 228,
+        "api_football_name": "Sporting CP",
+        "api_football_logo": "https://media.api-sports.io/football/teams/228.png",
+        "uefa_reference_name": "Sporting CP"
+      },
+      "uefa_club_coefficient": "59.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 8,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Manchester City",
+        "short_name": "MCI",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 50,
+        "api_football_name": "Manchester City",
+        "api_football_logo": "https://media.api-sports.io/football/teams/50.png",
+        "uefa_reference_name": "Manchester City"
+      },
+      "uefa_club_coefficient": "137.75",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 9,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Real Madrid",
+        "short_name": "REA",
+        "association": {
+          "name": "Spain",
+          "code": "ESP"
+        },
+        "api_football_id": 541,
+        "api_football_name": "Real Madrid",
+        "api_football_logo": "https://media.api-sports.io/football/teams/541.png",
+        "uefa_reference_name": "Real Madrid"
+      },
+      "uefa_club_coefficient": "143.5",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 10,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Inter",
+        "short_name": "INT",
+        "association": {
+          "name": "Italy",
+          "code": "ITA"
+        },
+        "api_football_id": 505,
+        "api_football_name": "Inter",
+        "api_football_logo": "https://media.api-sports.io/football/teams/505.png",
+        "uefa_reference_name": "Inter"
+      },
+      "uefa_club_coefficient": "116.25",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 11,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Paris Saint Germain",
+        "short_name": "PAR",
+        "association": {
+          "name": "France",
+          "code": "FRA"
+        },
+        "api_football_id": 85,
+        "api_football_name": "Paris Saint Germain",
+        "api_football_logo": "https://media.api-sports.io/football/teams/85.png",
+        "uefa_reference_name": "Paris Saint Germain"
+      },
+      "uefa_club_coefficient": "118.5",
+      "is_title_holder": true,
+      "qualified_via": "TITLE_HOLDER"
+    },
+    {
+      "rank": 12,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Newcastle",
+        "short_name": "NEW",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 34,
+        "api_football_name": "Newcastle",
+        "api_football_logo": "https://media.api-sports.io/football/teams/34.png",
+        "uefa_reference_name": "Newcastle"
+      },
+      "uefa_club_coefficient": "23.039",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 13,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Juventus",
+        "short_name": "JUV",
+        "association": {
+          "name": "Italy",
+          "code": "ITA"
+        },
+        "api_football_id": 496,
+        "api_football_name": "Juventus",
+        "api_football_logo": "https://media.api-sports.io/football/teams/496.png",
+        "uefa_reference_name": "Juventus"
+      },
+      "uefa_club_coefficient": "74.25",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 14,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Atletico Madrid",
+        "short_name": "MAD",
+        "association": {
+          "name": "Spain",
+          "code": "ESP"
+        },
+        "api_football_id": 530,
+        "api_football_name": "Atletico Madrid",
+        "api_football_logo": "https://media.api-sports.io/football/teams/530.png",
+        "uefa_reference_name": "Atletico Madrid"
+      },
+      "uefa_club_coefficient": "93.5",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 15,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Atalanta",
+        "short_name": "ATA",
+        "association": {
+          "name": "Italy",
+          "code": "ITA"
+        },
+        "api_football_id": 499,
+        "api_football_name": "Atalanta",
+        "api_football_logo": "https://media.api-sports.io/football/teams/499.png",
+        "uefa_reference_name": "Atalanta"
+      },
+      "uefa_club_coefficient": "82.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 16,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Bayer Leverkusen",
+        "short_name": "BAY",
+        "association": {
+          "name": "Germany",
+          "code": "GER"
+        },
+        "api_football_id": 168,
+        "api_football_name": "Bayer Leverkusen",
+        "api_football_logo": "https://media.api-sports.io/football/teams/168.png",
+        "uefa_reference_name": "Bayer Leverkusen"
+      },
+      "uefa_club_coefficient": "95.25",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 17,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Borussia Dortmund",
+        "short_name": "DOR",
+        "association": {
+          "name": "Germany",
+          "code": "GER"
+        },
+        "api_football_id": 165,
+        "api_football_name": "Borussia Dortmund",
+        "api_football_logo": "https://media.api-sports.io/football/teams/165.png",
+        "uefa_reference_name": "Borussia Dortmund"
+      },
+      "uefa_club_coefficient": "106.75",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 18,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Olympiakos",
+        "short_name": "OLY",
+        "association": {
+          "name": "Cyprus",
+          "code": "GRE"
+        },
+        "api_football_id": 3415,
+        "api_football_name": "Olympiakos",
+        "api_football_logo": "https://media.api-sports.io/football/teams/3415.png",
+        "uefa_reference_name": "Olympiacos"
+      },
+      "uefa_club_coefficient": "56.5",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 19,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Club Brugge KV",
+        "short_name": "CLU",
+        "association": {
+          "name": "Belgium",
+          "code": "BEL"
+        },
+        "api_football_id": 569,
+        "api_football_name": "Club Brugge KV",
+        "api_football_logo": "https://media.api-sports.io/football/teams/569.png",
+        "uefa_reference_name": "Club Brugge"
+      },
+      "uefa_club_coefficient": "71.75",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 20,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Galatasaray",
+        "short_name": "GAL",
+        "association": {
+          "name": "Turkey",
+          "code": "TUR"
+        },
+        "api_football_id": 645,
+        "api_football_name": "Galatasaray",
+        "api_football_logo": "https://media.api-sports.io/football/teams/645.png",
+        "uefa_reference_name": "Galatasaray"
+      },
+      "uefa_club_coefficient": "38.25",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 21,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Monaco",
+        "short_name": "MON",
+        "association": {
+          "name": "France",
+          "code": "FRA"
+        },
+        "api_football_id": 91,
+        "api_football_name": "Monaco",
+        "api_football_logo": "https://media.api-sports.io/football/teams/91.png",
+        "uefa_reference_name": "Monaco"
+      },
+      "uefa_club_coefficient": "41.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 22,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Qarabag",
+        "short_name": "KAR",
+        "association": {
+          "name": "Azerbaijan",
+          "code": "AZE"
+        },
+        "api_football_id": 556,
+        "api_football_name": "Qarabag",
+        "api_football_logo": "https://media.api-sports.io/football/teams/556.png",
+        "uefa_reference_name": "Qarabag"
+      },
+      "uefa_club_coefficient": "32.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 23,
+      "resolution_status": "unresolved",
+      "team": {
+        "name": "Bodo/Glimt",
+        "short_name": "BOD",
+        "association": {
+          "name": "Norway",
+          "code": "NOR"
+        },
+        "api_football_id": null,
+        "api_football_name": null,
+        "api_football_logo": null,
+        "uefa_reference_name": "Bodo/Glimt"
+      },
+      "uefa_club_coefficient": "49.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 24,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Benfica",
+        "short_name": "BEN",
+        "association": {
+          "name": "Portugal",
+          "code": "POR"
+        },
+        "api_football_id": 211,
+        "api_football_name": "Benfica",
+        "api_football_logo": "https://media.api-sports.io/football/teams/211.png",
+        "uefa_reference_name": "Benfica"
+      },
+      "uefa_club_coefficient": "87.75",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 25,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Marseille",
+        "short_name": "MAR",
+        "association": {
+          "name": "France",
+          "code": "FRA"
+        },
+        "api_football_id": 81,
+        "api_football_name": "Marseille",
+        "api_football_logo": "https://media.api-sports.io/football/teams/81.png",
+        "uefa_reference_name": "Marseille"
+      },
+      "uefa_club_coefficient": "48.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 26,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Pafos",
+        "short_name": "PAP",
+        "association": {
+          "name": "Cyprus",
+          "code": "CYP"
+        },
+        "api_football_id": 3403,
+        "api_football_name": "Pafos",
+        "api_football_logo": "https://media.api-sports.io/football/teams/3403.png",
+        "uefa_reference_name": "Pafos"
+      },
+      "uefa_club_coefficient": "11.125",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 27,
+      "resolution_status": "unresolved",
+      "team": {
+        "name": "Union SG",
+        "short_name": "USG",
+        "association": {
+          "name": "Belgium",
+          "code": "BEL"
+        },
+        "api_football_id": null,
+        "api_football_name": null,
+        "api_football_logo": null,
+        "uefa_reference_name": "Union SG"
+      },
+      "uefa_club_coefficient": "36.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 28,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "PSV Eindhoven",
+        "short_name": "PSV",
+        "association": {
+          "name": "Netherlands",
+          "code": "NED"
+        },
+        "api_football_id": 197,
+        "api_football_name": "PSV Eindhoven",
+        "api_football_logo": "https://media.api-sports.io/football/teams/197.png",
+        "uefa_reference_name": "PSV"
+      },
+      "uefa_club_coefficient": "69.25",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 29,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Athletic Club",
+        "short_name": "BIL",
+        "association": {
+          "name": "Spain",
+          "code": "ESP"
+        },
+        "api_football_id": 531,
+        "api_football_name": "Athletic Club",
+        "api_football_logo": "https://media.api-sports.io/football/teams/531.png",
+        "uefa_reference_name": "Athletic Club"
+      },
+      "uefa_club_coefficient": "26.75",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 30,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Napoli",
+        "short_name": "NAP",
+        "association": {
+          "name": "Italy",
+          "code": "ITA"
+        },
+        "api_football_id": 492,
+        "api_football_name": "Napoli",
+        "api_football_logo": "https://media.api-sports.io/football/teams/492.png",
+        "uefa_reference_name": "Napoli"
+      },
+      "uefa_club_coefficient": "61.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 31,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "FC Copenhagen",
+        "short_name": "COP",
+        "association": {
+          "name": "Denmark",
+          "code": "DEN"
+        },
+        "api_football_id": 400,
+        "api_football_name": "FC Copenhagen",
+        "api_football_logo": "https://media.api-sports.io/football/teams/400.png",
+        "uefa_reference_name": "Copenhagen"
+      },
+      "uefa_club_coefficient": "44.875",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 32,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Ajax",
+        "short_name": "AJA",
+        "association": {
+          "name": "Netherlands",
+          "code": "NED"
+        },
+        "api_football_id": 194,
+        "api_football_name": "Ajax",
+        "api_football_logo": "https://media.api-sports.io/football/teams/194.png",
+        "uefa_reference_name": "Ajax"
+      },
+      "uefa_club_coefficient": "67.25",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 33,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Eintracht Frankfurt",
+        "short_name": "EIN",
+        "association": {
+          "name": "Germany",
+          "code": "GER"
+        },
+        "api_football_id": 169,
+        "api_football_name": "Eintracht Frankfurt",
+        "api_football_logo": "https://media.api-sports.io/football/teams/169.png",
+        "uefa_reference_name": "Eintracht Frankfurt"
+      },
+      "uefa_club_coefficient": "74.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 34,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Slavia Praha",
+        "short_name": "SLA",
+        "association": {
+          "name": "Czech-Republic",
+          "code": "CZE"
+        },
+        "api_football_id": 560,
+        "api_football_name": "Slavia Praha",
+        "api_football_logo": "https://media.api-sports.io/football/teams/560.png",
+        "uefa_reference_name": "Slavia Praha"
+      },
+      "uefa_club_coefficient": "51.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 35,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Villarreal",
+        "short_name": "VIL",
+        "association": {
+          "name": "Spain",
+          "code": "ESP"
+        },
+        "api_football_id": 533,
+        "api_football_name": "Villarreal",
+        "api_football_logo": "https://media.api-sports.io/football/teams/533.png",
+        "uefa_reference_name": "Villarreal"
+      },
+      "uefa_club_coefficient": "82.0",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 36,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Kairat Almaty",
+        "short_name": "KAI",
+        "association": {
+          "name": "Kazakhstan",
+          "code": "KAZ"
+        },
+        "api_football_id": 664,
+        "api_football_name": "Kairat Almaty",
+        "api_football_logo": "https://media.api-sports.io/football/teams/664.png",
+        "uefa_reference_name": "Kairat Almaty"
+      },
+      "uefa_club_coefficient": "5.5",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    }
+  ]
+}
