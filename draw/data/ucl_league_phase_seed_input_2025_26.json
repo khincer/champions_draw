@@ -700,6 +700,45 @@
       "uefa_club_coefficient": "5.5",
       "is_title_holder": false,
       "qualified_via": "LEAGUE_POSITION"
-    }
+    },
+    {
+      "rank": 37,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Bodo/Glimt",
+        "short_name": "BOD",
+        "association": {
+          "name": "Norway",
+          "code": "NOR"
+        },
+        "api_football_id": 327,
+        "api_football_name": "Bodo/Glimt",
+        "api_football_logo": "https://media.api-sports.io/football/teams/327.png",
+        "uefa_reference_name": "Bodo/Glimt"
+      },
+      "uefa_club_coefficient": "5.5",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 38,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Union St. Gilloise",
+        "short_name": "GIL",
+        "association": {
+          "name": "Belgium",
+          "code": "BEL"
+        },
+        "api_football_id": 1393,
+        "api_football_name": "Union St. Gilloise",
+        "api_football_logo": "https://media.api-sports.io/football/teams/1393.png",
+        "uefa_reference_name": "Union St. Gilloise"
+      },
+      "uefa_club_coefficient": "5.5",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    }    
+
   ]
 }

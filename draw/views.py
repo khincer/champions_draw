@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from collections import Counter
 
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
@@ -43,6 +44,30 @@ class TeamListAPIView(generics.ListAPIView):
 class TeamDetailAPIView(generics.RetrieveAPIView):
 	queryset = SeasonTeam.objects.select_related('season', 'team', 'team__association')
 	serializer_class = SeasonTeamSerializer
+
+
+class TeamOverviewAPIView(APIView):
+	def get(self, request):
+		season = get_requested_or_active_season(request)
+		entries = list(
+			SeasonTeam.objects.select_related('season', 'team', 'team__association')
+			.filter(season=season)
+			.order_by('pot', 'seeding_position', 'team__name')
+		)
+		pot_sizes = Counter(entry.pot for entry in entries if entry.pot is not None)
+
+		return Response(
+			{
+				'season': SeasonSerializer(season).data,
+				'summary': {
+					'team_count': len(entries),
+					'seeded_team_count': sum(1 for entry in entries if entry.seeding_position is not None),
+					'pot_sizes': {pot: pot_sizes[pot] for pot in sorted(pot_sizes)},
+				},
+				'teams': SeasonTeamSerializer(entries, many=True).data,
+			},
+			status=status.HTTP_200_OK,
+		)
 
 
 class SeasonSeedingAPIView(APIView):
