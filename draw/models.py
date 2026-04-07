@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -107,3 +108,65 @@ class SeasonTeam(models.Model):
 
 	def __str__(self) -> str:
 		return f'{self.team.name} - {self.season.name}'
+
+
+class SeasonMatchup(models.Model):
+	season = models.ForeignKey(
+		Season,
+		on_delete=models.CASCADE,
+		related_name='matchups',
+	)
+	home_team = models.ForeignKey(
+		SeasonTeam,
+		on_delete=models.CASCADE,
+		related_name='home_matchups',
+	)
+	away_team = models.ForeignKey(
+		SeasonTeam,
+		on_delete=models.CASCADE,
+		related_name='away_matchups',
+	)
+	matchday = models.PositiveSmallIntegerField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['season__name', 'matchday', 'home_team__team__name', 'away_team__team__name']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['season', 'home_team', 'away_team'],
+				name='unique_directed_matchup_per_season',
+			),
+			models.CheckConstraint(
+				condition=~models.Q(home_team=models.F('away_team')),
+				name='prevent_self_matchup',
+			),
+		]
+
+	def clean(self) -> None:
+		super().clean()
+
+		if self.home_team_id and self.away_team_id and self.home_team_id == self.away_team_id:
+			raise ValidationError('A team cannot be matched against itself.')
+
+		if self.season_id and self.home_team_id and self.home_team.season_id != self.season_id:
+			raise ValidationError({'home_team': 'Home team must belong to the selected season.'})
+
+		if self.season_id and self.away_team_id and self.away_team.season_id != self.season_id:
+			raise ValidationError({'away_team': 'Away team must belong to the selected season.'})
+
+		if self.season_id and self.home_team_id and self.away_team_id:
+			reverse_matchup_exists = SeasonMatchup.objects.filter(
+				season_id=self.season_id,
+				home_team_id=self.away_team_id,
+				away_team_id=self.home_team_id,
+			).exclude(pk=self.pk).exists()
+			if reverse_matchup_exists:
+				raise ValidationError('This matchup already exists with the teams reversed.')
+
+	def save(self, *args, **kwargs):
+		self.full_clean()
+		return super().save(*args, **kwargs)
+
+	def __str__(self) -> str:
+		return f'{self.season.name}: {self.home_team.team.name} vs {self.away_team.team.name}'

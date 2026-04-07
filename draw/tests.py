@@ -4,11 +4,12 @@ from tempfile import TemporaryDirectory
 from decimal import Decimal
 
 from django.core.management import call_command
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from .models import Association, QualifiedViaChoices, Season, SeasonTeam, Team
+from .models import Association, QualifiedViaChoices, Season, SeasonMatchup, SeasonTeam, Team
 from .services.import_seed_input import import_seed_input_payload
 from .services.seeding import seed_season_entries
 
@@ -174,3 +175,48 @@ class SeedInputImportTests(TestCase):
 		self.assertEqual(summary.associations_updated, 1)
 		self.assertEqual(Association.objects.count(), 1)
 		self.assertTrue(Association.objects.filter(name='England', code='ENG').exists())
+
+
+class SeasonMatchupModelTests(TestCase):
+	def setUp(self):
+		self.season = Season.objects.create(name='2025-26')
+		self.other_season = Season.objects.create(name='2026-27')
+		self.association = Association.objects.create(name='England', code='ENG')
+		self.home_team = Team.objects.create(name='Arsenal', short_name='ARS', association=self.association)
+		self.away_team = Team.objects.create(name='Liverpool', short_name='LIV', association=self.association)
+		self.other_team = Team.objects.create(name='Chelsea', short_name='CHE', association=self.association)
+		self.home_entry = SeasonTeam.objects.create(season=self.season, team=self.home_team, uefa_club_coefficient=Decimal('98.0'))
+		self.away_entry = SeasonTeam.objects.create(season=self.season, team=self.away_team, uefa_club_coefficient=Decimal('125.5'))
+		self.other_season_entry = SeasonTeam.objects.create(season=self.other_season, team=self.other_team, uefa_club_coefficient=Decimal('109.0'))
+
+	def test_valid_matchup_is_saved(self):
+		matchup = SeasonMatchup.objects.create(
+			season=self.season,
+			home_team=self.home_entry,
+			away_team=self.away_entry,
+		)
+
+		self.assertEqual(matchup.season, self.season)
+		self.assertEqual(SeasonMatchup.objects.count(), 1)
+
+	def test_reverse_matchup_is_rejected(self):
+		SeasonMatchup.objects.create(
+			season=self.season,
+			home_team=self.home_entry,
+			away_team=self.away_entry,
+		)
+
+		with self.assertRaises(ValidationError):
+			SeasonMatchup.objects.create(
+				season=self.season,
+				home_team=self.away_entry,
+				away_team=self.home_entry,
+			)
+
+	def test_cross_season_matchup_is_rejected(self):
+		with self.assertRaises(ValidationError):
+			SeasonMatchup.objects.create(
+				season=self.season,
+				home_team=self.home_entry,
+				away_team=self.other_season_entry,
+			)

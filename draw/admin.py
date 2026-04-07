@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Association, Season, SeasonTeam, Team
+from .models import Association, Season, SeasonMatchup, SeasonTeam, Team
 
 
 @admin.register(Association)
@@ -36,3 +36,14 @@ class SeasonTeamAdmin(admin.ModelAdmin):
 	)
 	list_filter = ('season', 'pot', 'is_title_holder', 'qualified_via', 'team__association')
 	search_fields = ('team__name', 'team__short_name', 'season__name')
+
+
+@admin.register(SeasonMatchup)
+class SeasonMatchupAdmin(admin.ModelAdmin):
+	list_display = ('season', 'home_team', 'away_team', 'matchday')
+	list_filter = ('season', 'matchday')
+	search_fields = (
+		'season__name',
+		'home_team__team__name',
+		'away_team__team__name',
+	)
