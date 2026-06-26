@@ -116,7 +116,8 @@ DJANGO_ALLOWED_HOSTS=<your-service-domain>
 ```
 
 Railway provides `DATABASE_URL` when the PostgreSQL service is connected. The app also reads
-`RAILWAY_PUBLIC_DOMAIN`, so the generated Railway domain is allowed automatically when present.
+`RAILWAY_PUBLIC_DOMAIN`, and production settings allow Railway-generated `*.up.railway.app`
+domains by default. Set `DJANGO_ALLOWED_HOSTS` explicitly if you attach a custom domain.
 
 The start command in `Procfile` runs migrations, collects static files, and starts Gunicorn:
 
