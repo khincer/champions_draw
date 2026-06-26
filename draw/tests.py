@@ -183,6 +183,7 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(len(response.data['teams']), 36)
 		self.assertEqual(len(response.data['matchups']), 144)
 		self.assertIn('name', response.data['teams'][0])
+		self.assertIn('logo_url', response.data['teams'][0])
 		self.assertIn('home_team', response.data['matchups'][0])
 
 	def test_matchup_list_endpoint_returns_generated_matchups(self):
@@ -392,6 +393,7 @@ class SeedInputImportTests(TestCase):
 					'name': association_name,
 					'code': association_code,
 				},
+				'api_football_logo': f'https://example.test/{short_name}.png',
 				'uefa_reference_name': team_name,
 			},
 			'uefa_club_coefficient': coefficient,
@@ -427,6 +429,7 @@ class SeedInputImportTests(TestCase):
 		self.assertFalse(SeasonTeam.objects.filter(team__name='Real Madrid').exists())
 		self.assertTrue(SeasonTeam.objects.filter(team__name='Barcelona', is_title_holder=True).exists())
 		self.assertEqual(SeasonTeam.objects.get(team__name='Arsenal FC').uefa_club_coefficient, Decimal('99.5'))
+		self.assertEqual(Team.objects.get(name='Arsenal FC').logo_url, 'https://example.test/ARS.png')
 
 	def test_import_seed_input_command_reads_json_file(self):
 		payload = self.build_payload([
@@ -468,6 +471,18 @@ class SeedInputImportTests(TestCase):
 		self.assertEqual(Team.objects.filter(association__code='GER', short_name='BAY').count(), 2)
 		self.assertTrue(SeasonTeam.objects.filter(team__name='Bayern München').exists())
 		self.assertTrue(SeasonTeam.objects.filter(team__name='Bayer Leverkusen').exists())
+
+	def test_import_seed_input_updates_existing_team_logo_url(self):
+		initial_payload = self.build_payload([
+			self.build_entry(1, 'Arsenal', 'ARS', 'England', 'ENG', '98.0', title_holder=True),
+		])
+		import_seed_input_payload(initial_payload, set_active=True)
+
+		updated_entry = self.build_entry(1, 'Arsenal', 'ARS', 'England', 'ENG', '98.0', title_holder=True)
+		updated_entry['team']['api_football_logo'] = 'https://example.test/arsenal-new.png'
+		import_seed_input_payload(self.build_payload([updated_entry]), set_active=True)
+
+		self.assertEqual(Team.objects.get(name='Arsenal').logo_url, 'https://example.test/arsenal-new.png')
 
 
 class SeasonMatchupModelTests(TestCase):

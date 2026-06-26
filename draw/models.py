@@ -57,6 +57,7 @@ class Season(models.Model):
 class Team(models.Model):
 	name = models.CharField(max_length=100)
 	short_name = models.CharField(max_length=30)
+	logo_url = models.URLField(max_length=500, blank=True)
 	association = models.ForeignKey(
 		Association,
 		on_delete=models.PROTECT,

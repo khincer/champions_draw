@@ -411,8 +411,23 @@ function FixtureRow({ fixture }) {
 function TeamBadge({ team, align }) {
   return (
     <span className={`team-badge ${align === 'right' ? 'right' : ''}`}>
+      <TeamLogo team={team} size="sm" />
       <b>{team.short_name}</b>
       <span>{team.association.code}</span>
+    </span>
+  );
+}
+
+function TeamLogo({ team, size = 'md' }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = team.logo_url && !failed;
+  return (
+    <span className={`team-logo ${size}`}>
+      {showImage ? (
+        <img src={team.logo_url} alt={`${team.name} badge`} loading="lazy" onError={() => setFailed(true)} />
+      ) : (
+        <span>{team.short_name.slice(0, 3)}</span>
+      )}
     </span>
   );
 }
@@ -433,6 +448,7 @@ function PotBoard({ pots, selectedTeamId, setSelectedTeamId }) {
               onClick={() => setSelectedTeamId(team.id)}
             >
               <span>{team.seeding_position}</span>
+              <TeamLogo team={team} size="sm" />
               <strong>{team.name}</strong>
               <em>{team.association.code}</em>
             </button>
@@ -471,6 +487,7 @@ function TeamInspector({ team, matchups }) {
   return (
     <aside className="inspector">
       <div className="inspector-head">
+        <TeamLogo team={team} size="lg" />
         <span>{team.association.name}</span>
         <h2>{team.name}</h2>
         <p>Pot {team.pot} · Seed {team.seeding_position} · Coeff. {team.uefa_club_coefficient}</p>
@@ -486,6 +503,7 @@ function TeamInspector({ team, matchups }) {
               return (
                 <div className="opponent-row" key={matchup.id}>
                   <span>MD{matchup.matchday}</span>
+                  <TeamLogo team={opponent} size="sm" />
                   <strong>{opponent.name}</strong>
                   <em>{isHome ? 'Home' : 'Away'} · Pot {opponent.pot}</em>
                 </div>

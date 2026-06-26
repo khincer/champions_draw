@@ -14,7 +14,7 @@ class TeamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Team
-        fields = ['id', 'name', 'short_name', 'association']
+        fields = ['id', 'name', 'short_name', 'logo_url', 'association']
 
 
 class SeasonSerializer(serializers.ModelSerializer):
@@ -70,6 +70,7 @@ class CompactSeasonTeamSerializer(serializers.ModelSerializer):
     team_id = serializers.IntegerField(source='team.id', read_only=True)
     name = serializers.CharField(source='team.name', read_only=True)
     short_name = serializers.CharField(source='team.short_name', read_only=True)
+    logo_url = serializers.URLField(source='team.logo_url', read_only=True)
     association = AssociationSerializer(source='team.association', read_only=True)
 
     class Meta:
@@ -79,6 +80,7 @@ class CompactSeasonTeamSerializer(serializers.ModelSerializer):
             'team_id',
             'name',
             'short_name',
+            'logo_url',
             'association',
             'uefa_club_coefficient',
             'is_title_holder',

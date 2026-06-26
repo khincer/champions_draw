@@ -18,9 +18,9 @@ class SeasonAdmin(admin.ModelAdmin):
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
-	list_display = ('name', 'short_name', 'association')
+	list_display = ('name', 'short_name', 'association', 'logo_url')
 	list_filter = ('association',)
-	search_fields = ('name', 'short_name')
+	search_fields = ('name', 'short_name', 'logo_url')
 
 
 @admin.register(SeasonTeam)

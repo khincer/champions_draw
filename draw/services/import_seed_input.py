@@ -176,6 +176,7 @@ def get_or_create_team(team_payload: dict, association: Association) -> dict:
     team_name = team_payload.get('name')
     short_name = team_payload.get('short_name')
     uefa_reference_name = team_payload.get('uefa_reference_name', '')
+    logo_url = team_payload.get('api_football_logo') or ''
     if not team_name or not short_name:
         raise ValueError('Each entry must include team.name and team.short_name.')
 
@@ -199,6 +200,7 @@ def get_or_create_team(team_payload: dict, association: Association) -> dict:
                 association=association,
                 name=team_name,
                 short_name=short_name,
+                logo_url=logo_url,
             ),
             'created': True,
             'updated': False,
@@ -211,8 +213,11 @@ def get_or_create_team(team_payload: dict, association: Association) -> dict:
     if team.short_name != short_name:
         team.short_name = short_name
         updated = True
+    if team.logo_url != logo_url:
+        team.logo_url = logo_url
+        updated = True
     if updated:
-        team.save(update_fields=['name', 'short_name'])
+        team.save(update_fields=['name', 'short_name', 'logo_url'])
 
     return {'instance': team, 'created': False, 'updated': updated}
 
