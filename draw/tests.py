@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from decimal import Decimal
 
+from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -59,6 +60,9 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(seeded_entries[-1].seeding_position, 36)
 
 	def test_seed_endpoint_assigns_pots_and_returns_payload(self):
+		User.objects.create_user(username='operator', password='password')
+		self.client.login(username='operator', password='password')
+
 		response = self.client.post(reverse('draw:season-seed', args=[self.season.pk]))
 
 		self.assertEqual(response.status_code, 200)
@@ -90,6 +94,27 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(response.data['summary']['pot_sizes'], {1: 9, 2: 9, 3: 9, 4: 9})
 		self.assertEqual(len(response.data['teams']), 36)
 		self.assertEqual(response.data['teams'][0]['team']['name'], self.title_holder.team.name)
+
+	def test_public_ui_route_serves_preact_app(self):
+		response = self.client.get('/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response['Content-Type'], 'text/html')
+
+	def test_console_ui_route_requires_login(self):
+		response = self.client.get('/console/')
+
+		self.assertEqual(response.status_code, 302)
+		self.assertIn('/admin/login/', response['Location'])
+
+	def test_console_ui_route_serves_preact_app_after_login(self):
+		User.objects.create_user(username='operator', password='password')
+		self.client.login(username='operator', password='password')
+
+		response = self.client.get('/console/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response['Content-Type'], 'text/html')
 
 	def test_generate_draw_creates_valid_league_phase_matchups(self):
 		seed_season_entries(self.season)
@@ -146,6 +171,20 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(response.data[0]['draw_seed'], 'history-test-draw')
 		self.assertEqual(response.data[0]['status'], DrawStatusChoices.COMPLETED)
 
+	def test_ui_season_state_returns_compact_payload(self):
+		seed_season_entries(self.season)
+		generate_season_draw(self.season, draw_seed='ui-state-test')
+
+		response = self.client.get(reverse('draw:ui-season-state', args=[self.season.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['summary']['team_count'], 36)
+		self.assertEqual(response.data['summary']['matchup_count'], 144)
+		self.assertEqual(len(response.data['teams']), 36)
+		self.assertEqual(len(response.data['matchups']), 144)
+		self.assertIn('name', response.data['teams'][0])
+		self.assertIn('home_team', response.data['matchups'][0])
+
 	def test_matchup_list_endpoint_returns_generated_matchups(self):
 		seed_season_entries(self.season)
 		generate_season_draw(self.season, draw_seed='list-test-draw')
@@ -164,6 +203,20 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(draw_record.status, DrawStatusChoices.FAILED)
 		self.assertIn('seeded', draw_record.error_message)
 		self.assertIsNotNone(draw_record.completed_at)
+
+	def test_seed_endpoint_requires_authentication(self):
+		response = self.client.post(reverse('draw:season-seed', args=[self.season.pk]))
+
+		self.assertIn(response.status_code, [401, 403])
+
+	def test_seed_endpoint_accepts_authenticated_user(self):
+		User.objects.create_user(username='operator', password='password')
+		self.client.login(username='operator', password='password')
+
+		response = self.client.post(reverse('draw:season-seed', args=[self.season.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['summary']['total_teams'], 36)
 
 	def test_draw_endpoint_rejects_incomplete_season(self):
 		incomplete_season = Season.objects.create(name='2026-27')

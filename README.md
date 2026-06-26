@@ -22,6 +22,8 @@ Django/DRF backend for importing UEFA Champions League league-phase teams, seedi
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
 .\.venv\Scripts\python manage.py migrate
+npm install
+npm run build
 ```
 
 Optional environment variables:
@@ -49,11 +51,28 @@ Start the API:
 .\.venv\Scripts\python manage.py runserver 8001
 ```
 
+For frontend development with Vite:
+
+```powershell
+npm run dev
+```
+
+The compiled Preact app is served by Django at:
+
+```text
+http://127.0.0.1:8001/
+http://127.0.0.1:8001/console/
+```
+
+The public UI can inspect seasons, pots, matchdays, teams, draw history, and generate persisted demo draws. The console route uses Django login and exposes the same draw workflow plus re-seeding controls.
+
 Useful API flow:
 
 ```text
 GET  /api/seasons/
 GET  /api/teams/overview/
+GET  /api/ui/seasons/<season_id>/state/
+GET  /api/me/
 POST /api/seasons/<season_id>/seed/
 POST /api/seasons/<season_id>/draw/
 GET  /api/seasons/<season_id>/draws/
