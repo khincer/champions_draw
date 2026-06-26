@@ -57,6 +57,8 @@ default_allowed_hosts = []
 railway_public_domain = os.getenv('RAILWAY_PUBLIC_DOMAIN')
 if railway_public_domain:
     default_allowed_hosts.append(railway_public_domain)
+if not DEBUG:
+    default_allowed_hosts.append('.up.railway.app')
 if DEBUG:
     default_allowed_hosts.extend(['localhost', '127.0.0.1', '[::1]'])
 
