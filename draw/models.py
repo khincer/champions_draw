@@ -16,6 +16,12 @@ class QualifiedViaChoices(models.TextChoices):
 	OTHER = 'OTHER', 'Other'
 
 
+class DrawStatusChoices(models.TextChoices):
+	RUNNING = 'RUNNING', 'Running'
+	COMPLETED = 'COMPLETED', 'Completed'
+	FAILED = 'FAILED', 'Failed'
+
+
 class Association(models.Model):
 	name = models.CharField(max_length=100, unique=True)
 	code = models.CharField(max_length=3, unique=True)
@@ -64,10 +70,6 @@ class Team(models.Model):
 				fields=['association', 'name'],
 				name='unique_team_name_per_association',
 			),
-			models.UniqueConstraint(
-				fields=['association', 'short_name'],
-				name='unique_team_short_name_per_association',
-			),
 		]
 
 	def __str__(self) -> str:
@@ -108,6 +110,30 @@ class SeasonTeam(models.Model):
 
 	def __str__(self) -> str:
 		return f'{self.team.name} - {self.season.name}'
+
+
+class SeasonDraw(models.Model):
+	season = models.ForeignKey(
+		Season,
+		on_delete=models.CASCADE,
+		related_name='draws',
+	)
+	draw_seed = models.CharField(max_length=100)
+	status = models.CharField(
+		max_length=20,
+		choices=DrawStatusChoices.choices,
+		default=DrawStatusChoices.RUNNING,
+	)
+	matchups_created = models.PositiveSmallIntegerField(default=0)
+	error_message = models.TextField(blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	completed_at = models.DateTimeField(null=True, blank=True)
+
+	class Meta:
+		ordering = ['-created_at']
+
+	def __str__(self) -> str:
+		return f'{self.season.name} draw {self.draw_seed} ({self.status})'
 
 
 class SeasonMatchup(models.Model):

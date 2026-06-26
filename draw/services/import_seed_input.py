@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
 from django.db import transaction
-from django.db.models import Q
 
 from draw.models import Association, CompetitionChoices, QualifiedViaChoices, Season, SeasonTeam, Team
 
@@ -175,17 +175,23 @@ def get_or_create_association(association_payload: dict) -> dict:
 def get_or_create_team(team_payload: dict, association: Association) -> dict:
     team_name = team_payload.get('name')
     short_name = team_payload.get('short_name')
+    uefa_reference_name = team_payload.get('uefa_reference_name', '')
     if not team_name or not short_name:
         raise ValueError('Each entry must include team.name and team.short_name.')
 
     team = Team.objects.filter(association=association, name=team_name).first()
     if team is None:
-        team = Team.objects.filter(association=association, short_name=short_name).first()
+        team = Team.objects.filter(association=association, name=uefa_reference_name).first()
     if team is None:
-        team = Team.objects.filter(association=association).filter(
-            Q(name=team_payload.get('uefa_reference_name', '')) |
-            Q(short_name=short_name)
-        ).first()
+        short_name_candidates = Team.objects.filter(association=association, short_name=short_name)
+        team = next(
+            (
+                candidate
+                for candidate in short_name_candidates
+                if team_names_are_compatible(candidate.name, team_name, uefa_reference_name)
+            ),
+            None,
+        )
 
     if team is None:
         return {
@@ -209,6 +215,35 @@ def get_or_create_team(team_payload: dict, association: Association) -> dict:
         team.save(update_fields=['name', 'short_name'])
 
     return {'instance': team, 'created': False, 'updated': updated}
+
+
+def team_names_are_compatible(existing_name: str, team_name: str, uefa_reference_name: str) -> bool:
+    existing_tokens = significant_name_tokens(existing_name)
+    incoming_tokens = significant_name_tokens(team_name)
+    reference_tokens = significant_name_tokens(uefa_reference_name)
+
+    return bool(
+        existing_tokens
+        and (
+            existing_tokens == incoming_tokens
+            or existing_tokens == reference_tokens
+            or existing_tokens.issubset(incoming_tokens)
+            or incoming_tokens.issubset(existing_tokens)
+            or existing_tokens.issubset(reference_tokens)
+            or reference_tokens.issubset(existing_tokens)
+        )
+    )
+
+
+def significant_name_tokens(value: str) -> set[str]:
+    normalized = unicodedata.normalize('NFKD', value or '')
+    ascii_only = normalized.encode('ascii', 'ignore').decode('ascii')
+    tokens = {
+        token
+        for token in ''.join(character.lower() if character.isalnum() else ' ' for character in ascii_only).split()
+        if token not in {'ac', 'afc', 'as', 'c', 'cf', 'club', 'fc', 'fk', 'sc'}
+    }
+    return tokens
 
 
 def parse_coefficient(value: str | float | int | Decimal | None) -> Decimal:

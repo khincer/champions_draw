@@ -7,8 +7,9 @@ from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Season, SeasonTeam
-from .serializers import SeasonSerializer, SeasonTeamSerializer
+from .models import Season, SeasonDraw, SeasonMatchup, SeasonTeam
+from .serializers import SeasonDrawSerializer, SeasonMatchupSerializer, SeasonSerializer, SeasonTeamSerializer
+from .services.draw import DrawError, generate_season_draw
 from .services.seeding import SeedingError, seed_season_entries
 
 
@@ -93,3 +94,65 @@ class SeasonSeedingAPIView(APIView):
 			},
 			status=status.HTTP_200_OK,
 		)
+
+
+class SeasonDrawAPIView(APIView):
+	def post(self, request, pk):
+		season = get_object_or_404(Season, pk=pk)
+		draw_seed = request.data.get('seed')
+		reset = parse_bool(request.data.get('reset', False))
+
+		try:
+			summary = generate_season_draw(season, draw_seed=draw_seed, reset=reset)
+		except DrawError as exc:
+			return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+		matchups = get_season_matchups(season)
+		return Response(
+			{
+				'summary': asdict(summary),
+				'season': SeasonSerializer(season).data,
+				'matchups': SeasonMatchupSerializer(matchups, many=True).data,
+			},
+			status=status.HTTP_200_OK,
+		)
+
+
+class SeasonMatchupListAPIView(generics.ListAPIView):
+	serializer_class = SeasonMatchupSerializer
+
+	def get_queryset(self):
+		season = get_object_or_404(Season, pk=self.kwargs['pk'])
+		return get_season_matchups(season)
+
+
+class SeasonDrawListAPIView(generics.ListAPIView):
+	serializer_class = SeasonDrawSerializer
+
+	def get_queryset(self):
+		season = get_object_or_404(Season, pk=self.kwargs['pk'])
+		return SeasonDraw.objects.filter(season=season).order_by('-created_at')
+
+
+def get_season_matchups(season: Season):
+	return (
+		SeasonMatchup.objects.select_related(
+			'season',
+			'home_team__season',
+			'home_team__team',
+			'home_team__team__association',
+			'away_team__season',
+			'away_team__team',
+			'away_team__team__association',
+		)
+		.filter(season=season)
+		.order_by('matchday', 'home_team__team__name', 'away_team__team__name')
+	)
+
+
+def parse_bool(value) -> bool:
+	if isinstance(value, bool):
+		return value
+	if isinstance(value, str):
+		return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+	return bool(value)

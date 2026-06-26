@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Association, Season, SeasonTeam, Team
+from .models import Association, Season, SeasonDraw, SeasonMatchup, SeasonTeam, Team
 
 
 class AssociationSerializer(serializers.ModelSerializer):
@@ -46,4 +46,37 @@ class SeasonTeamSerializer(serializers.ModelSerializer):
             'qualified_via',
             'seeding_position',
             'pot',
+        ]
+
+
+class SeasonDrawSerializer(serializers.ModelSerializer):
+    season = SeasonSerializer(read_only=True)
+
+    class Meta:
+        model = SeasonDraw
+        fields = [
+            'id',
+            'season',
+            'draw_seed',
+            'status',
+            'matchups_created',
+            'error_message',
+            'created_at',
+            'completed_at',
+        ]
+
+
+class SeasonMatchupSerializer(serializers.ModelSerializer):
+    season = SeasonSerializer(read_only=True)
+    home_team = SeasonTeamSerializer(read_only=True)
+    away_team = SeasonTeamSerializer(read_only=True)
+
+    class Meta:
+        model = SeasonMatchup
+        fields = [
+            'id',
+            'season',
+            'home_team',
+            'away_team',
+            'matchday',
         ]

@@ -338,7 +338,7 @@ def build_entry(official: OfficialTeam, resolved_team: dict[str, Any] | None, ti
         'resolution_status': resolution_status,
         'team': {
             'name': team_data.get('name') or official.name,
-            'short_name': team_data.get('code') or official.short_name,
+            'short_name': official.short_name,
             'association': {
                 'name': team_data.get('country') or COUNTRY_NAMES.get(official.association_code),
                 'code': official.association_code,

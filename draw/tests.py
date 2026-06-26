@@ -9,7 +9,8 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from .models import Association, QualifiedViaChoices, Season, SeasonMatchup, SeasonTeam, Team
+from .models import Association, DrawStatusChoices, QualifiedViaChoices, Season, SeasonDraw, SeasonMatchup, SeasonTeam, Team
+from .services.draw import generate_season_draw
 from .services.import_seed_input import import_seed_input_payload
 from .services.seeding import seed_season_entries
 
@@ -89,6 +90,233 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(response.data['summary']['pot_sizes'], {1: 9, 2: 9, 3: 9, 4: 9})
 		self.assertEqual(len(response.data['teams']), 36)
 		self.assertEqual(response.data['teams'][0]['team']['name'], self.title_holder.team.name)
+
+	def test_generate_draw_creates_valid_league_phase_matchups(self):
+		seed_season_entries(self.season)
+
+		summary = generate_season_draw(self.season, draw_seed='unit-test-draw')
+		draw_record = SeasonDraw.objects.get(pk=summary.draw_id)
+
+		self.assertEqual(summary.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(summary.total_matchups, 144)
+		self.assertEqual(draw_record.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(draw_record.draw_seed, 'unit-test-draw')
+		self.assertEqual(draw_record.matchups_created, 144)
+		self.assertIsNotNone(draw_record.completed_at)
+		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 144)
+		self.assert_draw_constraints(self.season)
+
+	def test_generate_draw_for_checked_in_2025_seed_input(self):
+		seed_input_path = Path(__file__).resolve().parent / 'data' / 'ucl_league_phase_seed_input_2025_26.json'
+		payload = json.loads(seed_input_path.read_text(encoding='utf-8'))
+		summary = import_seed_input_payload(payload, set_active=True)
+		season = Season.objects.get(pk=summary.season_id)
+		seed_season_entries(season)
+
+		draw_summary = generate_season_draw(season, draw_seed='checked-in-seed-test')
+
+		self.assertEqual(draw_summary.total_matchups, 144)
+		self.assert_draw_constraints(season)
+
+	def test_draw_endpoint_generates_matchups(self):
+		seed_season_entries(self.season)
+
+		response = self.client.post(
+			reverse('draw:season-draw', args=[self.season.pk]),
+			{'seed': 'api-test-draw'},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['summary']['status'], DrawStatusChoices.COMPLETED)
+		self.assertIsNotNone(response.data['summary']['draw_id'])
+		self.assertEqual(response.data['summary']['total_matchups'], 144)
+		self.assertEqual(len(response.data['matchups']), 144)
+		self.assert_draw_constraints(self.season)
+
+	def test_draw_history_endpoint_returns_draw_metadata(self):
+		seed_season_entries(self.season)
+		summary = generate_season_draw(self.season, draw_seed='history-test-draw')
+
+		response = self.client.get(reverse('draw:season-draw-list', args=[self.season.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(len(response.data), 1)
+		self.assertEqual(response.data[0]['id'], summary.draw_id)
+		self.assertEqual(response.data[0]['draw_seed'], 'history-test-draw')
+		self.assertEqual(response.data[0]['status'], DrawStatusChoices.COMPLETED)
+
+	def test_matchup_list_endpoint_returns_generated_matchups(self):
+		seed_season_entries(self.season)
+		generate_season_draw(self.season, draw_seed='list-test-draw')
+
+		response = self.client.get(reverse('draw:season-matchup-list', args=[self.season.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(len(response.data), 144)
+
+	def test_draw_endpoint_rejects_unseeded_season(self):
+		response = self.client.post(reverse('draw:season-draw', args=[self.season.pk]))
+		draw_record = SeasonDraw.objects.get(season=self.season)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn('seeded', response.data['detail'])
+		self.assertEqual(draw_record.status, DrawStatusChoices.FAILED)
+		self.assertIn('seeded', draw_record.error_message)
+		self.assertIsNotNone(draw_record.completed_at)
+
+	def test_draw_endpoint_rejects_incomplete_season(self):
+		incomplete_season = Season.objects.create(name='2026-27')
+		for index in range(35):
+			association = Association.objects.create(
+				name=f'Incomplete Association {index + 1}',
+				code=f'I{index + 1:02}',
+			)
+			team = Team.objects.create(
+				name=f'Incomplete Team {index + 1}',
+				short_name=f'IT{index + 1}',
+				association=association,
+			)
+			SeasonTeam.objects.create(
+				season=incomplete_season,
+				team=team,
+				uefa_club_coefficient=Decimal('100.000') - Decimal(index),
+				seeding_position=index + 1,
+				pot=(index // 9) + 1,
+			)
+
+		response = self.client.post(reverse('draw:season-draw', args=[incomplete_season.pk]))
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn('exactly 36 teams', response.data['detail'])
+
+	def test_draw_endpoint_rejects_duplicate_draw_without_reset(self):
+		seed_season_entries(self.season)
+
+		first_response = self.client.post(
+			reverse('draw:season-draw', args=[self.season.pk]),
+			{'seed': 'duplicate-test'},
+			format='json',
+		)
+		second_response = self.client.post(
+			reverse('draw:season-draw', args=[self.season.pk]),
+			{'seed': 'duplicate-test'},
+			format='json',
+		)
+
+		self.assertEqual(first_response.status_code, 200)
+		self.assertEqual(second_response.status_code, 400)
+		self.assertIn('already has generated matchups', second_response.data['detail'])
+		self.assertEqual(SeasonDraw.objects.filter(season=self.season, status=DrawStatusChoices.COMPLETED).count(), 1)
+		self.assertEqual(SeasonDraw.objects.filter(season=self.season, status=DrawStatusChoices.FAILED).count(), 1)
+
+	def test_draw_endpoint_reset_replaces_existing_draw(self):
+		seed_season_entries(self.season)
+		self.client.post(
+			reverse('draw:season-draw', args=[self.season.pk]),
+			{'seed': 'reset-test-1'},
+			format='json',
+		)
+
+		response = self.client.post(
+			reverse('draw:season-draw', args=[self.season.pk]),
+			{'seed': 'reset-test-2', 'reset': True},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 144)
+		self.assertEqual(SeasonDraw.objects.filter(season=self.season, status=DrawStatusChoices.COMPLETED).count(), 2)
+		self.assert_draw_constraints(self.season)
+
+	def test_generate_draw_management_command_creates_matchups_and_metadata(self):
+		seed_season_entries(self.season)
+
+		call_command('generate_draw', self.season.name, '--seed', 'command-test-draw')
+
+		draw_record = SeasonDraw.objects.get(season=self.season)
+		self.assertEqual(draw_record.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(draw_record.draw_seed, 'command-test-draw')
+		self.assertEqual(draw_record.matchups_created, 144)
+		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 144)
+		self.assert_draw_constraints(self.season)
+
+	def test_draw_endpoint_rejects_impossible_association_constraints(self):
+		season = Season.objects.create(name='2027-28')
+		association = Association.objects.create(name='One Association', code='ONE')
+		for index in range(36):
+			team = Team.objects.create(
+				name=f'Same Association Team {index + 1}',
+				short_name=f'SA{index + 1}',
+				association=association,
+			)
+			SeasonTeam.objects.create(
+				season=season,
+				team=team,
+				uefa_club_coefficient=Decimal('100.000') - Decimal(index),
+				seeding_position=index + 1,
+				pot=(index // 9) + 1,
+			)
+
+		response = self.client.post(reverse('draw:season-draw', args=[season.pk]))
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn('eligible opponents', response.data['detail'])
+
+	def assert_draw_constraints(self, season):
+		entries = list(SeasonTeam.objects.select_related('team__association').filter(season=season))
+		entries_by_id = {entry.pk: entry for entry in entries}
+		matchups = list(
+			SeasonMatchup.objects.select_related(
+				'home_team__team__association',
+				'away_team__team__association',
+			).filter(season=season)
+		)
+		home_counts = {}
+		away_counts = {}
+		opponent_pot_counts = {entry.pk: {} for entry in entries}
+		opponent_association_counts = {entry.pk: {} for entry in entries}
+		matchday_counts = {entry.pk: {} for entry in entries}
+		undirected_edges = set()
+
+		self.assertEqual(len(matchups), 144)
+
+		for matchup in matchups:
+			home_id = matchup.home_team_id
+			away_id = matchup.away_team_id
+			home_entry = entries_by_id[home_id]
+			away_entry = entries_by_id[away_id]
+			edge = tuple(sorted((home_id, away_id)))
+
+			self.assertNotIn(edge, undirected_edges)
+			undirected_edges.add(edge)
+			self.assertNotEqual(home_entry.team.association_id, away_entry.team.association_id)
+			self.assertIsNotNone(matchup.matchday)
+			self.assertGreaterEqual(matchup.matchday, 1)
+			self.assertLessEqual(matchup.matchday, 8)
+
+			home_counts[home_id] = home_counts.get(home_id, 0) + 1
+			away_counts[away_id] = away_counts.get(away_id, 0) + 1
+			opponent_pot_counts[home_id][away_entry.pot] = opponent_pot_counts[home_id].get(away_entry.pot, 0) + 1
+			opponent_pot_counts[away_id][home_entry.pot] = opponent_pot_counts[away_id].get(home_entry.pot, 0) + 1
+			opponent_association_counts[home_id][away_entry.team.association_id] = (
+				opponent_association_counts[home_id].get(away_entry.team.association_id, 0) + 1
+			)
+			opponent_association_counts[away_id][home_entry.team.association_id] = (
+				opponent_association_counts[away_id].get(home_entry.team.association_id, 0) + 1
+			)
+			matchday_counts[home_id][matchup.matchday] = matchday_counts[home_id].get(matchup.matchday, 0) + 1
+			matchday_counts[away_id][matchup.matchday] = matchday_counts[away_id].get(matchup.matchday, 0) + 1
+
+		for entry in entries:
+			self.assertEqual(home_counts.get(entry.pk, 0), 4)
+			self.assertEqual(away_counts.get(entry.pk, 0), 4)
+			for pot in range(1, 5):
+				self.assertEqual(opponent_pot_counts[entry.pk].get(pot, 0), 2)
+			for association_count in opponent_association_counts[entry.pk].values():
+				self.assertLessEqual(association_count, 2)
+			for matchday in range(1, 9):
+				self.assertEqual(matchday_counts[entry.pk].get(matchday, 0), 1)
 
 
 class SeedInputImportTests(TestCase):
@@ -175,6 +403,18 @@ class SeedInputImportTests(TestCase):
 		self.assertEqual(summary.associations_updated, 1)
 		self.assertEqual(Association.objects.count(), 1)
 		self.assertTrue(Association.objects.filter(name='England', code='ENG').exists())
+
+	def test_import_seed_input_does_not_merge_distinct_teams_with_same_short_name(self):
+		payload = self.build_payload([
+			self.build_entry(1, 'Bayern München', 'BAY', 'Germany', 'GER', '135.25', title_holder=True),
+			self.build_entry(2, 'Bayer Leverkusen', 'BAY', 'Germany', 'GER', '95.25'),
+		])
+
+		import_seed_input_payload(payload, set_active=True)
+
+		self.assertEqual(Team.objects.filter(association__code='GER', short_name='BAY').count(), 2)
+		self.assertTrue(SeasonTeam.objects.filter(team__name='Bayern München').exists())
+		self.assertTrue(SeasonTeam.objects.filter(team__name='Bayer Leverkusen').exists())
 
 
 class SeasonMatchupModelTests(TestCase):
