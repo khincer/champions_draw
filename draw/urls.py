@@ -1,7 +1,6 @@
 from django.urls import path
 
 from .views import (
-    CurrentUserAPIView,
     SeasonDrawAPIView,
     SeasonDrawListAPIView,
     SeasonListAPIView,
@@ -16,7 +15,6 @@ from .views import (
 app_name = 'draw'
 
 urlpatterns = [
-    path('me/', CurrentUserAPIView.as_view(), name='current-user'),
     path('seasons/', SeasonListAPIView.as_view(), name='season-list'),
     path('seasons/<int:pk>/seed/', SeasonSeedingAPIView.as_view(), name='season-seed'),
     path('seasons/<int:pk>/draw/', SeasonDrawAPIView.as_view(), name='season-draw'),

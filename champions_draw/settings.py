@@ -174,8 +174,8 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
-LOGIN_URL = '/admin/login/'
-LOGIN_REDIRECT_URL = '/console/'
+LOGIN_URL = '/'
+LOGIN_REDIRECT_URL = '/'
 
 STORAGES = {
     'default': {

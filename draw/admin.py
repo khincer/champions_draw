@@ -40,9 +40,9 @@ class SeasonTeamAdmin(admin.ModelAdmin):
 
 @admin.register(SeasonDraw)
 class SeasonDrawAdmin(admin.ModelAdmin):
-	list_display = ('season', 'draw_seed', 'status', 'matchups_created', 'created_at', 'completed_at')
+	list_display = ('season', 'draw_seed', 'player_name', 'status', 'matchups_created', 'created_at', 'completed_at')
 	list_filter = ('season', 'status')
-	search_fields = ('season__name', 'draw_seed', 'error_message')
+	search_fields = ('season__name', 'draw_seed', 'player_name', 'error_message')
 	readonly_fields = ('created_at', 'completed_at')
 
 

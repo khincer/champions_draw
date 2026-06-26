@@ -110,10 +110,11 @@ class SeasonDrawAPIView(APIView):
 	def post(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
 		draw_seed = request.data.get('seed')
+		player_name = request.data.get('player_name', '')
 		reset = parse_bool(request.data.get('reset', False))
 
 		try:
-			summary = generate_season_draw(season, draw_seed=draw_seed, reset=reset)
+			summary = generate_season_draw(season, draw_seed=draw_seed, player_name=player_name, reset=reset)
 		except DrawError as exc:
 			return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -142,18 +143,6 @@ class SeasonDrawListAPIView(generics.ListAPIView):
 	def get_queryset(self):
 		season = get_object_or_404(Season, pk=self.kwargs['pk'])
 		return SeasonDraw.objects.filter(season=season).order_by('-created_at')
-
-
-class CurrentUserAPIView(APIView):
-	def get(self, request):
-		return Response(
-			{
-				'is_authenticated': request.user.is_authenticated,
-				'username': request.user.get_username() if request.user.is_authenticated else '',
-				'is_staff': bool(request.user.is_staff) if request.user.is_authenticated else False,
-			},
-			status=status.HTTP_200_OK,
-		)
 
 
 class UiSeasonStateAPIView(APIView):

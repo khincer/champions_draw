@@ -1,12 +1,13 @@
 # Champions Draw
 
-Django/DRF backend for importing UEFA Champions League league-phase teams, seeding them into pots, and generating league-phase matchups.
+Django/DRF backend and Preact UI for importing UEFA Champions League league-phase teams, seeding them into pots, and letting players publish their own draw simulations.
 
 ## What it does
 
 - Stores associations, teams, seasons, seeded season entries, and matchups.
 - Imports seed-input JSON into the database.
 - Seeds 36 teams into 4 pots of 9, with the title holder first.
+- Serves a public prediction lab where players can run simulations and compare other players' runs.
 - Generates a deterministic 144-match league-phase draw:
   - 8 matches per team.
   - 2 opponents from each pot.
@@ -61,10 +62,9 @@ The compiled Preact app is served by Django at:
 
 ```text
 http://127.0.0.1:8001/
-http://127.0.0.1:8001/console/
 ```
 
-The public UI can inspect seasons, pots, matchdays, teams, draw history, and generate persisted demo draws. The console route uses Django login and exposes the same draw workflow plus re-seeding controls.
+The public UI invites players to enter a name, choose a deterministic simulation seed, run a persisted draw, inspect matchdays and pots, and review other players' runs. The old `/console/` route redirects back to the public simulator, and Django admin URLs are not mounted.
 
 Useful API flow:
 
@@ -72,7 +72,6 @@ Useful API flow:
 GET  /api/seasons/
 GET  /api/teams/overview/
 GET  /api/ui/seasons/<season_id>/state/
-GET  /api/me/
 POST /api/seasons/<season_id>/seed/
 POST /api/seasons/<season_id>/draw/
 GET  /api/seasons/<season_id>/draws/
@@ -83,15 +82,17 @@ Generate a reproducible draw:
 
 ```json
 {
-  "seed": "demo-draw-1"
+  "seed": "prediction-1",
+  "player_name": "Ada"
 }
 ```
 
-Regenerate an existing draw:
+Publish a new current simulation when fixtures already exist:
 
 ```json
 {
-  "seed": "demo-draw-2",
+  "seed": "prediction-2",
+  "player_name": "Marta",
   "reset": true
 }
 ```
@@ -101,16 +102,16 @@ The draw response includes a summary with the draw seed, total matchup count, ma
 Generate a draw from the command line:
 
 ```powershell
-.\.venv\Scripts\python manage.py generate_draw 2025-26 --seed demo-draw-1
+.\.venv\Scripts\python manage.py generate_draw 2025-26 --seed prediction-1 --player-name "Ada"
 ```
 
 Replace an existing draw:
 
 ```powershell
-.\.venv\Scripts\python manage.py generate_draw 2025-26 --seed demo-draw-2 --reset
+.\.venv\Scripts\python manage.py generate_draw 2025-26 --seed prediction-2 --player-name "CLI Player" --reset
 ```
 
-Every draw attempt is stored as metadata with its seed, status, matchup count, error message, and completion time.
+Every draw attempt is stored as metadata with its player name, seed, status, matchup count, error message, and completion time.
 
 ## Docker
 

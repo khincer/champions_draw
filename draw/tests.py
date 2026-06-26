@@ -101,31 +101,29 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response['Content-Type'], 'text/html')
 
-	def test_console_ui_route_requires_login(self):
+	def test_console_ui_route_redirects_to_public_app(self):
 		response = self.client.get('/console/')
 
 		self.assertEqual(response.status_code, 302)
-		self.assertIn('/admin/login/', response['Location'])
+		self.assertEqual(response['Location'], '/')
 
-	def test_console_ui_route_serves_preact_app_after_login(self):
-		User.objects.create_user(username='operator', password='password')
-		self.client.login(username='operator', password='password')
+	def test_admin_route_is_not_exposed(self):
+		response = self.client.get('/admin/')
 
-		response = self.client.get('/console/')
-
-		self.assertEqual(response.status_code, 200)
-		self.assertEqual(response['Content-Type'], 'text/html')
+		self.assertEqual(response.status_code, 404)
 
 	def test_generate_draw_creates_valid_league_phase_matchups(self):
 		seed_season_entries(self.season)
 
-		summary = generate_season_draw(self.season, draw_seed='unit-test-draw')
+		summary = generate_season_draw(self.season, draw_seed='unit-test-draw', player_name='Ada')
 		draw_record = SeasonDraw.objects.get(pk=summary.draw_id)
 
 		self.assertEqual(summary.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(summary.player_name, 'Ada')
 		self.assertEqual(summary.total_matchups, 144)
 		self.assertEqual(draw_record.status, DrawStatusChoices.COMPLETED)
 		self.assertEqual(draw_record.draw_seed, 'unit-test-draw')
+		self.assertEqual(draw_record.player_name, 'Ada')
 		self.assertEqual(draw_record.matchups_created, 144)
 		self.assertIsNotNone(draw_record.completed_at)
 		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 144)
@@ -148,20 +146,22 @@ class DrawApiTests(APITestCase):
 
 		response = self.client.post(
 			reverse('draw:season-draw', args=[self.season.pk]),
-			{'seed': 'api-test-draw'},
+			{'seed': 'api-test-draw', 'player_name': 'Marta'},
 			format='json',
 		)
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data['summary']['status'], DrawStatusChoices.COMPLETED)
+		self.assertEqual(response.data['summary']['player_name'], 'Marta')
 		self.assertIsNotNone(response.data['summary']['draw_id'])
 		self.assertEqual(response.data['summary']['total_matchups'], 144)
 		self.assertEqual(len(response.data['matchups']), 144)
+		self.assertEqual(SeasonDraw.objects.get(pk=response.data['summary']['draw_id']).player_name, 'Marta')
 		self.assert_draw_constraints(self.season)
 
 	def test_draw_history_endpoint_returns_draw_metadata(self):
 		seed_season_entries(self.season)
-		summary = generate_season_draw(self.season, draw_seed='history-test-draw')
+		summary = generate_season_draw(self.season, draw_seed='history-test-draw', player_name='History Player')
 
 		response = self.client.get(reverse('draw:season-draw-list', args=[self.season.pk]))
 
@@ -169,11 +169,12 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(len(response.data), 1)
 		self.assertEqual(response.data[0]['id'], summary.draw_id)
 		self.assertEqual(response.data[0]['draw_seed'], 'history-test-draw')
+		self.assertEqual(response.data[0]['player_name'], 'History Player')
 		self.assertEqual(response.data[0]['status'], DrawStatusChoices.COMPLETED)
 
 	def test_ui_season_state_returns_compact_payload(self):
 		seed_season_entries(self.season)
-		generate_season_draw(self.season, draw_seed='ui-state-test')
+		generate_season_draw(self.season, draw_seed='ui-state-test', player_name='UI Player')
 
 		response = self.client.get(reverse('draw:ui-season-state', args=[self.season.pk]))
 
@@ -185,6 +186,7 @@ class DrawApiTests(APITestCase):
 		self.assertIn('name', response.data['teams'][0])
 		self.assertIn('logo_url', response.data['teams'][0])
 		self.assertIn('home_team', response.data['matchups'][0])
+		self.assertEqual(response.data['draws'][0]['player_name'], 'UI Player')
 
 	def test_matchup_list_endpoint_returns_generated_matchups(self):
 		seed_season_entries(self.season)
@@ -286,11 +288,12 @@ class DrawApiTests(APITestCase):
 	def test_generate_draw_management_command_creates_matchups_and_metadata(self):
 		seed_season_entries(self.season)
 
-		call_command('generate_draw', self.season.name, '--seed', 'command-test-draw')
+		call_command('generate_draw', self.season.name, '--seed', 'command-test-draw', '--player-name', 'CLI Player')
 
 		draw_record = SeasonDraw.objects.get(season=self.season)
 		self.assertEqual(draw_record.status, DrawStatusChoices.COMPLETED)
 		self.assertEqual(draw_record.draw_seed, 'command-test-draw')
+		self.assertEqual(draw_record.player_name, 'CLI Player')
 		self.assertEqual(draw_record.matchups_created, 144)
 		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 144)
 		self.assert_draw_constraints(self.season)

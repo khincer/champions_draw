@@ -3,21 +3,15 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import {
   Activity,
   AlertCircle,
-  CalendarDays,
   CheckCircle2,
-  ChevronRight,
   History,
-  Lock,
   Play,
-  RefreshCcw,
-  Shield,
-  Sparkles,
-  Trophy,
   Users,
 } from 'lucide-preact';
 import './styles.css';
 
 const API_ROOT = '/api';
+const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
 
 function getCookie(name) {
   const cookies = document.cookie ? document.cookie.split('; ') : [];
@@ -72,17 +66,16 @@ function shortDate(value) {
 }
 
 function App() {
-  const isConsole = window.location.pathname.startsWith('/console');
   const [seasons, setSeasons] = useState([]);
   const [selectedSeasonId, setSelectedSeasonId] = useState('');
   const [seasonState, setSeasonState] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('matchdays');
+  const [activeTab, setActiveTab] = useState('home');
   const [selectedTeamId, setSelectedTeamId] = useState(null);
-  const [drawSeed, setDrawSeed] = useState('rest-test-1');
-  const [resetDraw, setResetDraw] = useState(true);
+  const [playerName, setPlayerName] = useState(() => localStorage.getItem(PLAYER_STORAGE_KEY) || '');
+  const [drawSeed, setDrawSeed] = useState('prediction-1');
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [drawAnimation, setDrawAnimation] = useState({ isActive: false, phase: 'idle', revealedCount: 0 });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -96,16 +89,36 @@ function App() {
     }
   }, [selectedSeasonId]);
 
+  useEffect(() => {
+    if (!drawAnimation.isActive || drawAnimation.phase !== 'fixtures') return undefined;
+
+    const totalMatchups = seasonState?.matchups?.length || 0;
+    if (!totalMatchups) return undefined;
+
+    const timer = window.setInterval(() => {
+      setDrawAnimation((current) => {
+        if (!current.isActive || current.phase !== 'fixtures') return current;
+        const nextCount = Math.min(current.revealedCount + 8, totalMatchups);
+        if (nextCount >= totalMatchups) {
+          window.setTimeout(() => {
+            setDrawAnimation({ isActive: false, phase: 'idle', revealedCount: 0 });
+            setActiveTab('matchdays');
+          }, 700);
+          return { ...current, phase: 'complete', revealedCount: nextCount };
+        }
+        return { ...current, revealedCount: nextCount };
+      });
+    }, 120);
+
+    return () => window.clearInterval(timer);
+  }, [drawAnimation.isActive, drawAnimation.phase, seasonState?.matchups?.length]);
+
   async function loadInitialData() {
     setLoading(true);
     setError('');
     try {
-      const [seasonPayload, userPayload] = await Promise.all([
-        apiFetch('/seasons/'),
-        apiFetch('/me/'),
-      ]);
+      const seasonPayload = await apiFetch('/seasons/');
       setSeasons(seasonPayload);
-      setCurrentUser(userPayload);
       const activeSeason = seasonPayload.find((season) => season.is_active) || seasonPayload[0];
       if (activeSeason) setSelectedSeasonId(String(activeSeason.id));
     } catch (err) {
@@ -123,46 +136,44 @@ function App() {
       if (!selectedTeamId && payload.teams.length) {
         setSelectedTeamId(payload.teams[0].id);
       }
+      return payload;
     } catch (err) {
       setError(err.message);
+      return null;
     }
   }
 
-  async function generateDraw() {
+  async function generateDraw({ fresh = false } = {}) {
     if (!selectedSeasonId) return;
+    setActiveTab('simulate');
+    setDrawAnimation({ isActive: true, phase: 'pots', revealedCount: 0 });
     setWorking(true);
     setError('');
     setNotice('');
     try {
-      const seed = drawSeed.trim() || `draw-${Date.now()}`;
+      const seed = fresh ? `prediction-${Date.now()}` : drawSeed.trim() || `prediction-${Date.now()}`;
+      const normalizedPlayer = playerName.trim() || 'Guest player';
+      localStorage.setItem(PLAYER_STORAGE_KEY, normalizedPlayer);
+      setPlayerName(normalizedPlayer);
+      setDrawSeed(seed);
+
       const payload = await apiFetch(`/seasons/${selectedSeasonId}/draw/`, {
         method: 'POST',
-        body: JSON.stringify({ seed, reset: resetDraw }),
+        body: JSON.stringify({
+          seed,
+          reset: true,
+          player_name: normalizedPlayer,
+        }),
       });
-      setNotice(`Draw ${payload.summary.draw_seed} completed with ${payload.summary.total_matchups} matchups.`);
+      setNotice(`${normalizedPlayer} ran ${payload.summary.draw_seed} with ${payload.summary.total_matchups} fixtures.`);
       await loadSeasonState(selectedSeasonId);
+      window.setTimeout(() => {
+        setDrawAnimation({ isActive: true, phase: 'fixtures', revealedCount: 0 });
+      }, 650);
     } catch (err) {
       setError(err.message);
+      setDrawAnimation({ isActive: false, phase: 'idle', revealedCount: 0 });
       await loadSeasonState(selectedSeasonId);
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  async function seedSeason() {
-    if (!selectedSeasonId) return;
-    setWorking(true);
-    setError('');
-    setNotice('');
-    try {
-      const payload = await apiFetch(`/seasons/${selectedSeasonId}/seed/`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
-      setNotice(`Seeded ${payload.summary.total_teams} teams into pots.`);
-      await loadSeasonState(selectedSeasonId);
-    } catch (err) {
-      setError(err.message);
     } finally {
       setWorking(false);
     }
@@ -183,73 +194,64 @@ function App() {
   const matchdays = groupBy(seasonState?.matchups || [], 'matchday');
   const pots = groupBy(seasonState?.teams || [], 'pot');
 
-  return (
-    <main className="app-shell">
-      <Sidebar isConsole={isConsole} activeTab={activeTab} setActiveTab={setActiveTab} />
-      <section className="workspace">
-        <TopBar
-          isConsole={isConsole}
-          seasons={seasons}
-          selectedSeasonId={selectedSeasonId}
-          setSelectedSeasonId={setSelectedSeasonId}
-          currentUser={currentUser}
-        />
-
+  if (activeTab === 'home') {
+    return (
+      <main className="homepage-shell">
         {loading ? (
-          <StateMessage icon={Activity} title="Loading draw workspace" text="Fetching seasons and current draw state." />
+          <StateMessage icon={Activity} title="Loading prediction lab" text="Fetching seasons, pots, and recent simulations." />
         ) : (
           <>
-            <StatusStrip seasonState={seasonState} latestDraw={latestDraw} />
+            <LandingPage working={working} generateDraw={generateDraw} setActiveTab={setActiveTab} />
+            <AppFooter />
+          </>
+        )}
+      </main>
+    );
+  }
+
+  return (
+    <main className="app-shell no-sidebar">
+      <section className="workspace">
+        {loading ? (
+          <StateMessage icon={Activity} title="Loading prediction lab" text="Fetching seasons, pots, and recent simulations." />
+        ) : (
+          <>
+            <WorkspaceHeader activeTab={activeTab} setActiveTab={setActiveTab} />
             {(error || notice) && <MessageBar error={error} notice={notice} />}
 
-            <section className="command-band">
-              <div>
-                <h1>{isConsole ? 'Operator console' : 'Champions League draw viewer'}</h1>
-                <p>
-                  {isConsole
-                    ? 'Manage seeding, generation, matchday validation, and draw history.'
-                    : 'Explore pots, matchdays, and run persisted demo draws.'}
-                </p>
-              </div>
-              <div className="draw-controls">
-                <label className="seed-input">
-                  <span>Draw seed</span>
-                  <input value={drawSeed} onInput={(event) => setDrawSeed(event.currentTarget.value)} />
-                </label>
-                <label className="toggle-row">
-                  <input type="checkbox" checked={resetDraw} onChange={(event) => setResetDraw(event.currentTarget.checked)} />
-                  <span>Reset current draw</span>
-                </label>
-                {isConsole && (
-                  <button className="button secondary" disabled={working} onClick={seedSeason}>
-                    <RefreshCcw size={16} />
-                    Re-seed
-                  </button>
-                )}
-                <button className="button primary" disabled={working} onClick={generateDraw}>
-                  <Play size={16} />
-                  {working ? 'Working' : isConsole ? 'Generate draw' : 'Generate demo'}
-                </button>
-              </div>
-            </section>
-
-            {isConsole && currentUser && !currentUser.is_authenticated && (
-              <div className="auth-callout">
-                <Lock size={18} />
-                <span>Console actions require Django login.</span>
-                <a href="/admin/login/?next=/console/">Log in</a>
-              </div>
+            {activeTab === 'simulate' && !drawAnimation.isActive && (
+              <SimulationPanel
+                playerName={playerName}
+                setPlayerName={setPlayerName}
+                drawSeed={drawSeed}
+                setDrawSeed={setDrawSeed}
+                working={working}
+                selectedSeasonId={selectedSeasonId}
+                generateDraw={generateDraw}
+              />
             )}
 
             <section className="content-grid">
               <div className="primary-column">
-                <ViewTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+                {activeTab === 'simulate' && (
+                  drawAnimation.isActive ? (
+                    <DrawAnimationStage
+                      phase={drawAnimation.phase}
+                      pots={pots}
+                      matchups={seasonState?.matchups || []}
+                      revealedCount={drawAnimation.revealedCount}
+                    />
+                  ) : (
+                    <MatchdayBoard matchdays={matchdays} />
+                  )
+                )}
                 {activeTab === 'matchdays' && <MatchdayBoard matchdays={matchdays} />}
                 {activeTab === 'pots' && <PotBoard pots={pots} selectedTeamId={selectedTeam?.id} setSelectedTeamId={setSelectedTeamId} />}
-                {activeTab === 'history' && <DrawHistory draws={seasonState?.draws || []} />}
+                {activeTab === 'history' && <PlayersRuns draws={seasonState?.draws || []} />}
               </div>
               <TeamInspector team={selectedTeam} matchups={teamMatchups} />
             </section>
+            <AppFooter />
           </>
         )}
       </section>
@@ -257,82 +259,149 @@ function App() {
   );
 }
 
-function Sidebar({ isConsole, activeTab, setActiveTab }) {
-  const items = [
-    ['matchdays', CalendarDays, 'Matchdays'],
-    ['pots', Trophy, 'Pots'],
-    ['history', History, 'History'],
-  ];
+function WorkspaceHeader({ activeTab, setActiveTab }) {
   return (
-    <aside className="sidebar">
-      <div className="brand-mark">
-        <Sparkles size={20} />
-        <div>
-          <strong>Champions Draw</strong>
-          <span>{isConsole ? 'Console' : 'Public'}</span>
-        </div>
-      </div>
-      <nav>
-        {items.map(([key, Icon, label]) => (
-          <button key={key} className={activeTab === key ? 'active' : ''} onClick={() => setActiveTab(key)}>
-            <Icon size={17} />
-            {label}
-          </button>
-        ))}
-      </nav>
-      <a className="sidebar-link" href={isConsole ? '/' : '/console/'}>
-        {isConsole ? 'Open public UI' : 'Open console'}
-        <ChevronRight size={15} />
-      </a>
-    </aside>
-  );
-}
-
-function TopBar({ isConsole, seasons, selectedSeasonId, setSelectedSeasonId, currentUser }) {
-  return (
-    <header className="topbar">
-      <div className="route-title">
-        <span>{isConsole ? 'Admin side' : 'Open public UI'}</span>
-        <strong>League phase workspace</strong>
-      </div>
-      <div className="top-actions">
-        <select value={selectedSeasonId} onChange={(event) => setSelectedSeasonId(event.currentTarget.value)}>
-          {seasons.map((season) => (
-            <option value={season.id} key={season.id}>
-              {season.name}
-            </option>
-          ))}
-        </select>
-        {isConsole ? (
-          <a className="identity" href="/admin/">
-            <Shield size={16} />
-            {currentUser?.is_authenticated ? currentUser.username : 'Login'}
-          </a>
-        ) : (
-          <span className="identity public">
-            <Users size={16} />
-            Public demo
-          </span>
-        )}
-      </div>
+    <header className="workspace-header">
+      <ChampionsLeagueLogo />
+      <ViewTabs activeTab={activeTab} setActiveTab={setActiveTab} />
     </header>
   );
 }
 
-function StatusStrip({ seasonState, latestDraw }) {
-  const summary = seasonState?.summary || {};
+function ChampionsLeagueLogo() {
   return (
-    <section className="status-strip">
-      <Metric label="Teams" value={summary.team_count || 0} />
-      <Metric label="Seeded" value={summary.seeded_team_count || 0} />
-      <Metric label="Matchups" value={summary.matchup_count || 0} />
-      <Metric label="Draws" value={summary.draw_count || 0} />
-      <div className={`draw-state ${latestDraw?.status === 'COMPLETED' ? 'ok' : latestDraw?.status === 'FAILED' ? 'bad' : ''}`}>
-        {latestDraw?.status === 'COMPLETED' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-        <div>
-          <span>Latest draw</span>
-          <strong>{latestDraw ? `${latestDraw.status} · ${latestDraw.draw_seed}` : 'No draw yet'}</strong>
+    <div className="champions-logo" aria-label="Champions League">
+      <svg viewBox="0 0 64 64" role="img" aria-hidden="true">
+        <circle cx="32" cy="32" r="27" />
+        <path d="M32 9l5.2 14.1 15 .7-11.8 9.3 4 14.5L32 39.4 19.6 47.6l4-14.5-11.8-9.3 15-.7L32 9z" />
+        <path d="M18.4 22.7l27.2 20.1M45.6 22.7L18.4 42.8M32 9v46" />
+      </svg>
+      <span>Champions League</span>
+    </div>
+  );
+}
+
+function LandingPage({ working, generateDraw, setActiveTab }) {
+  return (
+    <section className="landing">
+      <div className="landing-copy">
+        <h1>Make your Champions League draw prediction</h1>
+        <p>
+          Run a fresh league-phase simulation, save it under your name, and compare your draw against the other saved
+          runs from the community.
+        </p>
+        <div className="landing-actions">
+          <button className="button primary landing-button" disabled={working} onClick={() => generateDraw({ fresh: true })}>
+            <Play size={18} />
+            {working ? 'Running' : 'Run a simulation'}
+          </button>
+          <button className="button secondary landing-button" onClick={() => setActiveTab('history')}>
+            <History size={18} />
+            View saved runs
+          </button>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function AppFooter() {
+  return <footer className="app-footer">Unofficial draw simulator for fan predictions.</footer>;
+}
+
+function DrawAnimationStage({ phase, pots, matchups, revealedCount }) {
+  const revealedMatchups = matchups.slice(0, revealedCount);
+  const revealedByMatchday = groupBy(revealedMatchups, 'matchday');
+
+  return (
+    <section className="draw-animation-stage">
+      <div className="draw-animation-head">
+        <div>
+          <h2>{phase === 'pots' ? 'Loading the four pots' : 'Building the league-phase fixtures'}</h2>
+          <p>{phase === 'pots' ? 'The draw starts from the seeded pots.' : `${revealedMatchups.length} of ${matchups.length} fixtures placed.`}</p>
+        </div>
+        <span className="draw-pulse" />
+      </div>
+
+      <div className="animated-pot-grid">
+        {['1', '2', '3', '4'].map((pot, index) => (
+          <article className="animated-pot" style={{ '--delay': `${index * 90}ms` }} key={pot}>
+            <div className="pot-head">
+              <strong>Pot {pot}</strong>
+              <span>{pots[pot]?.length || 0} teams</span>
+            </div>
+            <div className="animated-team-list">
+              {(pots[pot] || []).map((team) => (
+                <span className="animated-team" key={team.id}>
+                  <TeamLogo team={team} size="sm" />
+                  <strong>{team.short_name}</strong>
+                </span>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {phase === 'fixtures' && (
+        <div className="animated-fixtures">
+          {Array.from({ length: 8 }, (_, index) => String(index + 1)).map((matchday) => {
+            const fixtures = revealedByMatchday[matchday] || [];
+            return (
+              <article className="animated-matchday" key={matchday}>
+                <div className="matchday-head">
+                  <strong>Matchday {matchday}</strong>
+                  <span>{fixtures.length} fixtures</span>
+                </div>
+                <div className="fixture-list">
+                  {fixtures.slice(0, 5).map((fixture) => (
+                    <FixtureRow fixture={fixture} key={fixture.id} />
+                  ))}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SimulationPanel({
+  playerName,
+  setPlayerName,
+  drawSeed,
+  setDrawSeed,
+  working,
+  selectedSeasonId,
+  generateDraw,
+}) {
+  return (
+    <section className="command-band">
+      <div>
+        <h1>Run your Champions League simulation</h1>
+        <p>
+          Enter your player name, choose a seed, and publish a league-phase prediction. Every run is saved so other
+          players can compare fixtures, pots, and outcomes.
+        </p>
+      </div>
+      <div className="draw-controls">
+        <label className="seed-input">
+          <span>Player name</span>
+          <input
+            value={playerName}
+            maxLength={80}
+            placeholder="Your name"
+            onInput={(event) => setPlayerName(event.currentTarget.value)}
+          />
+        </label>
+        <label className="seed-input">
+          <span>Simulation seed</span>
+          <input value={drawSeed} onInput={(event) => setDrawSeed(event.currentTarget.value)} />
+        </label>
+        <button className="button primary" disabled={working || !selectedSeasonId} onClick={() => generateDraw()}>
+          <Play size={16} />
+          {working ? 'Running' : 'Run simulation'}
+        </button>
       </div>
     </section>
   );
@@ -360,9 +429,10 @@ function ViewTabs({ activeTab, setActiveTab }) {
   return (
     <div className="view-tabs">
       {[
-        ['matchdays', 'Matchdays'],
+        ['simulate', 'Run simulation'],
+        ['matchdays', 'Fixtures'],
         ['pots', 'Pots'],
-        ['history', 'History'],
+        ['history', 'Saved runs'],
       ].map(([key, label]) => (
         <button key={key} className={activeTab === key ? 'active' : ''} onClick={() => setActiveTab(key)}>
           {label}
@@ -388,7 +458,7 @@ function MatchdayBoard({ matchdays }) {
               {fixtures.length ? (
                 fixtures.slice(0, 9).map((fixture) => <FixtureRow fixture={fixture} key={fixture.id} />)
               ) : (
-                <span className="empty-row">Generate a draw to fill this matchday.</span>
+                <span className="empty-row">Run a simulation to fill this matchday.</span>
               )}
             </div>
           </article>
@@ -459,7 +529,7 @@ function PotBoard({ pots, selectedTeamId, setSelectedTeamId }) {
   );
 }
 
-function DrawHistory({ draws }) {
+function PlayersRuns({ draws }) {
   return (
     <section className="history-list">
       {draws.length ? (
@@ -467,14 +537,14 @@ function DrawHistory({ draws }) {
           <article className="history-row" key={draw.id}>
             <span className={`status-dot ${draw.status.toLowerCase()}`} />
             <div>
-              <strong>{draw.draw_seed}</strong>
-              <span>{draw.status} · {draw.matchups_created} matchups · {shortDate(draw.completed_at)}</span>
+              <strong>{draw.player_name || 'Guest player'}</strong>
+              <span>{draw.draw_seed} - {draw.status} - {draw.matchups_created} fixtures - {shortDate(draw.completed_at)}</span>
               {draw.error_message && <em>{draw.error_message}</em>}
             </div>
           </article>
         ))
       ) : (
-        <StateMessage icon={History} title="No draw history" text="Draw attempts will appear here." />
+        <StateMessage icon={History} title="No player runs yet" text="Run the first simulation and it will appear here." />
       )}
     </section>
   );
@@ -490,7 +560,7 @@ function TeamInspector({ team, matchups }) {
         <TeamLogo team={team} size="lg" />
         <span>{team.association.name}</span>
         <h2>{team.name}</h2>
-        <p>Pot {team.pot} · Seed {team.seeding_position} · Coeff. {team.uefa_club_coefficient}</p>
+        <p>Pot {team.pot} - Seed {team.seeding_position} - Coeff. {team.uefa_club_coefficient}</p>
       </div>
       <div className="opponent-list">
         <strong>Opponents</strong>
@@ -505,12 +575,12 @@ function TeamInspector({ team, matchups }) {
                   <span>MD{matchup.matchday}</span>
                   <TeamLogo team={opponent} size="sm" />
                   <strong>{opponent.name}</strong>
-                  <em>{isHome ? 'Home' : 'Away'} · Pot {opponent.pot}</em>
+                  <em>{isHome ? 'Home' : 'Away'} - Pot {opponent.pot}</em>
                 </div>
               );
             })
         ) : (
-          <p className="muted">Generate a draw to inspect this team’s eight fixtures.</p>
+          <p className="muted">Run a simulation to inspect this team's eight fixtures.</p>
         )}
       </div>
     </aside>

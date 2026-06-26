@@ -58,6 +58,7 @@ class SeasonDrawSerializer(serializers.ModelSerializer):
             'id',
             'season',
             'draw_seed',
+            'player_name',
             'status',
             'matchups_created',
             'error_message',

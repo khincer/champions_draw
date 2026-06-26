@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from django.conf import settings
-from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, HttpResponse
+from django.shortcuts import redirect
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET
 
@@ -15,9 +15,8 @@ def public_app(request):
 
 @require_GET
 @ensure_csrf_cookie
-@login_required
 def console_app(request):
-    return serve_frontend_index()
+    return redirect('public-app')
 
 
 def serve_frontend_index():
