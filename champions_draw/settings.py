@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 
+import dj_database_url
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -20,22 +22,49 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
+def env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = env_bool('DJANGO_DEBUG', True)
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', '----------------------')
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if not DEBUG:
+        raise RuntimeError('DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=false.')
+    SECRET_KEY = 'local-dev-secret'
 
 API_URL = os.getenv('API_FOOTBALL_BASE_URL', os.getenv('API_URL', 'https://v3.football.api-sports.io'))
 API_KEY = os.getenv('API_FOOTBALL_KEY', os.getenv('API_KEY', ''))
 TIMEOUT = int(os.getenv('API_FOOTBALL_TIMEOUT', os.getenv('TIMEOUT', '10')))  # seconds
 LEAGUE_ID = int(os.getenv('API_FOOTBALL_LEAGUE_ID', os.getenv('LEAGUE_ID', '2')))  # UEFA Champions League
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DJANGO_DEBUG', 'true').lower() in {'1', 'true', 'yes', 'on'}
 
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
-    if host.strip()
-]
+def split_env_list(name: str) -> list[str]:
+    return [
+        value.strip()
+        for value in os.getenv(name, '').split(',')
+        if value.strip()
+    ]
+
+
+default_allowed_hosts = []
+railway_public_domain = os.getenv('RAILWAY_PUBLIC_DOMAIN')
+if railway_public_domain:
+    default_allowed_hosts.append(railway_public_domain)
+if DEBUG:
+    default_allowed_hosts.extend(['localhost', '127.0.0.1', '[::1]'])
+
+ALLOWED_HOSTS = split_env_list('DJANGO_ALLOWED_HOSTS') or default_allowed_hosts
+
+CSRF_TRUSTED_ORIGINS = split_env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
+if railway_public_domain:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{railway_public_domain}')
 
 
 # Application definition
@@ -53,6 +82,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -84,12 +114,22 @@ WSGI_APPLICATION = 'champions_draw.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+database_url = os.getenv('DATABASE_URL')
+if database_url:
+    DATABASES = {
+        'default': dj_database_url.parse(
+            database_url,
+            conn_max_age=600,
+            conn_health_checks=True,
+        ),
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        },
+    }
 
 
 # Password validation
@@ -126,7 +166,23 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = os.getenv('DJANGO_STATIC_URL', '/static/')
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = env_bool('DJANGO_SECURE_SSL_REDIRECT', not DEBUG)
+SESSION_COOKIE_SECURE = env_bool('DJANGO_SESSION_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = env_bool('DJANGO_CSRF_COOKIE_SECURE', not DEBUG)
+SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', '0' if DEBUG else '60'))
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
