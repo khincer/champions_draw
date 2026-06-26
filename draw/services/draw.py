@@ -5,8 +5,10 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 from django.db import transaction
+from django.utils import timezone
+from z3 import Bool, If, Solver, Sum, is_true, sat
 
-from draw.models import Season, SeasonMatchup, SeasonTeam
+from draw.models import DrawStatusChoices, Season, SeasonDraw, SeasonMatchup, SeasonTeam
 
 
 EXPECTED_TEAM_COUNT = 36
@@ -15,6 +17,8 @@ POT_SIZE = 9
 OPPONENTS_PER_POT = 2
 HOME_MATCHES = 4
 AWAY_MATCHES = 4
+MAX_OPPONENTS_PER_ASSOCIATION = 2
+MATCHDAY_COUNT = 8
 DEFAULT_MAX_ATTEMPTS = 100
 
 
@@ -24,12 +28,16 @@ class DrawError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class DrawSummary:
+    draw_id: int
     season_id: int
     draw_seed: str
+    status: str
     total_matchups: int
     home_matches_per_team: int
     away_matches_per_team: int
     opponents_per_pot: int
+    max_opponents_per_association: int
+    matchday_count: int
     pot_pair_counts: dict[str, int]
 
 
@@ -40,21 +48,50 @@ def generate_season_draw(
     reset: bool = False,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
 ) -> DrawSummary:
+    normalized_seed = str(draw_seed if draw_seed is not None else random.SystemRandom().randrange(1, 10**12))
+    draw_record = SeasonDraw.objects.create(
+        season=season,
+        draw_seed=normalized_seed,
+        status=DrawStatusChoices.RUNNING,
+    )
+
+    try:
+        return _generate_season_draw(
+            season,
+            draw_record=draw_record,
+            reset=reset,
+            max_attempts=max_attempts,
+        )
+    except DrawError as exc:
+        draw_record.status = DrawStatusChoices.FAILED
+        draw_record.error_message = str(exc)
+        draw_record.completed_at = timezone.now()
+        draw_record.save(update_fields=['status', 'error_message', 'completed_at'])
+        raise
+
+
+def _generate_season_draw(
+    season: Season,
+    *,
+    draw_record: SeasonDraw,
+    reset: bool,
+    max_attempts: int,
+) -> DrawSummary:
     entries = list(
         season.entries.select_related('team', 'team__association')
         .order_by('pot', 'seeding_position', 'team__name')
     )
     validate_draw_inputs(season, entries, reset=reset)
 
-    normalized_seed = str(draw_seed if draw_seed is not None else random.SystemRandom().randrange(1, 10**12))
     last_error: DrawError | None = None
 
     for attempt in range(1, max_attempts + 1):
-        rng = random.Random(f'{normalized_seed}:{attempt}')
+        rng = random.Random(f'{draw_record.draw_seed}:{attempt}')
         try:
             undirected_edges_by_pair = build_draw_graph(entries, rng)
             directed_edges = orient_draw_edges(entries, undirected_edges_by_pair, rng)
             validate_directed_draw(entries, directed_edges)
+            matchday_assignments = schedule_matchdays(entries, directed_edges, rng)
         except DrawError as exc:
             last_error = exc
             continue
@@ -70,14 +107,21 @@ def generate_season_draw(
                     season=season,
                     home_team_id=home_id,
                     away_team_id=away_id,
+                    matchday=matchday_assignments[normalize_edge(home_id, away_id)],
                 )
                 for home_id, away_id in directed_edges
             )
 
-        return build_summary(season, normalized_seed, entries, directed_edges)
+            draw_record.status = DrawStatusChoices.COMPLETED
+            draw_record.matchups_created = len(directed_edges)
+            draw_record.error_message = ''
+            draw_record.completed_at = timezone.now()
+            draw_record.save(update_fields=['status', 'matchups_created', 'error_message', 'completed_at'])
+
+        return build_summary(season, draw_record, entries, directed_edges)
 
     detail = f' Last error: {last_error}' if last_error else ''
-    raise DrawError(f'Unable to generate a valid draw after {max_attempts} attempts for seed {normalized_seed}.{detail}')
+    raise DrawError(f'Unable to generate a valid draw after {max_attempts} attempts for seed {draw_record.draw_seed}.{detail}')
 
 
 def validate_draw_inputs(season: Season, entries: list[SeasonTeam], *, reset: bool) -> None:
@@ -117,115 +161,68 @@ def build_draw_graph(
     entries: list[SeasonTeam],
     rng: random.Random,
 ) -> dict[tuple[int, int], set[tuple[int, int]]]:
-    entries_by_pot = group_entries_by_pot(entries)
-    edges_by_pair: dict[tuple[int, int], set[tuple[int, int]]] = {}
-    global_edges: set[tuple[int, int]] = set()
+    entries_by_id = {entry.pk: entry for entry in entries}
+    associations = sorted({entry.team.association_id for entry in entries})
+    possible_edges = [
+        normalize_edge(first.pk, second.pk)
+        for index, first in enumerate(entries)
+        for second in entries[index + 1:]
+        if associations_differ(first, second)
+    ]
+    rng.shuffle(possible_edges)
 
-    for pot_a in range(1, POT_COUNT + 1):
-        for pot_b in range(pot_a, POT_COUNT + 1):
-            pot_pair = (pot_a, pot_b)
-            edges = solve_pot_pair(entries_by_pot[pot_a], entries_by_pot[pot_b], pot_a == pot_b, global_edges, rng)
-            edges_by_pair[pot_pair] = edges
-            global_edges.update(edges)
+    edge_vars = {
+        edge: Bool(f'edge_{edge[0]}_{edge[1]}')
+        for edge in possible_edges
+    }
+    solver = Solver()
+    solver.set('random_seed', rng.randrange(1, 2**31 - 1))
 
-    return edges_by_pair
-
-
-def solve_pot_pair(
-    pot_a_entries: list[SeasonTeam],
-    pot_b_entries: list[SeasonTeam],
-    same_pot: bool,
-    global_edges: set[tuple[int, int]],
-    rng: random.Random,
-) -> set[tuple[int, int]]:
-    involved_entries = pot_a_entries if same_pot else [*pot_a_entries, *pot_b_entries]
-    entries_by_id = {entry.pk: entry for entry in involved_entries}
-    ids_by_side_a = {entry.pk for entry in pot_a_entries}
-    ids_by_side_b = ids_by_side_a if same_pot else {entry.pk for entry in pot_b_entries}
-    remaining = {entry.pk: OPPONENTS_PER_POT for entry in involved_entries}
-    edges: set[tuple[int, int]] = set()
-
-    def is_allowed_pair(first_id: int, second_id: int) -> bool:
-        if first_id == second_id:
-            return False
-        first = entries_by_id[first_id]
-        second = entries_by_id[second_id]
-        if not associations_differ(first, second):
-            return False
-        edge = normalize_edge(first_id, second_id)
-        if edge in edges or edge in global_edges:
-            return False
-        if same_pot:
-            return True
-        return (first_id in ids_by_side_a and second_id in ids_by_side_b) or (
-            first_id in ids_by_side_b and second_id in ids_by_side_a
-        )
-
-    def available_candidates(entry_id: int) -> list[int]:
-        return [
-            candidate_id
-            for candidate_id, candidate_remaining in remaining.items()
-            if candidate_remaining > 0 and is_allowed_pair(entry_id, candidate_id)
+    for entry in entries:
+        incident_edges = [
+            edge_vars[edge]
+            for edge in possible_edges
+            if entry.pk in edge
         ]
+        solver.add(Sum([If(edge_var, 1, 0) for edge_var in incident_edges]) == 8)
 
-    def choose_next_entry() -> int | None:
-        candidates = [entry_id for entry_id, count in remaining.items() if count > 0]
-        if not candidates:
-            return None
-        return min(candidates, key=lambda entry_id: (len(available_candidates(entry_id)), -remaining[entry_id]))
+        for pot in range(1, POT_COUNT + 1):
+            pot_edges = [
+                edge_vars[edge]
+                for edge in possible_edges
+                if entry.pk in edge and other_entry_for_edge(edge, entry.pk, entries_by_id).pot == pot
+            ]
+            solver.add(Sum([If(edge_var, 1, 0) for edge_var in pot_edges]) == OPPONENTS_PER_POT)
 
-    def can_still_finish() -> bool:
-        for entry_id, count in remaining.items():
-            if count > 0 and len(available_candidates(entry_id)) < count:
-                return False
-        if not same_pot:
-            side_a_remaining = sum(remaining[entry_id] for entry_id in ids_by_side_a)
-            side_b_remaining = sum(remaining[entry_id] for entry_id in ids_by_side_b)
-            if side_a_remaining != side_b_remaining:
-                return False
-        else:
-            if sum(remaining.values()) % 2 != 0:
-                return False
-        return True
+        for association_id in associations:
+            if association_id == entry.team.association_id:
+                continue
+            association_edges = [
+                edge_vars[edge]
+                for edge in possible_edges
+                if (
+                    entry.pk in edge
+                    and other_entry_for_edge(edge, entry.pk, entries_by_id).team.association_id == association_id
+                )
+            ]
+            solver.add(Sum([If(edge_var, 1, 0) for edge_var in association_edges]) <= MAX_OPPONENTS_PER_ASSOCIATION)
 
-    def backtrack() -> bool:
-        if all(count == 0 for count in remaining.values()):
-            return True
-        if not can_still_finish():
-            return False
+    if solver.check() != sat:
+        raise DrawError('Unable to solve draw graph with association constraints.')
 
-        entry_id = choose_next_entry()
-        if entry_id is None:
-            return True
+    model = solver.model()
+    selected_edges = {
+        edge
+        for edge, edge_var in edge_vars.items()
+        if is_true(model.evaluate(edge_var))
+    }
+    edges_by_pair: dict[tuple[int, int], set[tuple[int, int]]] = defaultdict(set)
+    for first_id, second_id in selected_edges:
+        first_pot = entries_by_id[first_id].pot
+        second_pot = entries_by_id[second_id].pot
+        edges_by_pair[tuple(sorted((first_pot, second_pot)))].add((first_id, second_id))
 
-        candidates = available_candidates(entry_id)
-        rng.shuffle(candidates)
-        candidates.sort(key=lambda candidate_id: len(available_candidates(candidate_id)))
-
-        for candidate_id in candidates:
-            edge = normalize_edge(entry_id, candidate_id)
-            edges.add(edge)
-            remaining[entry_id] -= 1
-            remaining[candidate_id] -= 1
-
-            if backtrack():
-                return True
-
-            remaining[candidate_id] += 1
-            remaining[entry_id] += 1
-            edges.remove(edge)
-
-        return False
-
-    if not backtrack():
-        pot_names = sorted({entry.pot for entry in involved_entries})
-        raise DrawError(f'Unable to solve pot pairing {pot_names}.')
-
-    expected_edges = len(involved_entries) if same_pot else len(pot_a_entries) * OPPONENTS_PER_POT
-    if len(edges) != expected_edges:
-        raise DrawError('Generated pot pairing has an unexpected number of matchups.')
-
-    return edges
+    return dict(edges_by_pair)
 
 
 def orient_draw_edges(
@@ -306,6 +303,9 @@ def validate_directed_draw(entries: list[SeasonTeam], directed_edges: list[tuple
     opponent_pot_counts: dict[int, Counter[int]] = {
         entry.pk: Counter() for entry in entries
     }
+    opponent_association_counts: dict[int, Counter[int]] = {
+        entry.pk: Counter() for entry in entries
+    }
 
     for home_id, away_id in directed_edges:
         home_entry = entries_by_id[home_id]
@@ -317,6 +317,8 @@ def validate_directed_draw(entries: list[SeasonTeam], directed_edges: list[tuple
 
         opponent_pot_counts[home_id][away_entry.pot] += 1
         opponent_pot_counts[away_id][home_entry.pot] += 1
+        opponent_association_counts[home_id][away_entry.team.association_id] += 1
+        opponent_association_counts[away_id][home_entry.team.association_id] += 1
 
     for entry in entries:
         if home_counts[entry.pk] != HOME_MATCHES or away_counts[entry.pk] != AWAY_MATCHES:
@@ -324,11 +326,114 @@ def validate_directed_draw(entries: list[SeasonTeam], directed_edges: list[tuple
         for pot in range(1, POT_COUNT + 1):
             if opponent_pot_counts[entry.pk][pot] != OPPONENTS_PER_POT:
                 raise DrawError('Generated draw does not assign two opponents from each pot.')
+        if any(count > MAX_OPPONENTS_PER_ASSOCIATION for count in opponent_association_counts[entry.pk].values()):
+            raise DrawError('Generated draw exceeds the maximum opponents from one association.')
+
+
+def schedule_matchdays(
+    entries: list[SeasonTeam],
+    directed_edges: list[tuple[int, int]],
+    rng: random.Random,
+) -> dict[tuple[int, int], int]:
+    remaining_edges = {normalize_edge(home_id, away_id) for home_id, away_id in directed_edges}
+    entry_ids = {entry.pk for entry in entries}
+    assignments: dict[tuple[int, int], int] = {}
+
+    def build_adjacency(edges: set[tuple[int, int]]) -> dict[int, set[int]]:
+        adjacency = {entry_id: set() for entry_id in entry_ids}
+        for first_id, second_id in edges:
+            adjacency[first_id].add(second_id)
+            adjacency[second_id].add(first_id)
+        return adjacency
+
+    def find_perfect_matching(edges: set[tuple[int, int]]) -> set[tuple[int, int]] | None:
+        adjacency = build_adjacency(edges)
+        matched: set[int] = set()
+        matching: set[tuple[int, int]] = set()
+
+        def unmatched_ids() -> list[int]:
+            return [entry_id for entry_id in entry_ids if entry_id not in matched]
+
+        def backtrack_matching() -> bool:
+            remaining_ids = unmatched_ids()
+            if not remaining_ids:
+                return True
+
+            entry_id = min(
+                remaining_ids,
+                key=lambda candidate_id: len([opponent_id for opponent_id in adjacency[candidate_id] if opponent_id not in matched]),
+            )
+            candidates = [
+                opponent_id
+                for opponent_id in adjacency[entry_id]
+                if opponent_id not in matched
+            ]
+            rng.shuffle(candidates)
+            candidates.sort(key=lambda opponent_id: len([next_id for next_id in adjacency[opponent_id] if next_id not in matched]))
+
+            for opponent_id in candidates:
+                edge = normalize_edge(entry_id, opponent_id)
+                matching.add(edge)
+                matched.add(entry_id)
+                matched.add(opponent_id)
+
+                if backtrack_matching():
+                    return True
+
+                matched.remove(opponent_id)
+                matched.remove(entry_id)
+                matching.remove(edge)
+
+            return False
+
+        if backtrack_matching():
+            return matching
+        return None
+
+    def has_feasible_remaining_degree(edges: set[tuple[int, int]], remaining_matchdays: int) -> bool:
+        degree_counts = Counter()
+        for first_id, second_id in edges:
+            degree_counts[first_id] += 1
+            degree_counts[second_id] += 1
+        return all(degree_counts[entry_id] == remaining_matchdays for entry_id in entry_ids)
+
+    def backtrack_matchdays(matchday: int, edges: set[tuple[int, int]]) -> bool:
+        if matchday > MATCHDAY_COUNT:
+            return not edges
+        if not has_feasible_remaining_degree(edges, MATCHDAY_COUNT - matchday + 1):
+            return False
+
+        seen_matchings: set[tuple[tuple[int, int], ...]] = set()
+        for _ in range(50):
+            matching = find_perfect_matching(edges)
+            if matching is None:
+                return False
+            matching_key = tuple(sorted(matching))
+            if matching_key in seen_matchings:
+                continue
+            seen_matchings.add(matching_key)
+
+            next_edges = edges - matching
+            for edge in matching:
+                assignments[edge] = matchday
+
+            if backtrack_matchdays(matchday + 1, next_edges):
+                return True
+
+            for edge in matching:
+                assignments.pop(edge, None)
+
+        return False
+
+    if not backtrack_matchdays(1, remaining_edges):
+        raise DrawError('Unable to schedule matchdays so each team plays once per matchday.')
+
+    return assignments
 
 
 def build_summary(
     season: Season,
-    draw_seed: str,
+    draw_record: SeasonDraw,
     entries: list[SeasonTeam],
     directed_edges: list[tuple[int, int]],
 ) -> DrawSummary:
@@ -341,12 +446,16 @@ def build_summary(
         pot_pair_counts[pot_pair] += 1
 
     return DrawSummary(
+        draw_id=draw_record.pk,
         season_id=season.pk,
-        draw_seed=draw_seed,
+        draw_seed=draw_record.draw_seed,
+        status=draw_record.status,
         total_matchups=len(directed_edges),
         home_matches_per_team=HOME_MATCHES,
         away_matches_per_team=AWAY_MATCHES,
         opponents_per_pot=OPPONENTS_PER_POT,
+        max_opponents_per_association=MAX_OPPONENTS_PER_ASSOCIATION,
+        matchday_count=MATCHDAY_COUNT,
         pot_pair_counts=dict(sorted(pot_pair_counts.items())),
     )
 
@@ -363,6 +472,11 @@ def group_entries_by_pot(entries: list[SeasonTeam]) -> dict[int, list[SeasonTeam
 
 def normalize_edge(first_id: int, second_id: int) -> tuple[int, int]:
     return tuple(sorted((first_id, second_id)))
+
+
+def other_entry_for_edge(edge: tuple[int, int], entry_id: int, entries_by_id: dict[int, SeasonTeam]) -> SeasonTeam:
+    first_id, second_id = edge
+    return entries_by_id[second_id if first_id == entry_id else first_id]
 
 
 def associations_differ(first: SeasonTeam, second: SeasonTeam) -> bool:

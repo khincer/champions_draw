@@ -11,8 +11,10 @@ Django/DRF backend for importing UEFA Champions League league-phase teams, seedi
   - 8 matches per team.
   - 2 opponents from each pot.
   - No same-association matchups.
+  - No more than 2 opponents from any one association.
   - No duplicate or reverse duplicate pairings.
   - 4 home and 4 away matches per team.
+  - Matchdays 1-8, with each team playing once per matchday.
 
 ## Local setup
 
@@ -54,6 +56,7 @@ GET  /api/seasons/
 GET  /api/teams/overview/
 POST /api/seasons/<season_id>/seed/
 POST /api/seasons/<season_id>/draw/
+GET  /api/seasons/<season_id>/draws/
 GET  /api/seasons/<season_id>/matchups/
 ```
 
@@ -73,6 +76,22 @@ Regenerate an existing draw:
   "reset": true
 }
 ```
+
+The draw response includes a summary with the draw seed, total matchup count, matchday count, pot-pair counts, home/away targets, and association-opponent cap.
+
+Generate a draw from the command line:
+
+```powershell
+.\.venv\Scripts\python manage.py generate_draw 2025-26 --seed demo-draw-1
+```
+
+Replace an existing draw:
+
+```powershell
+.\.venv\Scripts\python manage.py generate_draw 2025-26 --seed demo-draw-2 --reset
+```
+
+Every draw attempt is stored as metadata with its seed, status, matchup count, error message, and completion time.
 
 ## Docker
 

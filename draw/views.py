@@ -7,8 +7,8 @@ from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Season, SeasonMatchup, SeasonTeam
-from .serializers import SeasonMatchupSerializer, SeasonSerializer, SeasonTeamSerializer
+from .models import Season, SeasonDraw, SeasonMatchup, SeasonTeam
+from .serializers import SeasonDrawSerializer, SeasonMatchupSerializer, SeasonSerializer, SeasonTeamSerializer
 from .services.draw import DrawError, generate_season_draw
 from .services.seeding import SeedingError, seed_season_entries
 
@@ -124,6 +124,14 @@ class SeasonMatchupListAPIView(generics.ListAPIView):
 	def get_queryset(self):
 		season = get_object_or_404(Season, pk=self.kwargs['pk'])
 		return get_season_matchups(season)
+
+
+class SeasonDrawListAPIView(generics.ListAPIView):
+	serializer_class = SeasonDrawSerializer
+
+	def get_queryset(self):
+		season = get_object_or_404(Season, pk=self.kwargs['pk'])
+		return SeasonDraw.objects.filter(season=season).order_by('-created_at')
 
 
 def get_season_matchups(season: Season):
