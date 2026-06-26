@@ -17,7 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from .ui_views import console_app, public_app
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('draw.urls')),
+    path('console/', console_app, name='console-app'),
+    path('', public_app, name='public-app'),
 ]
