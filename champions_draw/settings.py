@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -20,17 +21,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = '----------------------'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', '----------------------')
 
-API_URL = 'https://v3.football.api-sports.io'
-API_KEY = '-----------------------'
-TIMEOUT = 10  # seconds
-LEAGUE_ID = 2  # UEFA Champions League
+API_URL = os.getenv('API_FOOTBALL_BASE_URL', os.getenv('API_URL', 'https://v3.football.api-sports.io'))
+API_KEY = os.getenv('API_FOOTBALL_KEY', os.getenv('API_KEY', ''))
+TIMEOUT = int(os.getenv('API_FOOTBALL_TIMEOUT', os.getenv('TIMEOUT', '10')))  # seconds
+LEAGUE_ID = int(os.getenv('API_FOOTBALL_LEAGUE_ID', os.getenv('LEAGUE_ID', '2')))  # UEFA Champions League
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DJANGO_DEBUG', 'true').lower() in {'1', 'true', 'yes', 'on'}
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
+    if host.strip()
+]
 
 
 # Application definition
