@@ -31,6 +31,7 @@ class DrawSummary:
     draw_id: int
     season_id: int
     draw_seed: str
+    player_name: str
     status: str
     total_matchups: int
     home_matches_per_team: int
@@ -45,13 +46,16 @@ def generate_season_draw(
     season: Season,
     *,
     draw_seed: str | int | None = None,
+    player_name: str = '',
     reset: bool = False,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
 ) -> DrawSummary:
     normalized_seed = str(draw_seed if draw_seed is not None else random.SystemRandom().randrange(1, 10**12))
+    normalized_player_name = normalize_player_name(player_name)
     draw_record = SeasonDraw.objects.create(
         season=season,
         draw_seed=normalized_seed,
+        player_name=normalized_player_name,
         status=DrawStatusChoices.RUNNING,
     )
 
@@ -449,6 +453,7 @@ def build_summary(
         draw_id=draw_record.pk,
         season_id=season.pk,
         draw_seed=draw_record.draw_seed,
+        player_name=draw_record.player_name,
         status=draw_record.status,
         total_matchups=len(directed_edges),
         home_matches_per_team=HOME_MATCHES,
@@ -481,3 +486,9 @@ def other_entry_for_edge(edge: tuple[int, int], entry_id: int, entries_by_id: di
 
 def associations_differ(first: SeasonTeam, second: SeasonTeam) -> bool:
     return first.team.association_id != second.team.association_id
+
+
+def normalize_player_name(player_name: str | None) -> str:
+    if not player_name:
+        return ''
+    return str(player_name).strip()[:80]

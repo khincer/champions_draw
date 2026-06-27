@@ -57,6 +57,7 @@ class Season(models.Model):
 class Team(models.Model):
 	name = models.CharField(max_length=100)
 	short_name = models.CharField(max_length=30)
+	logo_url = models.URLField(max_length=500, blank=True)
 	association = models.ForeignKey(
 		Association,
 		on_delete=models.PROTECT,
@@ -119,6 +120,7 @@ class SeasonDraw(models.Model):
 		related_name='draws',
 	)
 	draw_seed = models.CharField(max_length=100)
+	player_name = models.CharField(max_length=80, blank=True)
 	status = models.CharField(
 		max_length=20,
 		choices=DrawStatusChoices.choices,
@@ -133,7 +135,8 @@ class SeasonDraw(models.Model):
 		ordering = ['-created_at']
 
 	def __str__(self) -> str:
-		return f'{self.season.name} draw {self.draw_seed} ({self.status})'
+		player = f' by {self.player_name}' if self.player_name else ''
+		return f'{self.season.name} draw {self.draw_seed}{player} ({self.status})'
 
 
 class SeasonMatchup(models.Model):

@@ -22,6 +22,11 @@ class Command(BaseCommand):
             help='Replace existing matchups for the season.',
         )
         parser.add_argument(
+            '--player-name',
+            default='',
+            help='Optional player name to store with the draw metadata.',
+        )
+        parser.add_argument(
             '--max-attempts',
             type=int,
             default=100,
@@ -38,6 +43,7 @@ class Command(BaseCommand):
             summary = generate_season_draw(
                 season,
                 draw_seed=options['draw_seed'],
+                player_name=options['player_name'],
                 reset=options['reset'],
                 max_attempts=options['max_attempts'],
             )

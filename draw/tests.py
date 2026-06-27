@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from decimal import Decimal
 
+from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -59,6 +60,9 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(seeded_entries[-1].seeding_position, 36)
 
 	def test_seed_endpoint_assigns_pots_and_returns_payload(self):
+		User.objects.create_user(username='operator', password='password')
+		self.client.login(username='operator', password='password')
+
 		response = self.client.post(reverse('draw:season-seed', args=[self.season.pk]))
 
 		self.assertEqual(response.status_code, 200)
@@ -91,16 +95,35 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(len(response.data['teams']), 36)
 		self.assertEqual(response.data['teams'][0]['team']['name'], self.title_holder.team.name)
 
+	def test_public_ui_route_serves_preact_app(self):
+		response = self.client.get('/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response['Content-Type'], 'text/html')
+
+	def test_console_ui_route_redirects_to_public_app(self):
+		response = self.client.get('/console/')
+
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response['Location'], '/')
+
+	def test_admin_route_is_not_exposed(self):
+		response = self.client.get('/admin/')
+
+		self.assertEqual(response.status_code, 404)
+
 	def test_generate_draw_creates_valid_league_phase_matchups(self):
 		seed_season_entries(self.season)
 
-		summary = generate_season_draw(self.season, draw_seed='unit-test-draw')
+		summary = generate_season_draw(self.season, draw_seed='unit-test-draw', player_name='Ada')
 		draw_record = SeasonDraw.objects.get(pk=summary.draw_id)
 
 		self.assertEqual(summary.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(summary.player_name, 'Ada')
 		self.assertEqual(summary.total_matchups, 144)
 		self.assertEqual(draw_record.status, DrawStatusChoices.COMPLETED)
 		self.assertEqual(draw_record.draw_seed, 'unit-test-draw')
+		self.assertEqual(draw_record.player_name, 'Ada')
 		self.assertEqual(draw_record.matchups_created, 144)
 		self.assertIsNotNone(draw_record.completed_at)
 		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 144)
@@ -123,20 +146,22 @@ class DrawApiTests(APITestCase):
 
 		response = self.client.post(
 			reverse('draw:season-draw', args=[self.season.pk]),
-			{'seed': 'api-test-draw'},
+			{'seed': 'api-test-draw', 'player_name': 'Marta'},
 			format='json',
 		)
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data['summary']['status'], DrawStatusChoices.COMPLETED)
+		self.assertEqual(response.data['summary']['player_name'], 'Marta')
 		self.assertIsNotNone(response.data['summary']['draw_id'])
 		self.assertEqual(response.data['summary']['total_matchups'], 144)
 		self.assertEqual(len(response.data['matchups']), 144)
+		self.assertEqual(SeasonDraw.objects.get(pk=response.data['summary']['draw_id']).player_name, 'Marta')
 		self.assert_draw_constraints(self.season)
 
 	def test_draw_history_endpoint_returns_draw_metadata(self):
 		seed_season_entries(self.season)
-		summary = generate_season_draw(self.season, draw_seed='history-test-draw')
+		summary = generate_season_draw(self.season, draw_seed='history-test-draw', player_name='History Player')
 
 		response = self.client.get(reverse('draw:season-draw-list', args=[self.season.pk]))
 
@@ -144,7 +169,24 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(len(response.data), 1)
 		self.assertEqual(response.data[0]['id'], summary.draw_id)
 		self.assertEqual(response.data[0]['draw_seed'], 'history-test-draw')
+		self.assertEqual(response.data[0]['player_name'], 'History Player')
 		self.assertEqual(response.data[0]['status'], DrawStatusChoices.COMPLETED)
+
+	def test_ui_season_state_returns_compact_payload(self):
+		seed_season_entries(self.season)
+		generate_season_draw(self.season, draw_seed='ui-state-test', player_name='UI Player')
+
+		response = self.client.get(reverse('draw:ui-season-state', args=[self.season.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['summary']['team_count'], 36)
+		self.assertEqual(response.data['summary']['matchup_count'], 144)
+		self.assertEqual(len(response.data['teams']), 36)
+		self.assertEqual(len(response.data['matchups']), 144)
+		self.assertIn('name', response.data['teams'][0])
+		self.assertIn('logo_url', response.data['teams'][0])
+		self.assertIn('home_team', response.data['matchups'][0])
+		self.assertEqual(response.data['draws'][0]['player_name'], 'UI Player')
 
 	def test_matchup_list_endpoint_returns_generated_matchups(self):
 		seed_season_entries(self.season)
@@ -164,6 +206,20 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(draw_record.status, DrawStatusChoices.FAILED)
 		self.assertIn('seeded', draw_record.error_message)
 		self.assertIsNotNone(draw_record.completed_at)
+
+	def test_seed_endpoint_requires_authentication(self):
+		response = self.client.post(reverse('draw:season-seed', args=[self.season.pk]))
+
+		self.assertIn(response.status_code, [401, 403])
+
+	def test_seed_endpoint_accepts_authenticated_user(self):
+		User.objects.create_user(username='operator', password='password')
+		self.client.login(username='operator', password='password')
+
+		response = self.client.post(reverse('draw:season-seed', args=[self.season.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['summary']['total_teams'], 36)
 
 	def test_draw_endpoint_rejects_incomplete_season(self):
 		incomplete_season = Season.objects.create(name='2026-27')
@@ -232,11 +288,12 @@ class DrawApiTests(APITestCase):
 	def test_generate_draw_management_command_creates_matchups_and_metadata(self):
 		seed_season_entries(self.season)
 
-		call_command('generate_draw', self.season.name, '--seed', 'command-test-draw')
+		call_command('generate_draw', self.season.name, '--seed', 'command-test-draw', '--player-name', 'CLI Player')
 
 		draw_record = SeasonDraw.objects.get(season=self.season)
 		self.assertEqual(draw_record.status, DrawStatusChoices.COMPLETED)
 		self.assertEqual(draw_record.draw_seed, 'command-test-draw')
+		self.assertEqual(draw_record.player_name, 'CLI Player')
 		self.assertEqual(draw_record.matchups_created, 144)
 		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 144)
 		self.assert_draw_constraints(self.season)
@@ -339,6 +396,7 @@ class SeedInputImportTests(TestCase):
 					'name': association_name,
 					'code': association_code,
 				},
+				'api_football_logo': f'https://example.test/{short_name}.png',
 				'uefa_reference_name': team_name,
 			},
 			'uefa_club_coefficient': coefficient,
@@ -374,6 +432,7 @@ class SeedInputImportTests(TestCase):
 		self.assertFalse(SeasonTeam.objects.filter(team__name='Real Madrid').exists())
 		self.assertTrue(SeasonTeam.objects.filter(team__name='Barcelona', is_title_holder=True).exists())
 		self.assertEqual(SeasonTeam.objects.get(team__name='Arsenal FC').uefa_club_coefficient, Decimal('99.5'))
+		self.assertEqual(Team.objects.get(name='Arsenal FC').logo_url, 'https://example.test/ARS.png')
 
 	def test_import_seed_input_command_reads_json_file(self):
 		payload = self.build_payload([
@@ -415,6 +474,18 @@ class SeedInputImportTests(TestCase):
 		self.assertEqual(Team.objects.filter(association__code='GER', short_name='BAY').count(), 2)
 		self.assertTrue(SeasonTeam.objects.filter(team__name='Bayern München').exists())
 		self.assertTrue(SeasonTeam.objects.filter(team__name='Bayer Leverkusen').exists())
+
+	def test_import_seed_input_updates_existing_team_logo_url(self):
+		initial_payload = self.build_payload([
+			self.build_entry(1, 'Arsenal', 'ARS', 'England', 'ENG', '98.0', title_holder=True),
+		])
+		import_seed_input_payload(initial_payload, set_active=True)
+
+		updated_entry = self.build_entry(1, 'Arsenal', 'ARS', 'England', 'ENG', '98.0', title_holder=True)
+		updated_entry['team']['api_football_logo'] = 'https://example.test/arsenal-new.png'
+		import_seed_input_payload(self.build_payload([updated_entry]), set_active=True)
+
+		self.assertEqual(Team.objects.get(name='Arsenal').logo_url, 'https://example.test/arsenal-new.png')
 
 
 class SeasonMatchupModelTests(TestCase):

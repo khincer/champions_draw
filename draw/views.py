@@ -4,11 +4,19 @@ from collections import Counter
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Season, SeasonDraw, SeasonMatchup, SeasonTeam
-from .serializers import SeasonDrawSerializer, SeasonMatchupSerializer, SeasonSerializer, SeasonTeamSerializer
+from .serializers import (
+	CompactSeasonMatchupSerializer,
+	CompactSeasonTeamSerializer,
+	SeasonDrawSerializer,
+	SeasonMatchupSerializer,
+	SeasonSerializer,
+	SeasonTeamSerializer,
+)
 from .services.draw import DrawError, generate_season_draw
 from .services.seeding import SeedingError, seed_season_entries
 
@@ -72,6 +80,8 @@ class TeamOverviewAPIView(APIView):
 
 
 class SeasonSeedingAPIView(APIView):
+	permission_classes = [IsAuthenticated]
+
 	def post(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
 
@@ -100,10 +110,11 @@ class SeasonDrawAPIView(APIView):
 	def post(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
 		draw_seed = request.data.get('seed')
+		player_name = request.data.get('player_name', '')
 		reset = parse_bool(request.data.get('reset', False))
 
 		try:
-			summary = generate_season_draw(season, draw_seed=draw_seed, reset=reset)
+			summary = generate_season_draw(season, draw_seed=draw_seed, player_name=player_name, reset=reset)
 		except DrawError as exc:
 			return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -132,6 +143,36 @@ class SeasonDrawListAPIView(generics.ListAPIView):
 	def get_queryset(self):
 		season = get_object_or_404(Season, pk=self.kwargs['pk'])
 		return SeasonDraw.objects.filter(season=season).order_by('-created_at')
+
+
+class UiSeasonStateAPIView(APIView):
+	def get(self, request, pk):
+		season = get_object_or_404(Season, pk=pk)
+		entries = list(
+			SeasonTeam.objects.select_related('season', 'team', 'team__association')
+			.filter(season=season)
+			.order_by('pot', 'seeding_position', 'team__name')
+		)
+		matchups = list(get_season_matchups(season))
+		draws = list(SeasonDraw.objects.filter(season=season).order_by('-created_at')[:12])
+		pot_sizes = Counter(entry.pot for entry in entries if entry.pot is not None)
+
+		return Response(
+			{
+				'season': SeasonSerializer(season).data,
+				'summary': {
+					'team_count': len(entries),
+					'seeded_team_count': sum(1 for entry in entries if entry.seeding_position is not None),
+					'matchup_count': len(matchups),
+					'draw_count': SeasonDraw.objects.filter(season=season).count(),
+					'pot_sizes': {pot: pot_sizes[pot] for pot in sorted(pot_sizes)},
+				},
+				'teams': CompactSeasonTeamSerializer(entries, many=True).data,
+				'matchups': CompactSeasonMatchupSerializer(matchups, many=True).data,
+				'draws': SeasonDrawSerializer(draws, many=True).data,
+			},
+			status=status.HTTP_200_OK,
+		)
 
 
 def get_season_matchups(season: Season):
