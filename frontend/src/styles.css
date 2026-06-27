@@ -66,36 +66,14 @@ button {
 }
 
 .champions-logo {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--ink);
-  font-weight: 900;
+  display: inline-grid;
+  place-items: center;
 }
 
-.champions-logo svg {
-  width: 42px;
-  height: 42px;
-  color: var(--blue-dark);
-}
-
-.champions-logo circle {
-  fill: #ffffff;
-  stroke: currentColor;
-  stroke-width: 3;
-}
-
-.champions-logo path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.champions-logo span {
-  font-size: 18px;
-  letter-spacing: 0;
+.champions-logo img {
+  display: block;
+  width: 176px;
+  height: auto;
 }
 
 .app-footer {
@@ -667,6 +645,26 @@ select:focus,
   overflow: hidden;
 }
 
+.team-picker {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.team-picker span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.team-picker select {
+  width: 100%;
+}
+
 .inspector-head {
   padding: 18px;
   background: #102033;
@@ -811,18 +809,8 @@ select:focus,
     margin-bottom: 12px;
   }
 
-  .champions-logo {
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .champions-logo svg {
-    width: 36px;
-    height: 36px;
-  }
-
-  .champions-logo span {
-    font-size: 15px;
+  .champions-logo img {
+    width: 142px;
   }
 
   .view-tabs {

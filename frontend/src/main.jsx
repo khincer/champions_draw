@@ -8,6 +8,7 @@ import {
   Play,
   Users,
 } from 'lucide-preact';
+import championsLeagueLogoUrl from './assets/uefa-champions-league-logo.svg';
 import './styles.css';
 
 const API_ROOT = '/api';
@@ -249,7 +250,13 @@ function App() {
                 {activeTab === 'pots' && <PotBoard pots={pots} selectedTeamId={selectedTeam?.id} setSelectedTeamId={setSelectedTeamId} />}
                 {activeTab === 'history' && <PlayersRuns draws={seasonState?.draws || []} />}
               </div>
-              <TeamInspector team={selectedTeam} matchups={teamMatchups} />
+              <TeamInspector
+                team={selectedTeam}
+                teams={seasonState?.teams || []}
+                selectedTeamId={selectedTeam?.id}
+                setSelectedTeamId={setSelectedTeamId}
+                matchups={teamMatchups}
+              />
             </section>
             <AppFooter />
           </>
@@ -271,12 +278,7 @@ function WorkspaceHeader({ activeTab, setActiveTab }) {
 function ChampionsLeagueLogo() {
   return (
     <div className="champions-logo" aria-label="Champions League">
-      <svg viewBox="0 0 64 64" role="img" aria-hidden="true">
-        <circle cx="32" cy="32" r="27" />
-        <path d="M32 9l5.2 14.1 15 .7-11.8 9.3 4 14.5L32 39.4 19.6 47.6l4-14.5-11.8-9.3 15-.7L32 9z" />
-        <path d="M18.4 22.7l27.2 20.1M45.6 22.7L18.4 42.8M32 9v46" />
-      </svg>
-      <span>Champions League</span>
+      <img src={championsLeagueLogoUrl} alt="UEFA Champions League logo" />
     </div>
   );
 }
@@ -550,12 +552,22 @@ function PlayersRuns({ draws }) {
   );
 }
 
-function TeamInspector({ team, matchups }) {
+function TeamInspector({ team, teams, selectedTeamId, setSelectedTeamId, matchups }) {
   if (!team) {
     return <aside className="inspector"><StateMessage icon={Users} title="No team selected" text="Choose a team from a pot." /></aside>;
   }
   return (
     <aside className="inspector">
+      <label className="team-picker">
+        <span>Inspect team</span>
+        <select value={selectedTeamId || ''} onChange={(event) => setSelectedTeamId(Number(event.currentTarget.value))}>
+          {teams.map((entry) => (
+            <option value={entry.id} key={entry.id}>
+              {entry.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="inspector-head">
         <TeamLogo team={team} size="lg" />
         <span>{team.association.name}</span>
