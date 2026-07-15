@@ -65,7 +65,7 @@ function KnockoutMatch({ match, onScoreChange, disabled }) {
             {match.winner.logo_url ? <img src={match.winner.logo_url} alt="" /> : match.winner.short_name?.slice(0, 3)}
           </span>
           <strong>{match.winner.short_name}</strong>
-          <span className="winner-badge">Advances</span>
+          <span className="bracket-won-badge" style="background:none;padding:0;margin-left:4px">Advances</span>
         </div>
       )}
     </div>
