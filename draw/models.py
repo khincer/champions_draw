@@ -199,3 +199,96 @@ class SeasonMatchup(models.Model):
 
 	def __str__(self) -> str:
 		return f'{self.season.name}: {self.home_team.team.name} vs {self.away_team.team.name}'
+
+
+class Prediction(models.Model):
+	season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name='predictions')
+	player_name = models.CharField(max_length=80)
+	is_league_complete = models.BooleanField(default=False)
+	is_playoffs_complete = models.BooleanField(default=False)
+	is_knockout_complete = models.BooleanField(default=False)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['-updated_at']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['season', 'player_name'],
+				name='unique_prediction_per_player_per_season',
+			),
+		]
+
+	def __str__(self) -> str:
+		return f'{self.player_name} - {self.season.name} prediction'
+
+
+class MatchPrediction(models.Model):
+	prediction = models.ForeignKey(Prediction, on_delete=models.CASCADE, related_name='match_predictions')
+	matchup = models.ForeignKey(SeasonMatchup, on_delete=models.CASCADE, related_name='predictions')
+	home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+
+	class Meta:
+		constraints = [
+			models.UniqueConstraint(
+				fields=['prediction', 'matchup'],
+				name='unique_match_prediction',
+			),
+		]
+
+	def __str__(self) -> str:
+		return f'{self.matchup}: {self.home_goals}-{self.away_goals}'
+
+
+class PlayoffPrediction(models.Model):
+	prediction = models.ForeignKey(Prediction, on_delete=models.CASCADE, related_name='playoff_predictions')
+	matchup_index = models.PositiveSmallIntegerField()
+	home_team = models.ForeignKey(SeasonTeam, on_delete=models.CASCADE, related_name='home_playoff_preds')
+	away_team = models.ForeignKey(SeasonTeam, on_delete=models.CASCADE, related_name='away_playoff_preds')
+	leg1_home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	leg1_away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	leg2_home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	leg2_away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	winner = models.ForeignKey(SeasonTeam, on_delete=models.CASCADE, null=True, blank=True, related_name='playoff_wins')
+
+	class Meta:
+		constraints = [
+			models.UniqueConstraint(
+				fields=['prediction', 'matchup_index'],
+				name='unique_playoff_prediction',
+			),
+		]
+
+	def __str__(self) -> str:
+		return f'Playoff {self.matchup_index}: {self.home_team} vs {self.away_team}'
+
+
+class KnockoutPrediction(models.Model):
+	ROUND_CHOICES = [
+		('R16', 'Round of 16'),
+		('QF', 'Quarter-final'),
+		('SF', 'Semi-final'),
+		('F', 'Final'),
+	]
+	prediction = models.ForeignKey(Prediction, on_delete=models.CASCADE, related_name='knockout_predictions')
+	round = models.CharField(max_length=3, choices=ROUND_CHOICES)
+	bracket_position = models.PositiveSmallIntegerField()
+	home_team = models.ForeignKey(SeasonTeam, on_delete=models.CASCADE, null=True, blank=True, related_name='home_knockout_preds')
+	away_team = models.ForeignKey(SeasonTeam, on_delete=models.CASCADE, null=True, blank=True, related_name='away_knockout_preds')
+	home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	extra_time = models.BooleanField(default=False)
+	penalties = models.BooleanField(default=False)
+	winner = models.ForeignKey(SeasonTeam, on_delete=models.CASCADE, null=True, blank=True, related_name='knockout_wins')
+
+	class Meta:
+		constraints = [
+			models.UniqueConstraint(
+				fields=['prediction', 'round', 'bracket_position'],
+				name='unique_knockout_prediction',
+			),
+		]
+
+	def __str__(self) -> str:
+		return f'{self.get_round_display()} #{self.bracket_position}: {self.home_team} vs {self.away_team}'

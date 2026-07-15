@@ -6,10 +6,12 @@ import {
   CheckCircle2,
   History,
   Play,
+  Trophy,
   Users,
 } from 'lucide-preact';
 import championsLeagueLogoUrl from './assets/uefa-champions-league-logo.svg';
 import './styles.css';
+import PredictionApp from './PredictionApp';
 
 const API_ROOT = '/api';
 const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
@@ -47,7 +49,7 @@ async function apiFetch(path, options = {}) {
   return payload;
 }
 
-function groupBy(items, key) {
+export function groupBy(items, key) {
   return items.reduce((groups, item) => {
     const value = item[key] ?? 'Unassigned';
     groups[value] = groups[value] || [];
@@ -79,6 +81,7 @@ function App() {
   const [drawAnimation, setDrawAnimation] = useState({ isActive: false, phase: 'idle', revealedCount: 0 });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [predictionApi] = useState({});
 
   useEffect(() => {
     loadInitialData();
@@ -232,32 +235,42 @@ function App() {
               />
             )}
 
-            <section className="content-grid">
-              <div className="primary-column">
-                {activeTab === 'simulate' && (
-                  drawAnimation.isActive ? (
-                    <DrawAnimationStage
-                      phase={drawAnimation.phase}
-                      pots={pots}
-                      matchups={seasonState?.matchups || []}
-                      revealedCount={drawAnimation.revealedCount}
-                    />
-                  ) : (
-                    <MatchdayBoard matchdays={matchdays} />
-                  )
-                )}
-                {activeTab === 'matchdays' && <MatchdayBoard matchdays={matchdays} />}
-                {activeTab === 'pots' && <PotBoard pots={pots} selectedTeamId={selectedTeam?.id} setSelectedTeamId={setSelectedTeamId} />}
-                {activeTab === 'history' && <PlayersRuns draws={seasonState?.draws || []} />}
-              </div>
-              <TeamInspector
-                team={selectedTeam}
-                teams={seasonState?.teams || []}
-                selectedTeamId={selectedTeam?.id}
-                setSelectedTeamId={setSelectedTeamId}
-                matchups={teamMatchups}
+            {activeTab === 'predict' ? (
+              <PredictionApp
+                seasonId={selectedSeasonId}
+                playerName={playerName}
+                seasonState={seasonState}
+                predictionApi={predictionApi}
+                apiFetch={apiFetch}
               />
-            </section>
+            ) : (
+              <section className="content-grid">
+                <div className="primary-column">
+                  {activeTab === 'simulate' && (
+                    drawAnimation.isActive ? (
+                      <DrawAnimationStage
+                        phase={drawAnimation.phase}
+                        pots={pots}
+                        matchups={seasonState?.matchups || []}
+                        revealedCount={drawAnimation.revealedCount}
+                      />
+                    ) : (
+                      <MatchdayBoard matchdays={matchdays} />
+                    )
+                  )}
+                  {activeTab === 'matchdays' && <MatchdayBoard matchdays={matchdays} />}
+                  {activeTab === 'pots' && <PotBoard pots={pots} selectedTeamId={selectedTeam?.id} setSelectedTeamId={setSelectedTeamId} />}
+                  {activeTab === 'history' && <PlayersRuns draws={seasonState?.draws || []} />}
+                </div>
+                <TeamInspector
+                  team={selectedTeam}
+                  teams={seasonState?.teams || []}
+                  selectedTeamId={selectedTeam?.id}
+                  setSelectedTeamId={setSelectedTeamId}
+                  matchups={teamMatchups}
+                />
+              </section>
+            )}
             <AppFooter />
           </>
         )}
@@ -433,6 +446,7 @@ function ViewTabs({ activeTab, setActiveTab }) {
       {[
         ['simulate', 'Run simulation'],
         ['matchdays', 'Fixtures'],
+        ['predict', 'Predict'],
         ['pots', 'Pots'],
         ['history', 'Saved runs'],
       ].map(([key, label]) => (
