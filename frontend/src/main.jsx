@@ -5,12 +5,15 @@ import {
   AlertCircle,
   CheckCircle2,
   History,
+  Home,
   Play,
   Trophy,
+  UserRound,
   Users,
 } from 'lucide-preact';
 import championsLeagueLogoUrl from './assets/uefa-champions-league-logo.svg';
 import './styles.css';
+import CareerApp, { hasSavedCareer } from './CareerApp';
 import PredictionApp from './PredictionApp';
 
 const API_ROOT = '/api';
@@ -82,6 +85,7 @@ function App() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [predictionApi] = useState({});
+  const [careerAvailable, setCareerAvailable] = useState(() => hasSavedCareer());
 
   useEffect(() => {
     loadInitialData();
@@ -205,10 +209,29 @@ function App() {
           <StateMessage icon={Activity} title="Loading prediction lab" text="Fetching seasons, pots, and recent simulations." />
         ) : (
           <>
-            <LandingPage working={working} generateDraw={generateDraw} setActiveTab={setActiveTab} />
+            <LandingPage
+              working={working}
+              generateDraw={generateDraw}
+              setActiveTab={setActiveTab}
+              careerAvailable={careerAvailable}
+            />
             <AppFooter />
           </>
         )}
+      </main>
+    );
+  }
+
+  if (activeTab === 'career') {
+    return (
+      <main className="app-shell career-app-shell">
+        <CareerApp
+          defaultName={playerName}
+          seasonTeams={seasonState?.teams || []}
+          onHome={() => setActiveTab('home')}
+          onCareerAvailabilityChange={setCareerAvailable}
+        />
+        <AppFooter />
       </main>
     );
   }
@@ -282,6 +305,10 @@ function App() {
 function WorkspaceHeader({ activeTab, setActiveTab }) {
   return (
     <header className="workspace-header">
+      <button className="workspace-home-button" onClick={() => setActiveTab('home')}>
+        <Home size={16} />
+        Home
+      </button>
       <ChampionsLeagueLogo />
       <ViewTabs activeTab={activeTab} setActiveTab={setActiveTab} />
     </header>
@@ -296,25 +323,65 @@ function ChampionsLeagueLogo() {
   );
 }
 
-function LandingPage({ working, generateDraw, setActiveTab }) {
+function LandingPage({ working, generateDraw, setActiveTab, careerAvailable }) {
   return (
-    <section className="landing">
-      <div className="landing-copy">
-        <h1>Make your Champions League draw prediction</h1>
-        <p>
-          Run a fresh league-phase simulation, save it under your name, and compare your draw against the other saved
-          runs from the community.
-        </p>
-        <div className="landing-actions">
-          <button className="button primary landing-button" disabled={working} onClick={() => generateDraw({ fresh: true })}>
-            <Play size={18} />
-            {working ? 'Running' : 'Run a simulation'}
-          </button>
-          <button className="button secondary landing-button" onClick={() => setActiveTab('history')}>
-            <History size={18} />
-            View saved runs
-          </button>
-        </div>
+    <section className="product-hub">
+      <header className="product-hub-header">
+        <ChampionsLeagueLogo />
+        <span className="product-hub-kicker">Two ways to write football history</span>
+        <h1>Choose your game.</h1>
+        <p>Build the competition, then build the player who dreams of winning it.</p>
+      </header>
+      <div className="product-grid">
+        <article className="product-card product-card-draw">
+          <div className="product-card-index">01 / DRAW</div>
+          <Trophy size={32} />
+          <div>
+            <span className="product-label">Champions League</span>
+            <h2>Draw &amp; predict</h2>
+            <p>Generate the league phase, inspect every matchup, and predict the road to the final.</p>
+          </div>
+          <ul>
+            <li>36 seeded clubs</li>
+            <li>144 fixtures</li>
+            <li>Full knockout bracket</li>
+          </ul>
+          <div className="product-card-actions">
+            <button
+              className="button primary landing-button"
+              disabled={working}
+              onClick={() => generateDraw({ fresh: true })}
+            >
+              <Play size={18} />
+              {working ? 'Running' : 'Run a simulation'}
+            </button>
+            <button className="button secondary landing-button" onClick={() => setActiveTab('history')}>
+              <History size={18} />
+              Saved runs
+            </button>
+          </div>
+        </article>
+
+        <article className="product-card product-card-career">
+          <div className="product-card-index">02 / CAREER</div>
+          <UserRound size={32} />
+          <div>
+            <span className="product-label">Player career</span>
+            <h2>Build your legacy</h2>
+            <p>Choose every club, gamble on defining moments, and play from academy prospect to retirement.</p>
+          </div>
+          <ul>
+            <li>100 European clubs</li>
+            <li>24-year career</li>
+            <li>Deterministic choices</li>
+          </ul>
+          <div className="product-card-actions">
+            <button className="button career-hub-button landing-button" onClick={() => setActiveTab('career')}>
+              <Play size={18} />
+              {careerAvailable ? 'Resume career' : 'Start career'}
+            </button>
+          </div>
+        </article>
       </div>
     </section>
   );
