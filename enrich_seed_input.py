@@ -130,7 +130,7 @@ def load_project_defaults() -> tuple[str, str | None, int]:
         timeout = int(timeout_raw) if timeout_raw else DEFAULT_TIMEOUT
         return base_url, api_key, timeout
 
-    base_url = api_key or getattr(project_settings, 'API_URL', DEFAULT_BASE_URL)
+    base_url = base_url or getattr(project_settings, 'API_URL', DEFAULT_BASE_URL)
     api_key = api_key or getattr(project_settings, 'API_KEY', None)
     timeout_value = timeout_raw or str(getattr(project_settings, 'TIMEOUT', DEFAULT_TIMEOUT))
     timeout = int(timeout_value)

@@ -159,7 +159,8 @@ function App() {
     setError('');
     setNotice('');
     try {
-      const seed = fresh ? `prediction-${Date.now()}` : drawSeed.trim() || `prediction-${Date.now()}`;
+      const season = seasons.find((s) => String(s.id) === String(selectedSeasonId));
+      const seed = season ? season.name : `prediction-${Date.now()}`;
       const normalizedPlayer = playerName.trim() || 'Guest player';
       localStorage.setItem(PLAYER_STORAGE_KEY, normalizedPlayer);
       setPlayerName(normalizedPlayer);
@@ -250,10 +251,10 @@ function App() {
               <SimulationPanel
                 playerName={playerName}
                 setPlayerName={setPlayerName}
-                drawSeed={drawSeed}
-                setDrawSeed={setDrawSeed}
-                working={working}
+                seasons={seasons}
                 selectedSeasonId={selectedSeasonId}
+                setSelectedSeasonId={setSelectedSeasonId}
+                working={working}
                 generateDraw={generateDraw}
               />
             )}
@@ -451,10 +452,10 @@ function DrawAnimationStage({ phase, pots, matchups, revealedCount }) {
 function SimulationPanel({
   playerName,
   setPlayerName,
-  drawSeed,
-  setDrawSeed,
-  working,
+  seasons,
   selectedSeasonId,
+  setSelectedSeasonId,
+  working,
   generateDraw,
 }) {
   return (
@@ -462,7 +463,7 @@ function SimulationPanel({
       <div>
         <h1>Run your Champions League simulation</h1>
         <p>
-          Enter your player name, choose a seed, and publish a league-phase prediction. Every run is saved so other
+          Enter your player name, choose a season, and publish a league-phase prediction. Every run is saved so other
           players can compare fixtures, pots, and outcomes.
         </p>
       </div>
@@ -477,8 +478,14 @@ function SimulationPanel({
           />
         </label>
         <label className="seed-input">
-          <span>Simulation seed</span>
-          <input value={drawSeed} onInput={(event) => setDrawSeed(event.currentTarget.value)} />
+          <span>Season year</span>
+          <select value={selectedSeasonId} onChange={(event) => setSelectedSeasonId(event.currentTarget.value)}>
+            {seasons.map((season) => (
+              <option key={season.id} value={season.id}>
+                {season.name}
+              </option>
+            ))}
+          </select>
         </label>
         <button className="button primary" disabled={working || !selectedSeasonId} onClick={() => generateDraw()}>
           <Play size={16} />
