@@ -16,6 +16,8 @@ services:
       - db_data:/app/data
     command: >
       sh -c "python manage.py migrate &&
+      python manage.py import_seed_input draw/data/ucl_league_phase_seed_input_2025_26.json --set-active --seed &&
+      python manage.py import_seed_input draw/data/ucl_league_phase_seed_input_2026_27.json --seed &&
       npm run build &&
       python manage.py runserver 0.0.0.0:8001 &
       npm run dev"
