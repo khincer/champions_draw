@@ -22,8 +22,10 @@ export default function PredictionApp({
   predictionApi,
   apiFetch,
 }) {
+  const latestDrawSeed = seasonState?.draws?.[0]?.draw_seed;
+
   const [subTab, setSubTab] = useState('scores');
-  const [localData, setLocalData] = useState(() => loadLocal(seasonId, playerName));
+  const [localData, setLocalData] = useState(() => loadLocal(seasonId, playerName, latestDrawSeed));
   const [remotePrediction, setRemotePrediction] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [savingMatchday, setSavingMatchday] = useState(false);
@@ -42,12 +44,30 @@ export default function PredictionApp({
     return 1;
   });
 
+  const matchups = seasonState?.matchups || [];
+
+  const validMatchupIds = useMemo(
+    () => new Set(matchups.map((m) => String(m.id))),
+    [matchups],
+  );
+
   const matchPredictions = useMemo(
     () => localData.matchPredictions || {},
     [localData.matchPredictions],
   );
 
-  const matchups = seasonState?.matchups || [];
+  // Only count predictions for currently existing matchups.
+  // When a new draw is generated with reset=true, matchup IDs change
+  // and old localStorage entries must be excluded from standings.
+  const validPredictions = useMemo(() => {
+    const filtered = {};
+    for (const [id, pred] of Object.entries(matchPredictions)) {
+      if (validMatchupIds.has(id)) {
+        filtered[id] = pred;
+      }
+    }
+    return filtered;
+  }, [matchPredictions, validMatchupIds]);
 
   // Save current matchday to localStorage
   const persistMatchday = useCallback((md) => {
@@ -90,7 +110,7 @@ export default function PredictionApp({
               ...prev,
               matchPredictions: { ...remote, ...prev.matchPredictions },
             };
-            saveLocal(seasonId, playerName, merged);
+            saveLocal(seasonId, playerName, merged, latestDrawSeed);
             return merged;
           });
         }
@@ -113,7 +133,7 @@ export default function PredictionApp({
     if (!remotePrediction || syncing) return;
     setSyncing(true);
     try {
-      const predictions = Object.entries(matchPredictions)
+      const predictions = Object.entries(validPredictions)
         .filter(([_, v]) => v.home_goals != null || v.away_goals != null)
         .map(([matchupId, v]) => ({
           matchup: Number(matchupId),
@@ -132,13 +152,13 @@ export default function PredictionApp({
     } finally {
       setSyncing(false);
     }
-  }, [remotePrediction, matchPredictions, syncing]);
+  }, [remotePrediction, validPredictions, syncing]);
 
   const handleSaveMatchday = useCallback(async () => {
     if (!remotePrediction) return;
     setSavingMatchday(true);
     try {
-      const predictions = Object.entries(matchPredictions)
+      const predictions = Object.entries(validPredictions)
         .filter(([_, v]) => v.home_goals != null && v.away_goals != null)
         .map(([matchupId, v]) => ({
           matchup: Number(matchupId),
@@ -162,7 +182,7 @@ export default function PredictionApp({
     } finally {
       setSavingMatchday(false);
     }
-  }, [remotePrediction, matchPredictions, currentMatchday, persistMatchday]);
+  }, [remotePrediction, validPredictions, currentMatchday, persistMatchday]);
 
   const handleRandomizeMatchday = useCallback((matchday) => {
     const md = String(matchday);
@@ -189,10 +209,10 @@ export default function PredictionApp({
           away_team_id: f.away_team.id,
         };
       }
-      saveLocal(seasonId, playerName, updated);
+      saveLocal(seasonId, playerName, updated, latestDrawSeed);
       return updated;
     });
-  }, [matchups, seasonId, playerName]);
+  }, [matchups, seasonId, playerName, latestDrawSeed]);
 
   const handleScoreChange = useCallback((matchupId, field, value, fixture) => {
     setLocalData((prev) => {
@@ -208,10 +228,10 @@ export default function PredictionApp({
           [matchupId]: { ...existing, [field]: value },
         },
       };
-      saveLocal(seasonId, playerName, updated);
+      saveLocal(seasonId, playerName, updated, latestDrawSeed);
       return updated;
     });
-  }, [seasonId, playerName]);
+  }, [seasonId, playerName, latestDrawSeed]);
 
   const handlePlayoffScoreChange = useCallback((matchupIdx, field, value) => {
     setLocalData((prev) => {
@@ -223,10 +243,10 @@ export default function PredictionApp({
           [matchupIdx]: { ...existing, [field]: value },
         },
       };
-      saveLocal(seasonId, playerName, updated);
+      saveLocal(seasonId, playerName, updated, latestDrawSeed);
       return updated;
     });
-  }, [seasonId, playerName]);
+  }, [seasonId, playerName, latestDrawSeed]);
 
   const handleKnockoutScoreChange = useCallback((round, bp, field, value) => {
     setLocalData((prev) => {
@@ -239,14 +259,14 @@ export default function PredictionApp({
           [key]: { ...existing, round, bracket_position: bp, [field]: value },
         },
       };
-      saveLocal(seasonId, playerName, updated);
+      saveLocal(seasonId, playerName, updated, latestDrawSeed);
       return updated;
     });
-  }, [seasonId, playerName]);
+  }, [seasonId, playerName, latestDrawSeed]);
 
   const standings = useMemo(
-    () => computeStandings(seasonState?.teams || [], matchPredictions),
-    [seasonState?.teams, matchPredictions],
+    () => computeStandings(seasonState?.teams || [], validPredictions),
+    [seasonState?.teams, validPredictions],
   );
 
   const playoffMatchups = useMemo(() => {
@@ -399,7 +419,7 @@ export default function PredictionApp({
             key={key}
             className={subTab === key ? 'active' : ''}
             onClick={() => setSubTab(key)}
-            disabled={key === 'playoffs' && matchups.length > 0 && Object.keys(matchPredictions).length < matchups.length * 0.5}
+            disabled={key === 'playoffs' && matchups.length > 0 && Object.keys(validPredictions).length < matchups.length * 0.5}
           >
             {label}
           </button>
@@ -418,7 +438,7 @@ export default function PredictionApp({
                   <p>Fill in scores for each fixture. The standings update live as you type.</p>
                 </div>
                 <span className="muted">
-                  {Object.values(matchPredictions).filter(v => v.home_goals != null).length}/{matchups.length} scored
+                  {Object.values(validPredictions).filter(v => v.home_goals != null).length}/{matchups.length} scored
                 </span>
               </div>
               <MatchdayScoreBoard
@@ -435,7 +455,7 @@ export default function PredictionApp({
           )}
 
           {subTab === 'standings' && (
-            <LeagueTable teams={seasonState?.teams} matchPredictions={matchPredictions} />
+            <LeagueTable teams={seasonState?.teams} matchPredictions={validPredictions} />
           )}
 
           {subTab === 'playoffs' && (
@@ -458,7 +478,7 @@ export default function PredictionApp({
             <div className="sidebar-standings-header">
               <strong>Live Standings</strong>
               <span className="muted">
-                {Object.values(matchPredictions).filter(v => v.home_goals != null).length}/{matchups.length} played
+                {Object.values(validPredictions).filter(v => v.home_goals != null).length}/{matchups.length} played
               </span>
             </div>
             <div className="sidebar-standings-scroll">

@@ -10,8 +10,8 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from .models import Association, DrawStatusChoices, QualifiedViaChoices, Season, SeasonDraw, SeasonMatchup, SeasonTeam, Team
-from .services.draw import generate_season_draw
+from .models import Association, DrawMethodChoices, DrawStatusChoices, QualifiedViaChoices, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
+from .services.draw import compute_forbidden_directions, generate_season_draw, previous_season_names
 from .services.import_seed_input import import_seed_input_payload
 from .services.seeding import seed_season_entries
 
@@ -531,3 +531,224 @@ class SeasonMatchupModelTests(TestCase):
 				home_team=self.home_entry,
 				away_team=self.other_season_entry,
 			)
+
+
+class PreviousSeasonNamesTests(TestCase):
+	def test_derives_two_consecutive_previous_seasons(self):
+		self.assertEqual(previous_season_names('2026-27'), ['2025-26', '2024-25'])
+		self.assertEqual(previous_season_names('2025-26'), ['2024-25', '2023-24'])
+
+	def test_returns_none_for_malformed_name(self):
+		self.assertIsNone(previous_season_names('not-a-season'))
+		self.assertIsNone(previous_season_names('2026'))
+
+
+class Rule6Tests(TestCase):
+	def setUp(self):
+		# Season 2026-27, whose two previous consecutive seasons are 2025-26 and 2024-25.
+		self.season = Season.objects.create(name='2026-27', is_active=True)
+		self.entries = []
+		for index in range(36):
+			association = Association.objects.create(name=f'Assoc {index + 1}', code=f'{index + 1:03}')
+			team = Team.objects.create(name=f'Team {index + 1}', short_name=f'T{index + 1}', association=association)
+			entry = SeasonTeam.objects.create(
+				season=self.season,
+				team=team,
+				uefa_club_coefficient=Decimal('120.000') - Decimal(index),
+				qualified_via=QualifiedViaChoices.LEAGUE_POSITION,
+			)
+			self.entries.append(entry)
+
+		title_holder = self.entries[-1]
+		title_holder.is_title_holder = True
+		title_holder.qualified_via = QualifiedViaChoices.TITLE_HOLDER
+		title_holder.uefa_club_coefficient = Decimal('15.000')
+		title_holder.save(update_fields=['is_title_holder', 'qualified_via', 'uefa_club_coefficient'])
+
+		seed_season_entries(self.season)
+
+	def test_previous_season_names_map_to_rule_six(self):
+		self.assertEqual(previous_season_names('2026-27'), ['2025-26', '2024-25'])
+
+	def test_compute_forbidden_directions_blocks_repeated_home_pairing(self):
+		home = self.entries[0]
+		away = self.entries[1]
+		SeasonMatchupHistory.objects.create(season_name='2025-26', home_team=home.team, away_team=away.team)
+		SeasonMatchupHistory.objects.create(season_name='2024-25', home_team=home.team, away_team=away.team)
+
+		forbidden = compute_forbidden_directions(self.season)
+
+		self.assertIn((home.team_id, away.team_id), forbidden)
+
+	def test_single_previous_occurrence_is_not_blocked(self):
+		home = self.entries[0]
+		away = self.entries[1]
+		SeasonMatchupHistory.objects.create(season_name='2025-26', home_team=home.team, away_team=away.team)
+
+		forbidden = compute_forbidden_directions(self.season)
+
+		self.assertNotIn((home.team_id, away.team_id), forbidden)
+
+	def test_opposite_direction_is_not_blocked_by_rule_six(self):
+		home = self.entries[0]
+		away = self.entries[1]
+		# home vs away blocked, but away vs home (reverse) remains legal.
+		SeasonMatchupHistory.objects.create(season_name='2025-26', home_team=home.team, away_team=away.team)
+		SeasonMatchupHistory.objects.create(season_name='2024-25', home_team=home.team, away_team=away.team)
+
+		forbidden = compute_forbidden_directions(self.season)
+
+		self.assertIn((home.team_id, away.team_id), forbidden)
+		self.assertNotIn((away.team_id, home.team_id), forbidden)
+
+	def test_generated_draw_never_places_blocked_team_as_home(self):
+		home = self.entries[0]
+		away = self.entries[1]
+		SeasonMatchupHistory.objects.create(season_name='2025-26', home_team=home.team, away_team=away.team)
+		SeasonMatchupHistory.objects.create(season_name='2024-25', home_team=home.team, away_team=away.team)
+
+		for seed in ('rule6-a', 'rule6-b', 'rule6-c', 'rule6-d'):
+			summary = generate_season_draw(self.season, draw_seed=seed, reset=True)
+			self.assertEqual(summary.status, DrawStatusChoices.COMPLETED)
+
+			# Whenever the undirected pairing is drawn, the blocked team must be the away side.
+			violations = SeasonMatchup.objects.filter(
+				season=self.season,
+				home_team__team=home.team,
+				away_team__team=away.team,
+			)
+			self.assertEqual(violations.count(), 0)
+
+
+class SequentialDrawTests(TestCase):
+	"""Sequential (UEFA-style extraction) draw generation."""
+
+	def setUp(self):
+		# Season 2026-27: its two previous consecutive seasons are 2025-26 and 2024-25.
+		self.season = Season.objects.create(name='2026-27', is_active=True)
+		self.entries = []
+
+		for index in range(36):
+			association = Association.objects.create(
+				name=f'Assoc {index + 1}',
+				code=f'{index + 1:03}',
+			)
+			team = Team.objects.create(
+				name=f'Team {index + 1}',
+				short_name=f'T{index + 1}',
+				association=association,
+			)
+			entry = SeasonTeam.objects.create(
+				season=self.season,
+				team=team,
+				uefa_club_coefficient=Decimal('120.000') - Decimal(index),
+				qualified_via=QualifiedViaChoices.LEAGUE_POSITION,
+			)
+			self.entries.append(entry)
+
+		title_holder = self.entries[-1]
+		title_holder.is_title_holder = True
+		title_holder.qualified_via = QualifiedViaChoices.TITLE_HOLDER
+		title_holder.uefa_club_coefficient = Decimal('15.000')
+		title_holder.save(update_fields=['is_title_holder', 'qualified_via', 'uefa_club_coefficient'])
+
+		seed_season_entries(self.season)
+
+	def test_sequential_draw_produces_valid_matchups(self):
+		summary = generate_season_draw(self.season, draw_seed='seq-1', method='sequential')
+		draw_record = SeasonDraw.objects.get(pk=summary.draw_id)
+
+		self.assertEqual(summary.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(summary.total_matchups, 144)
+		self.assertEqual(draw_record.method, DrawMethodChoices.SEQUENTIAL)
+		self.assert_draw_constraints(self.season)
+
+	def test_sat_draw_defaults_method_to_sat(self):
+		summary = generate_season_draw(self.season, draw_seed='sat-1', method='sat')
+		draw_record = SeasonDraw.objects.get(pk=summary.draw_id)
+
+		self.assertEqual(summary.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(summary.total_matchups, 144)
+		self.assertEqual(draw_record.method, DrawMethodChoices.SAT)
+
+	def test_sequential_draw_multiple_seeds(self):
+		for seed in ('seq-multi-1', 'seq-multi-2', 'seq-multi-3'):
+			summary = generate_season_draw(self.season, draw_seed=seed, reset=True, method='sequential')
+
+			self.assertEqual(summary.status, DrawStatusChoices.COMPLETED)
+			self.assertEqual(summary.total_matchups, 144)
+			self.assert_draw_constraints(self.season)
+
+	def test_sequential_draw_respects_rule_six(self):
+		home = self.entries[0]
+		away = self.entries[1]
+		SeasonMatchupHistory.objects.create(season_name='2025-26', home_team=home.team, away_team=away.team)
+		SeasonMatchupHistory.objects.create(season_name='2024-25', home_team=home.team, away_team=away.team)
+
+		for seed in ('seq-rule6-a', 'seq-rule6-b', 'seq-rule6-c'):
+			summary = generate_season_draw(self.season, draw_seed=seed, reset=True, method='sequential')
+
+			self.assertEqual(summary.status, DrawStatusChoices.COMPLETED)
+
+			# Whenever the undirected pairing is drawn, the blocked team must be the away side.
+			violations = SeasonMatchup.objects.filter(
+				season=self.season,
+				home_team__team=home.team,
+				away_team__team=away.team,
+			)
+			self.assertEqual(violations.count(), 0)
+
+	def assert_draw_constraints(self, season):
+		entries = list(SeasonTeam.objects.select_related('team__association').filter(season=season))
+		entries_by_id = {entry.pk: entry for entry in entries}
+		matchups = list(
+			SeasonMatchup.objects.select_related(
+				'home_team__team__association',
+				'away_team__team__association',
+			).filter(season=season)
+		)
+		home_counts = {}
+		away_counts = {}
+		opponent_pot_counts = {entry.pk: {} for entry in entries}
+		opponent_association_counts = {entry.pk: {} for entry in entries}
+		matchday_counts = {entry.pk: {} for entry in entries}
+		undirected_edges = set()
+
+		self.assertEqual(len(matchups), 144)
+
+		for matchup in matchups:
+			home_id = matchup.home_team_id
+			away_id = matchup.away_team_id
+			home_entry = entries_by_id[home_id]
+			away_entry = entries_by_id[away_id]
+			edge = tuple(sorted((home_id, away_id)))
+
+			self.assertNotIn(edge, undirected_edges)
+			undirected_edges.add(edge)
+			self.assertNotEqual(home_entry.team.association_id, away_entry.team.association_id)
+			self.assertIsNotNone(matchup.matchday)
+			self.assertGreaterEqual(matchup.matchday, 1)
+			self.assertLessEqual(matchup.matchday, 8)
+
+			home_counts[home_id] = home_counts.get(home_id, 0) + 1
+			away_counts[away_id] = away_counts.get(away_id, 0) + 1
+			opponent_pot_counts[home_id][away_entry.pot] = opponent_pot_counts[home_id].get(away_entry.pot, 0) + 1
+			opponent_pot_counts[away_id][home_entry.pot] = opponent_pot_counts[away_id].get(home_entry.pot, 0) + 1
+			opponent_association_counts[home_id][away_entry.team.association_id] = (
+				opponent_association_counts[home_id].get(away_entry.team.association_id, 0) + 1
+			)
+			opponent_association_counts[away_id][home_entry.team.association_id] = (
+				opponent_association_counts[away_id].get(home_entry.team.association_id, 0) + 1
+			)
+			matchday_counts[home_id][matchup.matchday] = matchday_counts[home_id].get(matchup.matchday, 0) + 1
+			matchday_counts[away_id][matchup.matchday] = matchday_counts[away_id].get(matchup.matchday, 0) + 1
+
+		for entry in entries:
+			self.assertEqual(home_counts.get(entry.pk, 0), 4)
+			self.assertEqual(away_counts.get(entry.pk, 0), 4)
+			for pot in range(1, 5):
+				self.assertEqual(opponent_pot_counts[entry.pk].get(pot, 0), 2)
+			for association_count in opponent_association_counts[entry.pk].values():
+				self.assertLessEqual(association_count, 2)
+			for matchday in range(1, 9):
+				self.assertEqual(matchday_counts[entry.pk].get(matchday, 0), 1)

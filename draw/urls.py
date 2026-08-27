@@ -11,15 +11,18 @@ from .predictions_views import (
     StandingsAPIView,
 )
 from .views import (
-    SeasonDrawAPIView,
-    SeasonDrawListAPIView,
-    SeasonListAPIView,
-    SeasonMatchupListAPIView,
-    SeasonSeedingAPIView,
-    TeamDetailAPIView,
-    TeamListAPIView,
-    TeamOverviewAPIView,
-    UiSeasonStateAPIView,
+	HomepageMatchesAPIView,
+	LeagueListAPIView,
+	LeagueStandingListAPIView,
+	SeasonDrawAPIView,
+	SeasonDrawListAPIView,
+	SeasonListAPIView,
+	SeasonMatchupListAPIView,
+	SeasonSeedingAPIView,
+	TeamDetailAPIView,
+	TeamListAPIView,
+	TeamOverviewAPIView,
+	UiSeasonStateAPIView,
 )
 
 app_name = 'draw'
@@ -34,6 +37,11 @@ urlpatterns = [
     path('teams/', TeamListAPIView.as_view(), name='team-list'),
     path('teams/overview/', TeamOverviewAPIView.as_view(), name='team-overview'),
     path('teams/<int:pk>/', TeamDetailAPIView.as_view(), name='team-detail'),
+    # Leagues & standings
+    path('leagues/', LeagueListAPIView.as_view(), name='league-list'),
+    path('leagues/<int:league_id>/standings/', LeagueStandingListAPIView.as_view(), name='league-standings'),
+    # Homepage
+    path('homepage/matches/', HomepageMatchesAPIView.as_view(), name='homepage-matches'),
     # Prediction endpoints
     path('predictions/', PredictionCreateGetAPIView.as_view(), name='prediction-create'),
     path('predictions/<int:pk>/', PredictionDetailAPIView.as_view(), name='prediction-detail'),

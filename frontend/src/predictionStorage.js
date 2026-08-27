@@ -5,11 +5,11 @@ function getStorageKey(seasonId, playerName) {
   return `${STORAGE_PREFIX}${seasonId}_${playerName || 'Guest'}`;
 }
 
-export function saveLocal(seasonId, playerName, data) {
+export function saveLocal(seasonId, playerName, data, drawSeed) {
   try {
     const key = getStorageKey(seasonId, playerName);
-    const existing = loadLocal(seasonId, playerName);
-    const merged = { ...existing, ...data, lastUpdated: Date.now() };
+    const existing = loadLocal(seasonId, playerName, drawSeed);
+    const merged = { ...existing, ...data, lastUpdated: Date.now(), drawSeed };
     localStorage.setItem(key, JSON.stringify(merged));
     return merged;
   } catch {
@@ -17,11 +17,17 @@ export function saveLocal(seasonId, playerName, data) {
   }
 }
 
-export function loadLocal(seasonId, playerName) {
+export function loadLocal(seasonId, playerName, currentDrawSeed) {
   try {
     const key = getStorageKey(seasonId, playerName);
     const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : getDefaultState();
+    if (!raw) return getDefaultState();
+    const data = JSON.parse(raw);
+    // If a new draw was run since these predictions were saved, discard them
+    if (currentDrawSeed && data.drawSeed && data.drawSeed !== currentDrawSeed) {
+      return getDefaultState();
+    }
+    return data;
   } catch {
     return getDefaultState();
   }
@@ -36,6 +42,7 @@ function getDefaultState() {
     matchPredictions: {},
     playoffPredictions: {},
     knockoutPredictions: {},
+    drawSeed: null,
     lastUpdated: 0,
   };
 }

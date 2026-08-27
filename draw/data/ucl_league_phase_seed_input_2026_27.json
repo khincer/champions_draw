@@ -1,0 +1,707 @@
+{
+  "season": {
+    "name": "2026-27",
+    "competition": "UCL",
+    "api_football_league_id": 2,
+    "api_football_season": 2026
+  },
+  "metadata": {
+    "provider": "api-football",
+    "generated_at": "2026-08-26T19:07:59.754386+00:00",
+    "team_count": 36,
+    "resolved_count": 32,
+    "unresolved_count": 4,
+    "unresolved_teams": [
+      "Fenerbahçe / Lyon",
+      "AEK Athens / Levski Sofia",
+      "Dinamo Zagreb / Viking",
+      "Slovan Bratislava / Celje"
+    ]
+  },
+  "entries": [
+    {
+      "rank": 1,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Paris Saint Germain",
+        "short_name": "PAR",
+        "association": {
+          "name": "France",
+          "code": "FRA"
+        },
+        "api_football_id": 85,
+        "api_football_name": "Paris Saint Germain",
+        "api_football_logo": "https://media.api-sports.io/football/teams/85.png",
+        "uefa_reference_name": "Paris Saint Germain"
+      },
+      "uefa_club_coefficient": "119.000",
+      "is_title_holder": true,
+      "qualified_via": "TITLE_HOLDER"
+    },
+    {
+      "rank": 2,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Real Madrid",
+        "short_name": "REA",
+        "association": {
+          "name": "Spain",
+          "code": "ESP"
+        },
+        "api_football_id": 541,
+        "api_football_name": "Real Madrid",
+        "api_football_logo": "https://media.api-sports.io/football/teams/541.png",
+        "uefa_reference_name": "Real Madrid"
+      },
+      "uefa_club_coefficient": "120.500",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 3,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Manchester City",
+        "short_name": "MCI",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 50,
+        "api_football_name": "Manchester City",
+        "api_football_logo": "https://media.api-sports.io/football/teams/50.png",
+        "uefa_reference_name": "Manchester City"
+      },
+      "uefa_club_coefficient": "104.500",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 4,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Bayern München",
+        "short_name": "BAY",
+        "association": {
+          "name": "Germany",
+          "code": "GER"
+        },
+        "api_football_id": 157,
+        "api_football_name": "Bayern München",
+        "api_football_logo": "https://media.api-sports.io/football/teams/157.png",
+        "uefa_reference_name": "Bayern Munchen"
+      },
+      "uefa_club_coefficient": "127.500",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 5,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Liverpool",
+        "short_name": "LIV",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 40,
+        "api_football_name": "Liverpool",
+        "api_football_logo": "https://media.api-sports.io/football/teams/40.png",
+        "uefa_reference_name": "Liverpool"
+      },
+      "uefa_club_coefficient": "103.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 6,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Inter",
+        "short_name": "INT",
+        "association": {
+          "name": "Italy",
+          "code": "ITA"
+        },
+        "api_football_id": 505,
+        "api_football_name": "Inter",
+        "api_football_logo": "https://media.api-sports.io/football/teams/505.png",
+        "uefa_reference_name": "Inter"
+      },
+      "uefa_club_coefficient": "115.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 7,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Arsenal",
+        "short_name": "ARS",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 42,
+        "api_football_name": "Arsenal",
+        "api_football_logo": "https://media.api-sports.io/football/teams/42.png",
+        "uefa_reference_name": "Arsenal"
+      },
+      "uefa_club_coefficient": "125.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 8,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Atletico Madrid",
+        "short_name": "ATM",
+        "association": {
+          "name": "Spain",
+          "code": "ESP"
+        },
+        "api_football_id": 530,
+        "api_football_name": "Atletico Madrid",
+        "api_football_logo": "https://media.api-sports.io/football/teams/530.png",
+        "uefa_reference_name": "Atletico Madrid"
+      },
+      "uefa_club_coefficient": "91.750",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 9,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Barcelona",
+        "short_name": "BAR",
+        "association": {
+          "name": "Spain",
+          "code": "ESP"
+        },
+        "api_football_id": 529,
+        "api_football_name": "Barcelona",
+        "api_football_logo": "https://media.api-sports.io/football/teams/529.png",
+        "uefa_reference_name": "Barcelona"
+      },
+      "uefa_club_coefficient": "104.250",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 10,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Borussia Dortmund",
+        "short_name": "DOR",
+        "association": {
+          "name": "Germany",
+          "code": "GER"
+        },
+        "api_football_id": 165,
+        "api_football_name": "Borussia Dortmund",
+        "api_football_logo": "https://media.api-sports.io/football/teams/165.png",
+        "uefa_reference_name": "Borussia Dortmund"
+      },
+      "uefa_club_coefficient": "96.750",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 11,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "AS Roma",
+        "short_name": "ROM",
+        "association": {
+          "name": "Italy",
+          "code": "ITA"
+        },
+        "api_football_id": 497,
+        "api_football_name": "Roma",
+        "api_football_logo": "https://media.api-sports.io/football/teams/497.png",
+        "uefa_reference_name": "Roma"
+      },
+      "uefa_club_coefficient": "80.750",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 12,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Sporting CP",
+        "short_name": "SPO",
+        "association": {
+          "name": "Portugal",
+          "code": "POR"
+        },
+        "api_football_id": 228,
+        "api_football_name": "Sporting CP",
+        "api_football_logo": "https://media.api-sports.io/football/teams/228.png",
+        "uefa_reference_name": "Sporting CP"
+      },
+      "uefa_club_coefficient": "74.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 13,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Aston Villa",
+        "short_name": "AVL",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 66,
+        "api_football_name": "Aston Villa",
+        "api_football_logo": "https://media.api-sports.io/football/teams/66.png",
+        "uefa_reference_name": "Aston Villa"
+      },
+      "uefa_club_coefficient": "89.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 14,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Porto",
+        "short_name": "POR",
+        "association": {
+          "name": "Portugal",
+          "code": "POR"
+        },
+        "api_football_id": 212,
+        "api_football_name": "Porto",
+        "api_football_logo": "https://media.api-sports.io/football/teams/212.png",
+        "uefa_reference_name": "Porto"
+      },
+      "uefa_club_coefficient": "76.750",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 15,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Manchester United",
+        "short_name": "MUN",
+        "association": {
+          "name": "England",
+          "code": "ENG"
+        },
+        "api_football_id": 33,
+        "api_football_name": "Manchester United",
+        "api_football_logo": "https://media.api-sports.io/football/teams/33.png",
+        "uefa_reference_name": "Manchester United"
+      },
+      "uefa_club_coefficient": "64.500",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 16,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Real Betis",
+        "short_name": "BET",
+        "association": {
+          "name": "Spain",
+          "code": "ESP"
+        },
+        "api_football_id": 536,
+        "api_football_name": "Real Betis",
+        "api_football_logo": "https://media.api-sports.io/football/teams/536.png",
+        "uefa_reference_name": "Real Betis"
+      },
+      "uefa_club_coefficient": "69.500",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 17,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Club Brugge KV",
+        "short_name": "CLU",
+        "association": {
+          "name": "Belgium",
+          "code": "BEL"
+        },
+        "api_football_id": 569,
+        "api_football_name": "Club Brugge KV",
+        "api_football_logo": "https://media.api-sports.io/football/teams/569.png",
+        "uefa_reference_name": "Club Brugge"
+      },
+      "uefa_club_coefficient": "74.250",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 18,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "PSV Eindhoven",
+        "short_name": "PSV",
+        "association": {
+          "name": "Netherlands",
+          "code": "NED"
+        },
+        "api_football_id": 197,
+        "api_football_name": "PSV Eindhoven",
+        "api_football_logo": "https://media.api-sports.io/football/teams/197.png",
+        "uefa_reference_name": "PSV"
+      },
+      "uefa_club_coefficient": "67.250",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 19,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Feyenoord",
+        "short_name": "FEY",
+        "association": {
+          "name": "Netherlands",
+          "code": "NED"
+        },
+        "api_football_id": 189,
+        "api_football_name": "Feyenoord",
+        "api_football_logo": "https://media.api-sports.io/football/teams/189.png",
+        "uefa_reference_name": "Feyenoord"
+      },
+      "uefa_club_coefficient": "53.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 20,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Lille",
+        "short_name": "LIL",
+        "association": {
+          "name": "France",
+          "code": "FRA"
+        },
+        "api_football_id": 79,
+        "api_football_name": "Lille",
+        "api_football_logo": "https://media.api-sports.io/football/teams/79.png",
+        "uefa_reference_name": "Lille"
+      },
+      "uefa_club_coefficient": "57.750",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 21,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Napoli",
+        "short_name": "NAP",
+        "association": {
+          "name": "Italy",
+          "code": "ITA"
+        },
+        "api_football_id": 492,
+        "api_football_name": "Napoli",
+        "api_football_logo": "https://media.api-sports.io/football/teams/492.png",
+        "uefa_reference_name": "Napoli"
+      },
+      "uefa_club_coefficient": "60.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 22,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "RB Leipzig",
+        "short_name": "RBL",
+        "association": {
+          "name": "Germany",
+          "code": "GER"
+        },
+        "api_football_id": 173,
+        "api_football_name": "RB Leipzig",
+        "api_football_logo": "https://media.api-sports.io/football/teams/173.png",
+        "uefa_reference_name": "RB Leipzig"
+      },
+      "uefa_club_coefficient": "50.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 23,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Villarreal",
+        "short_name": "VIL",
+        "association": {
+          "name": "Spain",
+          "code": "ESP"
+        },
+        "api_football_id": 533,
+        "api_football_name": "Villarreal",
+        "api_football_logo": "https://media.api-sports.io/football/teams/533.png",
+        "uefa_reference_name": "Villarreal"
+      },
+      "uefa_club_coefficient": "41.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 24,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Shakhtar Donetsk",
+        "short_name": "SHA",
+        "association": {
+          "name": "Ukraine",
+          "code": "UKR"
+        },
+        "api_football_id": 803,
+        "api_football_name": "Shakhtar Donetsk",
+        "api_football_logo": "https://media.api-sports.io/football/teams/803.png",
+        "uefa_reference_name": "Shakhtar Donetsk"
+      },
+      "uefa_club_coefficient": "56.250",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 25,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Galatasaray",
+        "short_name": "GAL",
+        "association": {
+          "name": "Turkey",
+          "code": "TUR"
+        },
+        "api_football_id": 645,
+        "api_football_name": "Galatasaray",
+        "api_football_logo": "https://media.api-sports.io/football/teams/645.png",
+        "uefa_reference_name": "Galatasaray"
+      },
+      "uefa_club_coefficient": "44.500",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 26,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Fenerbahce",
+        "short_name": "FEN",
+        "association": {
+          "name": "Turkey",
+          "code": "TUR"
+        },
+        "api_football_id": 611,
+        "api_football_name": "Fenerbahçe",
+        "api_football_logo": "https://media.api-sports.io/football/teams/611.png",
+        "uefa_reference_name": "Fenerbahce"
+      },
+      "uefa_club_coefficient": "55.750",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 27,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Bodo/Glimt",
+        "short_name": "BOD",
+        "association": {
+          "name": "Norway",
+          "code": "NOR"
+        },
+        "api_football_id": 327,
+        "api_football_name": "Bodo/Glimt",
+        "api_football_logo": "https://media.api-sports.io/football/teams/327.png",
+        "uefa_reference_name": "Bodo/Glimt"
+      },
+      "uefa_club_coefficient": "55.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 28,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Slavia Praha",
+        "short_name": "SLA",
+        "association": {
+          "name": "Czech-Republic",
+          "code": "CZE"
+        },
+        "api_football_id": 560,
+        "api_football_name": "Slavia Praha",
+        "api_football_logo": "https://media.api-sports.io/football/teams/560.png",
+        "uefa_reference_name": "Slavia Praha"
+      },
+      "uefa_club_coefficient": "40.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 29,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "VfB Stuttgart",
+        "short_name": "STU",
+        "association": {
+          "name": "Germany",
+          "code": "GER"
+        },
+        "api_football_id": 172,
+        "api_football_name": "VfB Stuttgart",
+        "api_football_logo": "https://media.api-sports.io/football/teams/172.png",
+        "uefa_reference_name": "Stuttgart"
+      },
+      "uefa_club_coefficient": "33.500",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 30,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Como 1907",
+        "short_name": "COM",
+        "association": {
+          "name": "Italy",
+          "code": "ITA"
+        },
+        "api_football_id": 895,
+        "api_football_name": "Como",
+        "api_football_logo": "https://media.api-sports.io/football/teams/895.png",
+        "uefa_reference_name": "Como 1907"
+      },
+      "uefa_club_coefficient": "6.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 31,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "RC Lens",
+        "short_name": "LEN",
+        "association": {
+          "name": "France",
+          "code": "FRA"
+        },
+        "api_football_id": 87,
+        "api_football_name": "RC Lens",
+        "api_football_logo": "https://media.api-sports.io/football/teams/87.png",
+        "uefa_reference_name": "Lens"
+      },
+      "uefa_club_coefficient": "18.500",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 32,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "LASK",
+        "short_name": "LASK",
+        "association": {
+          "name": "Austria",
+          "code": "AUT"
+        },
+        "api_football_id": 2035,
+        "api_football_name": "LASK Linz",
+        "api_football_logo": "https://media.api-sports.io/football/teams/2035.png",
+        "uefa_reference_name": "LASK"
+      },
+      "uefa_club_coefficient": "12.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 33,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "AEK Athens",
+        "short_name": "AEK",
+        "association": {
+          "name": "Greece",
+          "code": "GRE"
+        },
+        "api_football_id": 575,
+        "api_football_name": "AEK Athens FC",
+        "api_football_logo": "https://media.api-sports.io/football/teams/575.png",
+        "uefa_reference_name": "AEK Athens"
+      },
+      "uefa_club_coefficient": "25.500",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 34,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Viking FK",
+        "short_name": "VIK",
+        "association": {
+          "name": "Norway",
+          "code": "NOR"
+        },
+        "api_football_id": 759,
+        "api_football_name": "Viking",
+        "api_football_logo": "https://media.api-sports.io/football/teams/759.png",
+        "uefa_reference_name": "Viking FK"
+      },
+      "uefa_club_coefficient": "0.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 35,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Slovan Bratislava",
+        "short_name": "SLO",
+        "association": {
+          "name": "Slovakia",
+          "code": "SVK"
+        },
+        "api_football_id": 656,
+        "api_football_name": "Slovan Bratislava",
+        "api_football_logo": "https://media.api-sports.io/football/teams/656.png",
+        "uefa_reference_name": "Slovan Bratislava"
+      },
+      "uefa_club_coefficient": "33.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    },
+    {
+      "rank": 36,
+      "resolution_status": "resolved",
+      "team": {
+        "name": "Sabah",
+        "short_name": "SAB",
+        "association": {
+          "name": "Azerbaijan",
+          "code": "AZE"
+        },
+        "api_football_id": 13976,
+        "api_football_name": "Sabah FA",
+        "api_football_logo": "https://media.api-sports.io/football/teams/13976.png",
+        "uefa_reference_name": "Sabah"
+      },
+      "uefa_club_coefficient": "12.000",
+      "is_title_holder": false,
+      "qualified_via": "LEAGUE_POSITION"
+    }
+  ]
+}
