@@ -8,7 +8,15 @@ from django.db import transaction
 from django.utils import timezone
 from z3 import Bool, If, Solver, Sum, is_true, sat
 
-from draw.models import DrawStatusChoices, Season, SeasonDraw, SeasonMatchup, SeasonTeam
+from draw.models import (
+    DrawMethodChoices,
+    DrawStatusChoices,
+    Season,
+    SeasonDraw,
+    SeasonMatchup,
+    SeasonMatchupHistory,
+    SeasonTeam,
+)
 
 
 EXPECTED_TEAM_COUNT = 36
@@ -49,17 +57,31 @@ def generate_season_draw(
     player_name: str = '',
     reset: bool = False,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+    method: str = 'sat',
 ) -> DrawSummary:
+    if method not in {'sat', 'sequential'}:
+        raise DrawError(f'Unknown draw method: {method}')
+
     normalized_seed = str(draw_seed if draw_seed is not None else random.SystemRandom().randrange(1, 10**12))
     normalized_player_name = normalize_player_name(player_name)
     draw_record = SeasonDraw.objects.create(
         season=season,
         draw_seed=normalized_seed,
         player_name=normalized_player_name,
+        method=method,
         status=DrawStatusChoices.RUNNING,
     )
 
     try:
+        if method == 'sequential':
+            from draw.services.sequential_draw import generate_sequential_season_draw
+
+            return generate_sequential_season_draw(
+                season,
+                draw_record=draw_record,
+                reset=reset,
+                max_attempts=max_attempts,
+            )
         return _generate_season_draw(
             season,
             draw_record=draw_record,
@@ -87,13 +109,20 @@ def _generate_season_draw(
     )
     validate_draw_inputs(season, entries, reset=reset)
 
+    forbidden_directions = compute_forbidden_directions(season)
+
     last_error: DrawError | None = None
 
     for attempt in range(1, max_attempts + 1):
         rng = random.Random(f'{draw_record.draw_seed}:{attempt}')
         try:
             undirected_edges_by_pair = build_draw_graph(entries, rng)
-            directed_edges = orient_draw_edges(entries, undirected_edges_by_pair, rng)
+            directed_edges = orient_draw_edges(
+                entries,
+                undirected_edges_by_pair,
+                rng,
+                forbidden_directions=forbidden_directions,
+            )
             validate_directed_draw(entries, directed_edges)
             matchday_assignments = schedule_matchdays(entries, directed_edges, rng)
         except DrawError as exc:
@@ -120,7 +149,8 @@ def _generate_season_draw(
             draw_record.matchups_created = len(directed_edges)
             draw_record.error_message = ''
             draw_record.completed_at = timezone.now()
-            draw_record.save(update_fields=['status', 'matchups_created', 'error_message', 'completed_at'])
+            draw_record.method = DrawMethodChoices.SAT
+            draw_record.save(update_fields=['status', 'matchups_created', 'error_message', 'completed_at', 'method'])
 
         return build_summary(season, draw_record, entries, directed_edges)
 
@@ -233,7 +263,11 @@ def orient_draw_edges(
     entries: list[SeasonTeam],
     edges_by_pair: dict[tuple[int, int], set[tuple[int, int]]],
     rng: random.Random,
+    *,
+    forbidden_directions: set[tuple[int, int]] | None = None,
 ) -> list[tuple[int, int]]:
+    forbidden_directions = forbidden_directions or set()
+    team_id_by_entry_id = {entry.pk: entry.team_id for entry in entries}
     directed_edges: list[tuple[int, int]] = []
 
     for edges in edges_by_pair.values():
@@ -241,12 +275,35 @@ def orient_draw_edges(
         for component in components:
             if len(component) < 3:
                 raise DrawError('Draw graph contains an invalid cycle.')
-            if rng.choice([True, False]):
-                component = list(reversed(component))
-            directed_edges.extend(
+
+            forward = [
                 (component[index], component[(index + 1) % len(component)])
                 for index in range(len(component))
-            )
+            ]
+            reverse = [
+                (component[(index + 1) % len(component)], component[index])
+                for index in range(len(component))
+            ]
+
+            def conflicts(orientation: list[tuple[int, int]]) -> bool:
+                for home_id, away_id in orientation:
+                    if (team_id_by_entry_id[home_id], team_id_by_entry_id[away_id]) in forbidden_directions:
+                        return True
+                return False
+
+            forward_safe = not conflicts(forward)
+            reverse_safe = not conflicts(reverse)
+
+            if forward_safe and reverse_safe:
+                orientation = forward if rng.choice([True, False]) else reverse
+            elif forward_safe:
+                orientation = forward
+            elif reverse_safe:
+                orientation = reverse
+            else:
+                raise DrawError('Draw cycle cannot be oriented without repeating a forbidden home pairing.')
+
+            directed_edges.extend(orientation)
 
     return directed_edges
 
@@ -492,3 +549,49 @@ def normalize_player_name(player_name: str | None) -> str:
     if not player_name:
         return ''
     return str(player_name).strip()[:80]
+
+
+def previous_season_names(season_name: str) -> list[str] | None:
+    """Return the two consecutive season names immediately before `season_name`.
+
+    '2026-27' -> ['2025-26', '2024-25']. Returns None when the name is not in
+    the '<start>-<end>' year format.
+    """
+    try:
+        start_year, end_year = season_name.split('-')
+        start = int(start_year)
+        end = int(end_year)
+    except (ValueError, TypeError):
+        return None
+    if end != (start % 100) + 1:
+        return None
+    return [f'{start - 1}-{(end - 1) % 100:02d}', f'{start - 2}-{(end - 2) % 100:02d}']
+
+
+def compute_forbidden_directions(
+    season: Season,
+    min_previous_appearances: int = 2,
+) -> set[tuple[int, int]]:
+    """Return directed (home_team_id, away_team_id) pairs blocked by Rule 6.
+
+    A directed cross is blocked when the same home-vs-away pairing already
+    occurred in at least `min_previous_appearances` of the two most recent
+    consecutive seasons, so this draw would be a third consecutive repeat
+    with the same home team.
+    """
+    if min_previous_appearances > 2:
+        raise ValueError('min_previous_appearances cannot exceed 2 (only two prior seasons are consulted).')
+
+    previous = previous_season_names(season.name)
+    if not previous:
+        return set()
+
+    counts: dict[tuple[int, int], int] = defaultdict(int)
+    for history in SeasonMatchupHistory.objects.filter(season_name__in=previous):
+        counts[(history.home_team_id, history.away_team_id)] += 1
+
+    return {
+        (home_id, away_id)
+        for (home_id, away_id), count in counts.items()
+        if count >= min_previous_appearances
+    }

@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Season, SeasonDraw, SeasonMatchup, SeasonTeam
+from .models import League, LeagueStanding, Season, SeasonDraw, SeasonMatchup, SeasonTeam
 from .serializers import (
 	CompactSeasonMatchupSerializer,
 	CompactSeasonTeamSerializer,
@@ -111,10 +111,17 @@ class SeasonDrawAPIView(APIView):
 		season = get_object_or_404(Season, pk=pk)
 		draw_seed = request.data.get('seed')
 		player_name = request.data.get('player_name', '')
+		method = str(request.data.get('method', 'sat'))
 		reset = parse_bool(request.data.get('reset', False))
 
 		try:
-			summary = generate_season_draw(season, draw_seed=draw_seed, player_name=player_name, reset=reset)
+			summary = generate_season_draw(
+				season,
+				draw_seed=draw_seed,
+				player_name=player_name,
+				reset=reset,
+				method=method,
+			)
 		except DrawError as exc:
 			return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -197,3 +204,85 @@ def parse_bool(value) -> bool:
 	if isinstance(value, str):
 		return value.strip().lower() in {'1', 'true', 'yes', 'on'}
 	return bool(value)
+
+
+# --- Leagues & Standings ---
+
+
+class LeagueListAPIView(generics.ListAPIView):
+	serializer_class = None
+
+	def get(self, request):
+		leagues = League.objects.filter(is_active=True)
+		data = [
+			{
+				'id': lg.id,
+				'code': lg.code,
+				'name': lg.name,
+				'country': lg.country,
+				'emblem_url': lg.emblem_url,
+			}
+			for lg in leagues
+		]
+		return Response(data)
+
+
+class LeagueStandingListAPIView(APIView):
+	def get(self, request, league_id):
+		league = get_object_404(League, pk=league_id)
+		season_year = request.query_params.get('season')
+		qs = LeagueStanding.objects.filter(league=league)
+		if season_year:
+			qs = qs.filter(season_year=int(season_year))
+		else:
+			latest_year = qs.order_by('-season_year').values_list('season_year', flat=True).first()
+			if latest_year is not None:
+				qs = qs.filter(season_year=latest_year)
+		data = list(qs.values(
+			'position', 'team_name', 'team_crest', 'played',
+			'won', 'draw', 'lost', 'goals_for', 'goals_against',
+			'goal_difference', 'points',
+		).order_by('position'))
+		return Response({
+			'league': {'id': league.id, 'code': league.code, 'name': league.name, 'emblem_url': league.emblem_url},
+			'standings': data,
+		})
+
+
+# --- Homepage: recent + upcoming matches ---
+
+
+class HomepageMatchesAPIView(APIView):
+	def get(self, request):
+		season = get_requested_or_active_season(request)
+		matchups = list(
+			SeasonMatchup.objects.select_related(
+				'home_team__team', 'away_team__team',
+			).filter(season=season)
+		)
+
+		recent = []
+		upcoming = []
+		for m in matchups:
+			row = {
+				'id': m.id,
+				'home_team': CompactSeasonTeamSerializer(m.home_team).data,
+				'away_team': CompactSeasonTeamSerializer(m.away_team).data,
+				'matchday': m.matchday,
+				'home_goals': m.home_goals,
+				'away_goals': m.away_goals,
+				'status': m.status,
+				'kickoff': m.kickoff.isoformat() if m.kickoff else None,
+			}
+			if m.status == 'FINISHED':
+				recent.append(row)
+			elif m.status in ('SCHEDULED', 'TIMED', '') and m.kickoff:
+				upcoming.append(row)
+
+		recent.sort(key=lambda r: r['matchday'] or 0, reverse=True)
+		upcoming.sort(key=lambda r: r['kickoff'] or '')
+
+		return Response({
+			'recent': recent[:20],
+			'upcoming': upcoming[:20],
+		})

@@ -22,6 +22,11 @@ class DrawStatusChoices(models.TextChoices):
 	FAILED = 'FAILED', 'Failed'
 
 
+class DrawMethodChoices(models.TextChoices):
+	SAT = 'sat', 'SAT (uniform draws)'
+	SEQUENTIAL = 'sequential', 'Sequential (UEFA-style)'
+
+
 class Association(models.Model):
 	name = models.CharField(max_length=100, unique=True)
 	code = models.CharField(max_length=3, unique=True)
@@ -119,6 +124,12 @@ class SeasonDraw(models.Model):
 		on_delete=models.CASCADE,
 		related_name='draws',
 	)
+	method = models.CharField(
+		max_length=20,
+		default=DrawMethodChoices.SAT,
+		choices=DrawMethodChoices.choices,
+		help_text='Draw generation algorithm: sat (uniform) or sequential (UEFA-style).',
+	)
 	draw_seed = models.CharField(max_length=100)
 	player_name = models.CharField(max_length=80, blank=True)
 	status = models.CharField(
@@ -139,6 +150,39 @@ class SeasonDraw(models.Model):
 		return f'{self.season.name} draw {self.draw_seed}{player} ({self.status})'
 
 
+class SeasonMatchupHistory(models.Model):
+    """A directed (home, away) cross recorded from a past UCL season.
+
+    Used to enforce the "no 3 consecutive seasons with the same home team"
+    rule: if (home, away) already occurred in the two most recent seasons,
+    the same directed pairing is blocked for the current draw.
+    """
+    season_name = models.CharField(max_length=20)
+    home_team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='history_home_matchups',
+    )
+    away_team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='history_away_matchups',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['season_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['season_name', 'home_team', 'away_team'],
+                name='unique_directed_history_per_season',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.season_name}: {self.home_team.name} vs {self.away_team.name}'
+
+
 class SeasonMatchup(models.Model):
 	season = models.ForeignKey(
 		Season,
@@ -156,6 +200,16 @@ class SeasonMatchup(models.Model):
 		related_name='away_matchups',
 	)
 	matchday = models.PositiveSmallIntegerField(null=True, blank=True)
+	home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	status = models.CharField(
+		max_length=20,
+		blank=True,
+		default='',
+		help_text='SCHEDULED, IN_PLAY, FINISHED, etc.',
+	)
+	external_id = models.CharField(max_length=50, blank=True, default='')
+	kickoff = models.DateTimeField(null=True, blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 
@@ -292,3 +346,50 @@ class KnockoutPrediction(models.Model):
 
 	def __str__(self) -> str:
 		return f'{self.get_round_display()} #{self.bracket_position}: {self.home_team} vs {self.away_team}'
+
+
+class League(models.Model):
+	"""A real-world league fetched from football-data.org."""
+	code = models.CharField(max_length=10, unique=True, help_text='API code, e.g. PL, BL1, CL')
+	name = models.CharField(max_length=100)
+	country = models.CharField(max_length=100, blank=True, default='')
+	emblem_url = models.URLField(max_length=500, blank=True, default='')
+	plan = models.CharField(max_length=30, blank=True, default='', help_text='API plan tier (TIER_ONE, etc.)')
+	is_active = models.BooleanField(default=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['name']
+
+	def __str__(self) -> str:
+		return self.name
+
+
+class LeagueStanding(models.Model):
+	"""A team's position in a league table, synced from football-data.org."""
+	league = models.ForeignKey(League, on_delete=models.CASCADE, related_name='standings')
+	season_year = models.PositiveSmallIntegerField()
+	position = models.PositiveSmallIntegerField()
+	team_name = models.CharField(max_length=100)
+	team_crest = models.URLField(max_length=500, blank=True, default='')
+	played = models.PositiveSmallIntegerField(default=0)
+	won = models.PositiveSmallIntegerField(default=0)
+	draw = models.PositiveSmallIntegerField(default=0)
+	lost = models.PositiveSmallIntegerField(default=0)
+	goals_for = models.PositiveSmallIntegerField(default=0)
+	goals_against = models.PositiveSmallIntegerField(default=0)
+	goal_difference = models.IntegerField(default=0)
+	points = models.PositiveSmallIntegerField(default=0)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['league', 'season_year', 'position']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['league', 'season_year', 'team_name'],
+				name='unique_team_per_league_season',
+			),
+		]
+
+	def __str__(self) -> str:
+		return f'{self.position}. {self.team_name} ({self.league.code})'

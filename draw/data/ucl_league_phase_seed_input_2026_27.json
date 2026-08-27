@@ -496,20 +496,20 @@
     },
     {
       "rank": 26,
-      "resolution_status": "unresolved",
+      "resolution_status": "resolved",
       "team": {
-        "name": "Fenerbahçe / Lyon",
-        "short_name": "TBD",
+        "name": "Fenerbahce",
+        "short_name": "FEN",
         "association": {
-          "name": "TBD",
-          "code": "TBD"
+          "name": "Turkey",
+          "code": "TUR"
         },
-        "api_football_id": null,
-        "api_football_name": null,
-        "api_football_logo": null,
-        "uefa_reference_name": "Fenerbahce / Lyon"
+        "api_football_id": 611,
+        "api_football_name": "Fenerbahçe",
+        "api_football_logo": "https://media.api-sports.io/football/teams/611.png",
+        "uefa_reference_name": "Fenerbahce"
       },
-      "uefa_club_coefficient": null,
+      "uefa_club_coefficient": "55.750",
       "is_title_holder": false,
       "qualified_via": "LEAGUE_POSITION"
     },
@@ -629,58 +629,58 @@
     },
     {
       "rank": 33,
-      "resolution_status": "unresolved",
+      "resolution_status": "resolved",
       "team": {
-        "name": "AEK Athens / Levski Sofia",
-        "short_name": "TBD",
+        "name": "AEK Athens",
+        "short_name": "AEK",
         "association": {
-          "name": "TBD",
-          "code": "TBD"
+          "name": "Greece",
+          "code": "GRE"
         },
-        "api_football_id": null,
-        "api_football_name": null,
-        "api_football_logo": null,
-        "uefa_reference_name": "AEK Athens / Levski Sofia"
+        "api_football_id": 575,
+        "api_football_name": "AEK Athens FC",
+        "api_football_logo": "https://media.api-sports.io/football/teams/575.png",
+        "uefa_reference_name": "AEK Athens"
       },
-      "uefa_club_coefficient": null,
+      "uefa_club_coefficient": "25.500",
       "is_title_holder": false,
       "qualified_via": "LEAGUE_POSITION"
     },
     {
       "rank": 34,
-      "resolution_status": "unresolved",
+      "resolution_status": "resolved",
       "team": {
-        "name": "Dinamo Zagreb / Viking",
-        "short_name": "TBD",
+        "name": "Viking FK",
+        "short_name": "VIK",
         "association": {
-          "name": "TBD",
-          "code": "TBD"
+          "name": "Norway",
+          "code": "NOR"
         },
-        "api_football_id": null,
-        "api_football_name": null,
-        "api_football_logo": null,
-        "uefa_reference_name": "Dinamo Zagreb / Viking"
+        "api_football_id": 759,
+        "api_football_name": "Viking",
+        "api_football_logo": "https://media.api-sports.io/football/teams/759.png",
+        "uefa_reference_name": "Viking FK"
       },
-      "uefa_club_coefficient": null,
+      "uefa_club_coefficient": "0.000",
       "is_title_holder": false,
       "qualified_via": "LEAGUE_POSITION"
     },
     {
       "rank": 35,
-      "resolution_status": "unresolved",
+      "resolution_status": "resolved",
       "team": {
-        "name": "Slovan Bratislava / Celje",
-        "short_name": "TBD",
+        "name": "Slovan Bratislava",
+        "short_name": "SLO",
         "association": {
-          "name": "TBD",
-          "code": "TBD"
+          "name": "Slovakia",
+          "code": "SVK"
         },
-        "api_football_id": null,
-        "api_football_name": null,
-        "api_football_logo": null,
-        "uefa_reference_name": "Slovan Bratislava / Celje"
+        "api_football_id": 656,
+        "api_football_name": "Slovan Bratislava",
+        "api_football_logo": "https://media.api-sports.io/football/teams/656.png",
+        "uefa_reference_name": "Slovan Bratislava"
       },
-      "uefa_club_coefficient": null,
+      "uefa_club_coefficient": "33.000",
       "is_title_holder": false,
       "qualified_via": "LEAGUE_POSITION"
     },

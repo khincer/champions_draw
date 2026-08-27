@@ -57,6 +57,7 @@ class SeasonDrawSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'season',
+            'method',
             'draw_seed',
             'player_name',
             'status',
@@ -102,6 +103,10 @@ class CompactSeasonMatchupSerializer(serializers.ModelSerializer):
             'home_team',
             'away_team',
             'matchday',
+            'home_goals',
+            'away_goals',
+            'status',
+            'kickoff',
         ]
 
 
@@ -118,4 +123,8 @@ class SeasonMatchupSerializer(serializers.ModelSerializer):
             'home_team',
             'away_team',
             'matchday',
+            'home_goals',
+            'away_goals',
+            'status',
+            'kickoff',
         ]

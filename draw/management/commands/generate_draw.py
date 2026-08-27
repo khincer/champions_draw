@@ -27,6 +27,12 @@ class Command(BaseCommand):
             help='Optional player name to store with the draw metadata.',
         )
         parser.add_argument(
+            '--method',
+            choices=['sat', 'sequential'],
+            default='sat',
+            help='Draw algorithm: sat (uniform) or sequential (UEFA-style extraction).',
+        )
+        parser.add_argument(
             '--max-attempts',
             type=int,
             default=100,
@@ -46,6 +52,7 @@ class Command(BaseCommand):
                 player_name=options['player_name'],
                 reset=options['reset'],
                 max_attempts=options['max_attempts'],
+                method=options['method'],
             )
         except DrawError as exc:
             raise CommandError(str(exc)) from exc
