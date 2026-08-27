@@ -183,7 +183,7 @@ function TeamsBrowser({ leagues, selectedLeague, leagueStandings, setSelectedLea
     setSelectedLeague(league);
     setLoadingStandings(true);
     try {
-      const data = await apiFetch(`/api/leagues/${league.id}/standings/`);
+      const data = await apiFetch(`/leagues/${league.id}/standings/`);
       setLeagueStandings(Array.isArray(data) ? data : data.standings || []);
     } catch {
       setLeagueStandings([]);

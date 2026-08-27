@@ -229,7 +229,7 @@ class LeagueListAPIView(generics.ListAPIView):
 
 class LeagueStandingListAPIView(APIView):
 	def get(self, request, league_id):
-		league = get_object_404(League, pk=league_id)
+		league = get_object_or_404(League, pk=league_id)
 		season_year = request.query_params.get('season')
 		qs = LeagueStanding.objects.filter(league=league)
 		if season_year:
