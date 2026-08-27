@@ -18,6 +18,7 @@ ENV/
 
 # Django local files
 db.sqlite3
+data/
 staticfiles/
 media/
 

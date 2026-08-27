@@ -126,12 +126,15 @@ if database_url:
         ),
     }
 else:
+    db_dir = BASE_DIR / 'data'
+    db_dir.mkdir(parents=True, exist_ok=True)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'NAME': db_dir / 'db.sqlite3',
         },
     }
+
 
 
 # Password validation

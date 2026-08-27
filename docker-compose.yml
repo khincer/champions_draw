@@ -12,9 +12,11 @@ services:
       PYTHONUNBUFFERED: "1"
       DJANGO_SETTINGS_MODULE: champions_draw.settings
       DJANGO_DEBUG: "1"
+    volumes:
+      - db_data:/app/data
     command: >
-      sh -c "npm run build &&
-      python manage.py migrate &&
+      sh -c "python manage.py migrate &&
+      npm run build &&
       python manage.py runserver 0.0.0.0:8001 &
       npm run dev"
 
@@ -27,10 +29,18 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
       DJANGO_SETTINGS_MODULE: champions_draw.settings
+    volumes:
+      - db_data:/app/data
     command: >
       sh -c "while true; do
+        echo '[cron] migrating...';
+        python manage.py migrate 2>&1;
         echo '[cron] syncing leagues...';
         python manage.py sync_leagues 2>&1;
         echo '[cron] sleeping 24h...';
         sleep 86400;
       done"
+
+volumes:
+  db_data:
+

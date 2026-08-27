@@ -5,6 +5,7 @@ __pycache__
 node_modules
 staticfiles
 db.sqlite3
+data
 .env
 .atl
 .codegraph
