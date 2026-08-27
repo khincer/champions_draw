@@ -6,6 +6,7 @@
     "test:career": "node --test frontend/src/careerEngine.test.mjs"
   },
   "dependencies": {
+    "@babel/types": "^7.29.7",
     "@preact/preset-vite": "^2.10.2",
     "lucide-preact": "^0.468.0",
     "preact": "^10.25.3",
