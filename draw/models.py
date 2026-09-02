@@ -25,6 +25,7 @@ class DrawStatusChoices(models.TextChoices):
 class DrawMethodChoices(models.TextChoices):
 	SAT = 'sat', 'SAT (uniform draws)'
 	SEQUENTIAL = 'sequential', 'Sequential (UEFA-style)'
+	INTERACTIVE = 'interactive', 'Interactive (manual ceremony)'
 
 
 class Association(models.Model):
@@ -100,6 +101,10 @@ class SeasonTeam(models.Model):
 		choices=QualifiedViaChoices.choices,
 		default=QualifiedViaChoices.LEAGUE_POSITION,
 	)
+	# Domestic league standing (1 = champion) used by the frontend's draw
+	# strength blend (e.g. Como are 4th in Serie A, Sabah are lower in the
+	# Azerbaijani league). Null until seed input provides it.
+	domestic_position = models.PositiveSmallIntegerField(null=True, blank=True)
 	seeding_position = models.PositiveSmallIntegerField(null=True, blank=True)
 	pot = models.PositiveSmallIntegerField(null=True, blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
@@ -132,6 +137,11 @@ class SeasonDraw(models.Model):
 	)
 	draw_seed = models.CharField(max_length=100)
 	player_name = models.CharField(max_length=80, blank=True)
+	# For interactive draws only: the single pre-solved undirected edge set
+	# (list of [a, b] SeasonTeam pk pairs) revealed pick by pick. Persisted so
+	# every pick reveals against the SAME graph (SAT re-solve is not
+	# deterministic across calls).
+	interactive_edges = models.JSONField(default=list, blank=True)
 	status = models.CharField(
 		max_length=20,
 		choices=DrawStatusChoices.choices,
@@ -148,6 +158,38 @@ class SeasonDraw(models.Model):
 	def __str__(self) -> str:
 		player = f' by {self.player_name}' if self.player_name else ''
 		return f'{self.season.name} draw {self.draw_seed}{player} ({self.status})'
+
+
+class InteractiveDrawPick(models.Model):
+	"""One ceremony step: a season team drawn at a given pick_order.
+
+	A team counts as "drawn" for the interactive ceremony iff a pick row
+	exists for it on the active interactive SeasonDraw. Provisional matchups
+	created by the pick live on the season with matchday=null until finalize.
+	"""
+	draw = models.ForeignKey(
+		SeasonDraw,
+		on_delete=models.CASCADE,
+		related_name='picks',
+	)
+	season_team = models.ForeignKey(
+		SeasonTeam,
+		on_delete=models.CASCADE,
+		related_name='interactive_picks',
+	)
+	pick_order = models.PositiveSmallIntegerField()
+
+	class Meta:
+		ordering = ['pick_order']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['draw', 'season_team'],
+				name='unique_interactive_pick_team_per_draw',
+			),
+		]
+
+	def __str__(self) -> str:
+		return f'{self.draw}: {self.season_team.team.name} (pick {self.pick_order})'
 
 
 class SeasonMatchupHistory(models.Model):

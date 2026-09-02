@@ -12,6 +12,7 @@ from .predictions_views import (
 )
 from .views import (
 	HomepageMatchesAPIView,
+	InteractivePickAPIView,
 	LeagueListAPIView,
 	LeagueStandingListAPIView,
 	SeasonDrawAPIView,
@@ -31,6 +32,7 @@ urlpatterns = [
     path('seasons/', SeasonListAPIView.as_view(), name='season-list'),
     path('seasons/<int:pk>/seed/', SeasonSeedingAPIView.as_view(), name='season-seed'),
     path('seasons/<int:pk>/draw/', SeasonDrawAPIView.as_view(), name='season-draw'),
+    path('seasons/<int:pk>/interactive/pick/', InteractivePickAPIView.as_view(), name='season-interactive-pick'),
     path('seasons/<int:pk>/draws/', SeasonDrawListAPIView.as_view(), name='season-draw-list'),
     path('seasons/<int:pk>/matchups/', SeasonMatchupListAPIView.as_view(), name='season-matchup-list'),
     path('ui/seasons/<int:pk>/state/', UiSeasonStateAPIView.as_view(), name='ui-season-state'),

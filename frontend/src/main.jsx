@@ -9,6 +9,7 @@ import {
   Home,
   LayoutGrid,
   ListOrdered,
+  Plane,
   Play,
   Swords,
   Trophy,
@@ -19,6 +20,7 @@ import championsLeagueLogoUrl from './assets/uefa-champions-league-logo.svg';
 import './styles.css';
 import CareerApp, { hasSavedCareer } from './CareerApp';
 import PredictionApp from './PredictionApp';
+import { clearLocal, loadLocal } from './predictionStorage';
 
 const API_ROOT = '/api';
 const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
@@ -281,6 +283,8 @@ function App() {
   const [playerName, setPlayerName] = useState(() => localStorage.getItem(PLAYER_STORAGE_KEY) || '');
   const [drawSeed, setDrawSeed] = useState('prediction-1');
   const [drawMethod, setDrawMethod] = useState('sat');
+  const [interactiveState, setInteractiveState] = useState(null);
+  const [revealedOpponentIds, setRevealedOpponentIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [drawAnimation, setDrawAnimation] = useState({ isActive: false, phase: 'idle', revealedCount: 0 });
@@ -343,7 +347,10 @@ function App() {
     try {
       const seasonPayload = await apiFetch('/seasons/');
       setSeasons(seasonPayload);
-      const activeSeason = seasonPayload.find((season) => season.is_active) || seasonPayload[0];
+      // Seasons arrive ordered -name, so seasonPayload[0] is the newest.
+      // Default the simulator to it; the season picker in the workspace lets
+      // the user switch to any other season.
+      const activeSeason = seasonPayload[0];
       if (activeSeason) setSelectedSeasonId(String(activeSeason.id));
     } catch (err) {
       setError(err.message);
@@ -391,6 +398,20 @@ function App() {
           method: drawMethod,
         }),
       });
+
+      // A fresh simulation must not inherit the previous run's predictions:
+      // the draw seed never changes (season name), so loadLocal's
+      // drawSeed-mismatch discard can't tell them apart.
+      clearLocal(selectedSeasonId, normalizedPlayer);
+
+      if (drawMethod === 'interactive') {
+        setDrawAnimation({ isActive: false, phase: 'idle', revealedCount: 0 });
+        setInteractiveState(payload);
+        setNotice(`${normalizedPlayer} started an interactive draw — pick teams pot by pot.`);
+        await loadSeasonState(selectedSeasonId);
+        return;
+      }
+
       setNotice(`${normalizedPlayer} ran ${payload.summary.draw_seed} with ${payload.summary.total_matchups} fixtures.`);
       await loadSeasonState(selectedSeasonId);
       window.setTimeout(() => {
@@ -406,17 +427,33 @@ function App() {
   }
 
   const selectedTeam = useMemo(() => {
-    return seasonState?.teams.find((team) => team.id === selectedTeamId) || seasonState?.teams[0] || null;
-  }, [seasonState, selectedTeamId]);
+    const teams = interactiveState ? interactiveState.teams : seasonState?.teams || [];
+    return teams.find((team) => team.id === selectedTeamId) || teams[0] || null;
+  }, [interactiveState, seasonState, selectedTeamId]);
+
+  async function makeInteractiveComplete() {
+    setInteractiveState(null);
+    setDrawAnimation({ isActive: false, phase: 'idle', revealedCount: 0 });
+    setActiveTab('matchdays');
+    await loadSeasonState(selectedSeasonId);
+  }
 
   const teamMatchups = useMemo(() => {
-    if (!selectedTeam || !seasonState) return [];
-    return seasonState.matchups.filter(
+    if (!selectedTeam) return [];
+    const matchups = interactiveState ? interactiveState.matchups || [] : seasonState?.matchups || [];
+    return matchups.filter(
       (matchup) => matchup.home_team.id === selectedTeam.id || matchup.away_team.id === selectedTeam.id,
     );
-  }, [selectedTeam, seasonState]);
+  }, [selectedTeam, interactiveState, seasonState]);
 
   const latestDraw = seasonState?.draws?.[0];
+  const latestDrawSeed = latestDraw?.draw_seed;
+  // Predicted scores for the current draw, read from the same localStorage
+  // snapshot PredictionApp persists to, so the Teams tab shows predictions.
+  const teamPredictions = useMemo(
+    () => (latestDrawSeed ? (loadLocal(selectedSeasonId, playerName, latestDrawSeed).matchPredictions || {}) : {}),
+    [selectedSeasonId, playerName, latestDrawSeed],
+  );
   const matchdays = groupBy(seasonState?.matchups || [], 'matchday');
   const pots = groupBy(seasonState?.teams || [], 'pot');
 
@@ -491,15 +528,28 @@ function App() {
                   <section className="content-grid">
                     <div className="primary-column">
                       {activeTab === 'simulate' && (
-                        drawAnimation.isActive ? (
-                          <DrawAnimationStage
-                            phase={drawAnimation.phase}
-                            pots={pots}
-                            matchups={seasonState?.matchups || []}
-                            revealedCount={drawAnimation.revealedCount}
+                        drawMethod === 'interactive' && interactiveState ? (
+                          <InteractiveDraft
+                            seasonId={selectedSeasonId}
+                            state={interactiveState}
+                            setState={setInteractiveState}
+                            apiFetch={apiFetch}
+                            selectedTeamId={selectedTeam?.id}
+                            setSelectedTeamId={setSelectedTeamId}
+                            onComplete={makeInteractiveComplete}
+                            onReveal={setRevealedOpponentIds}
                           />
                         ) : (
-                          <MatchdayBoard matchdays={matchdays} />
+                          drawAnimation.isActive ? (
+                            <DrawAnimationStage
+                              phase={drawAnimation.phase}
+                              pots={pots}
+                              matchups={seasonState?.matchups || []}
+                              revealedCount={drawAnimation.revealedCount}
+                            />
+                          ) : (
+                            <MatchdayBoard matchdays={matchdays} />
+                          )
                         )
                       )}
                       {activeTab === 'matchdays' && <MatchdayBoard matchdays={matchdays} />}
@@ -510,6 +560,7 @@ function App() {
                           teamId={teamDetailId}
                           setTeamId={setTeamDetailId}
                           matchups={seasonState?.matchups || []}
+                          predictions={teamPredictions}
                           onBack={() => setActiveTab('pots')}
                         />
                       )}
@@ -521,6 +572,8 @@ function App() {
                       selectedTeamId={selectedTeam?.id}
                       setSelectedTeamId={setSelectedTeamId}
                       matchups={teamMatchups}
+                      interactive={Boolean(interactiveState)}
+                      revealedOpponentIds={revealedOpponentIds}
                     />
                   </section>
                 )}
@@ -657,6 +710,7 @@ function SimulationPanel({
           <select value={drawMethod} onChange={(event) => setDrawMethod(event.currentTarget.value)}>
             <option value="sat">SAT (uniform)</option>
             <option value="sequential">Sequential (UEFA-style)</option>
+            <option value="interactive">Interactive (pick by pick)</option>
           </select>
         </label>
         <button className="button primary" disabled={working || !selectedSeasonId} onClick={() => generateDraw()}>
@@ -751,17 +805,222 @@ function TeamBadge({ team, align }) {
   );
 }
 
-function TeamLogo({ team, size = 'md' }) {
+function TeamLogo({ team, size = 'md', className = '' }) {
   const [failed, setFailed] = useState(false);
   const showImage = team.logo_url && !failed;
   return (
-    <span className={`team-logo ${size}`}>
+    <span className={`team-logo ${size} ${className}`.trim()}>
       {showImage ? (
         <img src={team.logo_url} alt={`${team.name} badge`} loading="lazy" onError={() => setFailed(true)} />
       ) : (
         <span>{team.short_name.slice(0, 3)}</span>
       )}
     </span>
+  );
+}
+
+function InteractiveDraft({ seasonId, state, setState, apiFetch, selectedTeamId, setSelectedTeamId, onComplete, onReveal }) {
+  const { teams, matchups, picks, current_pot, auto_finalized } = state;
+  const pickedIds = new Set((picks || []).map((pick) => pick.season_team_id));
+  const pickedTeams = (picks || [])
+    .slice()
+    .sort((a, b) => a.pick_order - b.pick_order)
+    .map((pick) => teams.find((team) => team.id === pick.season_team_id))
+    .filter(Boolean);
+  const [pickingId, setPickingId] = useState(null);
+  const [error, setError] = useState('');
+  const [revealCount, setRevealCount] = useState(0);
+  const [revealStart, setRevealStart] = useState(0);
+  const [revealSession, setRevealSession] = useState(0);
+  const [pendingFinalize, setPendingFinalize] = useState(false);
+
+  const activeId = selectedTeamId;
+  const activeTeam = teams.find((team) => team.id === activeId) || null;
+  const activeMatchups = useMemo(() => {
+    if (!activeTeam) return [];
+    return (matchups || []).filter(
+      (m) => m.home_team.id === activeTeam.id || m.away_team.id === activeTeam.id,
+    );
+  }, [activeTeam, matchups]);
+  const activeOpponents = activeMatchups
+    .map((m) => (m.home_team.id === activeTeam.id ? m.away_team : m.home_team))
+    .sort((a, b) => a.pot - b.pot || a.name.localeCompare(b.name));
+
+  // Reveal the selected team's opponents one by one, 1s apart. Opponents whose
+  // matchup already existed (knownCount = revealStart) appear instantly; only
+  // freshly-created matchups animate. Restarts on every selection via
+  // revealSession.
+  useEffect(() => {
+    setRevealCount(revealStart);
+    if (revealStart >= activeOpponents.length) return undefined;
+    const timer = window.setInterval(() => {
+      setRevealCount((count) => {
+        if (count >= activeOpponents.length) {
+          window.clearInterval(timer);
+          return count;
+        }
+        return count + 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [revealSession, revealStart]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the parent (TeamInspector) in sync with the reveal: it should show
+  // the same opponents, at the same pace, as the pots panel below.
+  useEffect(() => {
+    onReveal?.(new Set(revealedIds));
+  }, [revealSession, revealCount, activeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The pick that ended the draw still plays its full one-by-one reveal before
+  // switching away to matchdays ("even if the simulator already finished").
+  useEffect(() => {
+    if (pendingFinalize && activeOpponents.length && revealCount >= activeOpponents.length) {
+      const timer = window.setTimeout(() => onComplete(), 600);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [pendingFinalize, revealCount, activeOpponents.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handlePick(team) {
+    setSelectedTeamId(team.id);
+    // Opponents whose matchup already exists are "known": reveal them instantly
+    // instead of replaying the one-by-one animation for them too.
+    const knownCount = (matchups || []).filter(
+      (m) => m.home_team.id === team.id || m.away_team.id === team.id,
+    ).length;
+    if (pickedIds.has(team.id)) {
+      setRevealStart(knownCount); // re-click: show the whole list at once
+      setRevealSession((session) => session + 1);
+      return;
+    }
+    if (String(team.pot) !== String(current_pot)) {
+      // Team is not on the clock: selecting only inspects it in the sidebar.
+      setRevealStart(knownCount); // inspect-only: existing matchups are all known
+      setRevealSession((session) => session + 1);
+      return;
+    }
+    setRevealStart(knownCount);
+    setRevealSession((session) => session + 1);
+    setPickingId(team.id);
+    setError('');
+    try {
+      const payload = await apiFetch(`/seasons/${seasonId}/interactive/pick/`, {
+        method: 'POST',
+        body: JSON.stringify({ season_team_id: team.id }),
+      });
+      setState(payload);
+      setRevealSession((session) => session + 1); // start reveal once the pick's matchups are loaded
+      if (payload.auto_finalized) {
+        setPendingFinalize(true); // keep showing the reveal, then complete
+        return;
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPickingId(null);
+    }
+  }
+
+  const pots = ['1', '2', '3', '4'];
+  const potTeams = (pot) =>
+    (teams || []).filter((team) => String(team.pot) === pot).sort((a, b) => a.seeding_position - b.seeding_position);
+  const revealedOpponents = activeOpponents.slice(0, revealCount);
+  const revealedIds = new Set(revealedOpponents.map((opponent) => opponent.id));
+  const onClock = String(current_pot);
+
+  return (
+    <section className="interactive-stage">
+      <div className="draw-animation-head">
+        <div>
+          <h2>{auto_finalized ? 'Draw complete!' : `Interactive draw — Pot ${current_pot || '?'}`}</h2>
+          <p>
+            {pickedTeams.length} of 36 teams picked. Choose one team; all of its matchups are locked in immediately.
+          </p>
+        </div>
+        <span className="draw-pulse" />
+      </div>
+
+      {error && <MessageBar error={error} />}
+
+      <div className="interactive-head">
+        <strong>{current_pot ? `Pot ${current_pot} on the clock` : 'All teams picked'}</strong>
+        {activeTeam && <span>{activeTeam.name} selected</span>}
+      </div>
+
+      <div className="interactive-pots">
+        {pots.map((pot) => (
+          <article className="pot-panel" key={pot}>
+            <div className="pot-head">
+              <strong>Pot {pot}</strong>
+              <span>{onClock === pot ? 'on the clock' : ''}</span>
+            </div>
+            {potTeams(pot).map((team) => {
+              const isPicked = pickedIds.has(team.id);
+              const isActive = activeId === team.id;
+              const isRevealed = revealedIds.has(team.id);
+              return (
+                <button
+                  className={`team-row ${isActive ? 'selected' : ''} ${
+                    isRevealed && !isActive ? 'opponent' : ''
+                  } ${isPicked ? 'picked' : ''}`}
+                  key={team.id}
+                  disabled={Boolean(pickingId) && pickingId === team.id}
+                  onClick={() => handlePick(team)}
+                >
+                  <span>{team.seeding_position}</span>
+                  <TeamLogo team={team} size="sm" />
+                  <strong>{team.name}</strong>
+                  <em>{team.association.code}</em>
+                </button>
+              );
+            })}
+          </article>
+        ))}
+      </div>
+
+      <div className="picked-row">
+        <strong>Picked</strong>
+        {pickedTeams.length ? (
+          pickedTeams.map((team) => (
+            <button
+              className={`picked-chip ${activeId === team.id ? 'active' : ''}`}
+              key={team.id}
+              onClick={() => handlePick(team)}
+              title="Click to reveal opponents"
+            >
+              <TeamLogo team={team} size="sm" />
+              <b>{team.short_name}</b>
+            </button>
+          ))
+        ) : (
+          <span className="muted">Teams you pick will appear here, one by one.</span>
+        )}
+      </div>
+
+      <div className="reveal-box">
+        <h3>
+          {activeTeam ? `${activeTeam.name} — opponents` : 'Select a team'}
+        </h3>
+        <div className="reveal-badges">
+          {activeTeam && revealedOpponents.length ? (
+            revealedOpponents.map((opponent, index) => (
+              <TeamLogo
+                team={opponent}
+                size="md"
+                key={opponent.id}
+                className={index < revealStart ? 'known' : ''}
+              />
+            ))
+          ) : (
+            <span className="muted">
+              {activeTeam && !pickedIds.has(activeTeam.id)
+                ? 'Pick this team to reveal its opponents.'
+                : 'Opponents will appear here, one by one.'}
+            </span>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -795,7 +1054,7 @@ function PotBoard({ pots, selectedTeamId, setSelectedTeamId, onTeamClick }) {
   );
 }
 
-function TeamDetailPage({ teams, teamId, setTeamId, matchups, onBack }) {
+function TeamDetailPage({ teams, teamId, setTeamId, matchups, predictions = {}, onBack }) {
   const team = teams.find((t) => t.id === teamId) || teams[0];
   const teamMatchups = matchups.filter(
     (m) => m.home_team.id === team?.id || m.away_team.id === team?.id,
@@ -844,12 +1103,19 @@ function TeamDetailPage({ teams, teamId, setTeamId, matchups, onBack }) {
           {teamMatchups.map((m) => {
             const isHome = m.home_team.id === team.id;
             const opponent = isHome ? m.away_team : m.home_team;
+            const pred = predictions[String(m.id)];
+            const hasScore = pred && (pred.home_goals != null || pred.away_goals != null);
             return (
               <div className="team-fixture-row" key={m.id}>
                 <span className="matchday-chip">MD{m.matchday}</span>
                 <TeamBadge team={isHome ? m.home_team : m.away_team} />
                 <span className="versus">vs</span>
                 <TeamBadge team={opponent} align="right" />
+                {hasScore && (
+                  <span className="team-fixture-score">
+                    {pred.home_goals}&ndash;{pred.away_goals}
+                  </span>
+                )}
                 <span className={`venue-chip ${isHome ? 'home' : 'away'}`}>{isHome ? 'H' : 'A'}</span>
               </div>
             );
@@ -883,10 +1149,20 @@ function PlayersRuns({ draws }) {
   );
 }
 
-function TeamInspector({ team, teams, selectedTeamId, setSelectedTeamId, matchups }) {
+function TeamInspector({ team, teams, selectedTeamId, setSelectedTeamId, matchups, interactive = false, revealedOpponentIds = new Set() }) {
   if (!team) {
     return <aside className="inspector"><StateMessage icon={Users} title="No team selected" text="Choose a team from a pot." /></aside>;
   }
+  // During an interactive reveal, show exactly the opponents revealed so far
+  // (same pace as the badges below the pots); outside a reveal, show them all.
+  const visibleMatchups =
+    interactive && revealedOpponentIds.size
+      ? matchups.filter((matchup) => {
+          const opponentId =
+            matchup.home_team.id === team.id ? matchup.away_team.id : matchup.home_team.id;
+          return revealedOpponentIds.has(opponentId);
+        })
+      : matchups;
   return (
     <aside className="inspector">
       <label className="team-picker">
@@ -907,8 +1183,8 @@ function TeamInspector({ team, teams, selectedTeamId, setSelectedTeamId, matchup
       </div>
       <div className="opponent-list">
         <strong>Opponents</strong>
-        {matchups.length ? (
-          matchups
+        {visibleMatchups.length ? (
+          visibleMatchups
             .sort((a, b) => a.matchday - b.matchday)
             .map((matchup) => {
               const isHome = matchup.home_team.id === team.id;
@@ -918,12 +1194,19 @@ function TeamInspector({ team, teams, selectedTeamId, setSelectedTeamId, matchup
                   <span>MD{matchup.matchday}</span>
                   <TeamLogo team={opponent} size="sm" />
                   <strong>{opponent.name}</strong>
-                  <em>{isHome ? 'Home' : 'Away'} - Pot {opponent.pot}</em>
+                  <em className="home-away">
+                    {isHome ? <Home size={12} /> : <Plane size={12} />}
+                    <span>Pot {opponent.pot}</span>
+                  </em>
                 </div>
               );
             })
         ) : (
-          <p className="muted">Run a simulation to inspect this team's eight fixtures.</p>
+          <p className="muted">
+            {interactive
+              ? 'Pick this team in the interactive draw to lock its opponents.'
+              : 'Run a simulation to inspect this team\'s eight fixtures.'}
+          </p>
         )}
       </div>
     </aside>
