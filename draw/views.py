@@ -8,7 +8,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import League, LeagueStanding, Season, SeasonDraw, SeasonMatchup, SeasonTeam
+from .models import (
+	InteractiveDrawPick,
+	League,
+	LeagueStanding,
+	Prediction,
+	Season,
+	SeasonDraw,
+	SeasonMatchup,
+	SeasonTeam,
+)
 from .serializers import (
 	CompactSeasonMatchupSerializer,
 	CompactSeasonTeamSerializer,
@@ -18,6 +27,7 @@ from .serializers import (
 	SeasonTeamSerializer,
 )
 from .services.draw import DrawError, generate_season_draw
+from .services.interactive_draw import current_pot, pick_team, start_or_resume
 from .services.seeding import SeedingError, seed_season_entries
 
 
@@ -114,6 +124,26 @@ class SeasonDrawAPIView(APIView):
 		method = str(request.data.get('method', 'sat'))
 		reset = parse_bool(request.data.get('reset', False))
 
+		# Cleanup all prediction data for this season on every fresh simulation.
+		# Cascade deletes wipe MatchPrediction/PlayoffPrediction/KnockoutPrediction
+		# via the FK to Prediction.  Matches are only wiped by the draw services
+		# themselves, so placing this here covers both the interactive and SAT
+		# paths in a single call site.
+		if reset:
+			Prediction.objects.filter(season=season).delete()
+
+		if method == 'interactive':
+			try:
+				draw = start_or_resume(
+					season=season,
+					draw_seed=draw_seed,
+					player_name=player_name,
+					reset=reset,
+				)
+			except DrawError as exc:
+				return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+			return Response(_interactive_state(season, draw), status=status.HTTP_200_OK)
+
 		try:
 			summary = generate_season_draw(
 				season,
@@ -134,6 +164,60 @@ class SeasonDrawAPIView(APIView):
 			},
 			status=status.HTTP_200_OK,
 		)
+
+
+class InteractivePickAPIView(APIView):
+	"""Apply one manual ceremony pick against the running interactive draw."""
+
+	def post(self, request, pk):
+		season = get_object_or_404(Season, pk=pk)
+		season_team_id = request.data.get('season_team_id')
+		if season_team_id is None:
+			return Response(
+				{'detail': 'season_team_id is required.'},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+		try:
+			draw = start_or_resume(
+				season=season,
+				draw_seed=request.data.get('seed', 'interactive'),
+				player_name=request.data.get('player_name', ''),
+				reset=False,
+			)
+			result = pick_team(
+				season=season,
+				draw=draw,
+				season_team_id=int(season_team_id),
+			)
+		except (DrawError, ValueError) as exc:
+			return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+		payload = _interactive_state(season, result.draw)
+		payload['auto_finalized'] = result.auto_finalized
+		return Response(payload, status=status.HTTP_200_OK)
+
+
+def _interactive_state(season: Season, draw: SeasonDraw) -> dict:
+	"""State payload the manual draw UI needs: draw, teams, provisional
+	matchups, picks in order, and the pot currently on the clock."""
+	entries = list(
+		SeasonTeam.objects.select_related('season', 'team', 'team__association')
+		.filter(season=season)
+		.order_by('pot', 'seeding_position', 'team__name')
+	)
+	matchups = list(get_season_matchups(season))
+	picks = list(
+		InteractiveDrawPick.objects.filter(draw=draw)
+		.order_by('pick_order')
+		.values('season_team_id', 'pick_order')
+	)
+	return {
+		'draw': SeasonDrawSerializer(draw).data,
+		'teams': CompactSeasonTeamSerializer(entries, many=True).data,
+		'matchups': CompactSeasonMatchupSerializer(matchups, many=True).data,
+		'picks': picks,
+		'current_pot': current_pot(draw),
+	}
 
 
 class SeasonMatchupListAPIView(generics.ListAPIView):

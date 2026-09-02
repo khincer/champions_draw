@@ -6,13 +6,16 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from .models import Association, DrawMethodChoices, DrawStatusChoices, QualifiedViaChoices, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
-from .services.draw import compute_forbidden_directions, generate_season_draw, previous_season_names
+from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
+from .serializers import CompactSeasonTeamSerializer
+from .services.draw import DrawError, compute_forbidden_directions, generate_season_draw, previous_season_names
 from .services.import_seed_input import import_seed_input_payload
+from .services.interactive_draw import assign_opponents_for_pick, current_pot, finalize, pick_team, start_or_resume
 from .services.seeding import seed_season_entries
 
 
@@ -284,6 +287,51 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 144)
 		self.assertEqual(SeasonDraw.objects.filter(season=self.season, status=DrawStatusChoices.COMPLETED).count(), 2)
 		self.assert_draw_constraints(self.season)
+
+	def test_draw_reset_deletes_season_predictions(self):
+		seed_season_entries(self.season)
+		self.client.post(
+			reverse('draw:season-draw', args=[self.season.pk]),
+			{'seed': 'pred-test-1'},
+			format='json',
+		)
+		home = self.entries[0]
+		away = self.entries[1]
+		matchup = SeasonMatchup.objects.filter(season=self.season).first()
+		prediction = Prediction.objects.create(season=self.season, player_name='Ada')
+		MatchPrediction.objects.create(prediction=prediction, matchup=matchup, home_goals=2, away_goals=1)
+		PlayoffPrediction.objects.create(
+			prediction=prediction,
+			matchup_index=1,
+			home_team=home,
+			away_team=away,
+			leg1_home_goals=1,
+			leg1_away_goals=0,
+			leg2_home_goals=2,
+			leg2_away_goals=1,
+		)
+		KnockoutPrediction.objects.create(
+			prediction=prediction,
+			round='R16',
+			bracket_position=1,
+			home_team=home,
+			away_team=away,
+			home_goals=2,
+			away_goals=0,
+		)
+		self.assertEqual(Prediction.objects.filter(season=self.season).count(), 1)
+
+		response = self.client.post(
+			reverse('draw:season-draw', args=[self.season.pk]),
+			{'seed': 'pred-test-2', 'reset': True},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(Prediction.objects.filter(season=self.season).count(), 0)
+		self.assertEqual(MatchPrediction.objects.count(), 0)
+		self.assertEqual(PlayoffPrediction.objects.count(), 0)
+		self.assertEqual(KnockoutPrediction.objects.count(), 0)
 
 	def test_generate_draw_management_command_creates_matchups_and_metadata(self):
 		seed_season_entries(self.season)
@@ -752,3 +800,492 @@ class SequentialDrawTests(TestCase):
 				self.assertLessEqual(association_count, 2)
 			for matchday in range(1, 9):
 				self.assertEqual(matchday_counts[entry.pk].get(matchday, 0), 1)
+
+
+class InteractiveDrawTests(TestCase):
+	"""Interactive (manual pot-by-pot) draw ceremony: model, session, picks, finalize."""
+
+	def setUp(self):
+		# Season 2026-27: its two previous consecutive seasons are 2025-26 and 2024-25.
+		self.season = Season.objects.create(name='2026-27', is_active=True)
+		self.entries = []
+
+		for index in range(36):
+			association = Association.objects.create(
+				name=f'IAssoc {index + 1}',
+				code=f'{index + 1:03}',
+			)
+			team = Team.objects.create(
+				name=f'ITeam {index + 1}',
+				short_name=f'IT{index + 1}',
+				association=association,
+			)
+			entry = SeasonTeam.objects.create(
+				season=self.season,
+				team=team,
+				uefa_club_coefficient=Decimal('120.000') - Decimal(index),
+				qualified_via=QualifiedViaChoices.LEAGUE_POSITION,
+			)
+			self.entries.append(entry)
+
+		title_holder = self.entries[-1]
+		title_holder.is_title_holder = True
+		title_holder.qualified_via = QualifiedViaChoices.TITLE_HOLDER
+		title_holder.uefa_club_coefficient = Decimal('15.000')
+		title_holder.save(update_fields=['is_title_holder', 'qualified_via', 'uefa_club_coefficient'])
+
+		seed_season_entries(self.season)
+
+	def pot_entries(self, pot):
+		return list(SeasonTeam.objects.filter(season=self.season, pot=pot).order_by('seeding_position'))
+
+	def run_full_ceremony(self, draw):
+		for pot in range(1, 5):
+			for entry in self.pot_entries(pot):
+				pick_team(season=self.season, draw=draw, season_team_id=entry.pk)
+
+	def assert_draw_constraints(self, season):
+		entries = list(SeasonTeam.objects.select_related('team__association').filter(season=season))
+		entries_by_id = {entry.pk: entry for entry in entries}
+		matchups = list(
+			SeasonMatchup.objects.select_related(
+				'home_team__team__association',
+				'away_team__team__association',
+			).filter(season=season)
+		)
+		home_counts = {}
+		away_counts = {}
+		opponent_pot_counts = {entry.pk: {} for entry in entries}
+		opponent_association_counts = {entry.pk: {} for entry in entries}
+		matchday_counts = {entry.pk: {} for entry in entries}
+		undirected_edges = set()
+
+		self.assertEqual(len(matchups), 144)
+
+		for matchup in matchups:
+			home_id = matchup.home_team_id
+			away_id = matchup.away_team_id
+			home_entry = entries_by_id[home_id]
+			away_entry = entries_by_id[away_id]
+			edge = tuple(sorted((home_id, away_id)))
+
+			self.assertNotIn(edge, undirected_edges)
+			undirected_edges.add(edge)
+			self.assertNotEqual(home_entry.team.association_id, away_entry.team.association_id)
+			self.assertIsNotNone(matchup.matchday)
+			self.assertGreaterEqual(matchup.matchday, 1)
+			self.assertLessEqual(matchup.matchday, 8)
+
+			home_counts[home_id] = home_counts.get(home_id, 0) + 1
+			away_counts[away_id] = away_counts.get(away_id, 0) + 1
+			opponent_pot_counts[home_id][away_entry.pot] = opponent_pot_counts[home_id].get(away_entry.pot, 0) + 1
+			opponent_pot_counts[away_id][home_entry.pot] = opponent_pot_counts[away_id].get(home_entry.pot, 0) + 1
+			opponent_association_counts[home_id][away_entry.team.association_id] = (
+				opponent_association_counts[home_id].get(away_entry.team.association_id, 0) + 1
+			)
+			opponent_association_counts[away_id][home_entry.team.association_id] = (
+				opponent_association_counts[away_id].get(home_entry.team.association_id, 0) + 1
+			)
+			matchday_counts[home_id][matchup.matchday] = matchday_counts[home_id].get(matchup.matchday, 0) + 1
+			matchday_counts[away_id][matchup.matchday] = matchday_counts[away_id].get(matchup.matchday, 0) + 1
+
+		for entry in entries:
+			self.assertEqual(home_counts.get(entry.pk, 0), 4)
+			self.assertEqual(away_counts.get(entry.pk, 0), 4)
+			for pot in range(1, 5):
+				self.assertEqual(opponent_pot_counts[entry.pk].get(pot, 0), 2)
+			for association_count in opponent_association_counts[entry.pk].values():
+				self.assertLessEqual(association_count, 2)
+			for matchday in range(1, 9):
+				self.assertEqual(matchday_counts[entry.pk].get(matchday, 0), 1)
+
+	def test_interactive_method_exposes_choice_and_creates_running_session(self):
+		self.assertEqual(DrawMethodChoices.INTERACTIVE, 'interactive')
+
+		draw = SeasonDraw.objects.create(
+			season=self.season,
+			draw_seed='manual-1',
+			method=DrawMethodChoices.INTERACTIVE,
+		)
+		self.assertEqual(draw.status, DrawStatusChoices.RUNNING)
+
+	def test_duplicate_pick_for_same_team_rejected_by_constraint(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+		team = self.pot_entries(1)[0]
+		InteractiveDrawPick.objects.create(draw=draw, season_team=team, pick_order=1)
+
+		with transaction.atomic():
+			with self.assertRaises(IntegrityError):
+				InteractiveDrawPick.objects.create(draw=draw, season_team=team, pick_order=2)
+
+	def test_start_creates_running_interactive_session(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1', player_name='Ada')
+
+		self.assertEqual(draw.method, DrawMethodChoices.INTERACTIVE)
+		self.assertEqual(draw.status, DrawStatusChoices.RUNNING)
+		self.assertEqual(draw.player_name, 'Ada')
+		self.assertEqual(current_pot(draw), 1)
+
+	def test_start_resumes_existing_session_with_picks_intact(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+		pick_team(season=self.season, draw=draw, season_team_id=self.pot_entries(1)[0].pk)
+
+		resumed = start_or_resume(season=self.season, draw_seed='manual-1')
+		self.assertEqual(resumed.pk, draw.pk)
+		self.assertEqual(InteractiveDrawPick.objects.filter(draw=draw).count(), 1)
+		self.assertEqual(current_pot(resumed), 1)
+
+	def test_reset_clears_picks_matchups_and_stale_predictions(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+		pick_team(season=self.season, draw=draw, season_team_id=self.pot_entries(1)[0].pk)
+		matchup = SeasonMatchup.objects.filter(season=self.season).first()
+		prediction = Prediction.objects.create(season=self.season, player_name='Ada')
+		MatchPrediction.objects.create(prediction=prediction, matchup=matchup, home_goals=1, away_goals=0)
+
+		fresh = start_or_resume(season=self.season, draw_seed='manual-1', reset=True)
+
+		self.assertNotEqual(fresh.pk, draw.pk)
+		self.assertEqual(InteractiveDrawPick.objects.filter(draw=fresh).count(), 0)
+		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 0)
+		self.assertEqual(MatchPrediction.objects.count(), 0)
+		self.assertEqual(current_pot(fresh), 1)
+		self.assertEqual(
+			SeasonDraw.objects.filter(
+				season=self.season,
+				method=DrawMethodChoices.INTERACTIVE,
+				status=DrawStatusChoices.RUNNING,
+			).count(),
+			1,
+		)
+
+	def test_only_one_running_interactive_session_per_season(self):
+		first = start_or_resume(season=self.season, draw_seed='manual-1')
+		second = start_or_resume(season=self.season, draw_seed='manual-1')
+
+		self.assertEqual(first.pk, second.pk)
+		self.assertEqual(
+			SeasonDraw.objects.filter(
+				season=self.season,
+				method=DrawMethodChoices.INTERACTIVE,
+				status=DrawStatusChoices.RUNNING,
+			).count(),
+			1,
+		)
+
+	def test_one_shot_reset_cancels_running_interactive_session(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+		pick_team(season=self.season, draw=draw, season_team_id=self.pot_entries(1)[0].pk)
+
+		summary = generate_season_draw(self.season, draw_seed='oneshot-1', method='sequential', reset=True)
+
+		self.assertEqual(summary.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(summary.total_matchups, 144)
+		self.assertEqual(
+			SeasonDraw.objects.filter(
+				season=self.season,
+				method=DrawMethodChoices.INTERACTIVE,
+				status=DrawStatusChoices.RUNNING,
+			).count(),
+			0,
+		)
+		self.assertEqual(InteractiveDrawPick.objects.filter(draw=draw).count(), 0)
+
+	def test_pick_counts_follow_ceremony_math(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+
+		pot1 = self.pot_entries(1)
+		pick_team(season=self.season, draw=draw, season_team_id=pot1[0].pk)
+		self.assertEqual(SeasonMatchup.objects.count(), 8)
+		for entry in pot1[1:]:
+			pick_team(season=self.season, draw=draw, season_team_id=entry.pk)
+		self.assertEqual(SeasonMatchup.objects.count(), 63)
+		self.assertEqual(current_pot(draw), 2)
+
+		pot2 = self.pot_entries(2)
+		pick_team(season=self.season, draw=draw, season_team_id=pot2[0].pk)
+		self.assertEqual(SeasonMatchup.objects.count(), 63 + 6)
+		for entry in pot2[1:]:
+			pick_team(season=self.season, draw=draw, season_team_id=entry.pk)
+		self.assertEqual(SeasonMatchup.objects.count(), 108)
+		self.assertEqual(current_pot(draw), 3)
+
+		pot3 = self.pot_entries(3)
+		pick_team(season=self.season, draw=draw, season_team_id=pot3[0].pk)
+		self.assertEqual(SeasonMatchup.objects.count(), 108 + 4)
+		for entry in pot3[1:]:
+			pick_team(season=self.season, draw=draw, season_team_id=entry.pk)
+		self.assertEqual(SeasonMatchup.objects.count(), 135)
+		self.assertEqual(current_pot(draw), 4)
+
+		pot4 = self.pot_entries(4)
+		pick_team(season=self.season, draw=draw, season_team_id=pot4[0].pk)
+		self.assertEqual(SeasonMatchup.objects.count(), 135 + 2)
+
+		last = None
+		for entry in pot4[1:]:
+			last = pick_team(season=self.season, draw=draw, season_team_id=entry.pk)
+
+		draw.refresh_from_db()
+		self.assertEqual(last.auto_finalized, True)
+		self.assertEqual(SeasonMatchup.objects.count(), 144)
+		self.assertEqual(draw.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(draw.matchups_created, 144)
+		self.assertEqual(current_pot(draw), None)
+		self.assert_draw_constraints(self.season)
+
+	def test_full_ceremony_auto_finalizes_and_holds_constraints(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+
+		last = None
+		for pot in range(1, 5):
+			for entry in self.pot_entries(pot):
+				last = pick_team(season=self.season, draw=draw, season_team_id=entry.pk)
+
+		draw.refresh_from_db()
+		self.assertEqual(last.auto_finalized, True)
+		self.assertEqual(draw.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(draw.matchups_created, 144)
+		self.assertIsNotNone(draw.completed_at)
+		self.assert_draw_constraints(self.season)
+
+	def test_every_pick_leaves_four_home_four_away(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+
+		# The ceremony display must never show an unbalanced home/away split:
+		# from the moment a team is picked it holds exactly 4 home and 4 away.
+		for pot in range(1, 5):
+			for entry in self.pot_entries(pot):
+				pick_team(season=self.season, draw=draw, season_team_id=entry.pk)
+				home_rows = SeasonMatchup.objects.filter(season=self.season, home_team_id=entry.pk).count()
+				away_rows = SeasonMatchup.objects.filter(season=self.season, away_team_id=entry.pk).count()
+				self.assertEqual(
+					home_rows, 4,
+					f'{entry.team.name} must hold exactly 4 home games after its pick',
+				)
+				self.assertEqual(
+					away_rows, 4,
+					f'{entry.team.name} must hold exactly 4 away games after its pick',
+				)
+
+		draw.refresh_from_db()
+		self.assertEqual(draw.status, DrawStatusChoices.COMPLETED)
+		self.assert_draw_constraints(self.season)
+
+	def test_pick_rejects_team_not_in_current_pot(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+		for entry in self.pot_entries(1):
+			pick_team(season=self.season, draw=draw, season_team_id=entry.pk)
+
+		stray = self.pot_entries(1)[0]
+		with self.assertRaises(DrawError):
+			pick_team(season=self.season, draw=draw, season_team_id=stray.pk)
+		self.assertEqual(SeasonMatchup.objects.count(), 63)
+		self.assertEqual(InteractiveDrawPick.objects.filter(draw=draw).count(), 9)
+
+	def test_pick_rejects_already_drawn_team(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+		team = self.pot_entries(1)[0]
+		pick_team(season=self.season, draw=draw, season_team_id=team.pk)
+
+		with self.assertRaises(DrawError):
+			pick_team(season=self.season, draw=draw, season_team_id=team.pk)
+		self.assertEqual(SeasonMatchup.objects.count(), 8)
+		self.assertEqual(InteractiveDrawPick.objects.filter(draw=draw).count(), 1)
+
+	def test_pick_rejects_when_draw_not_running(self):
+		draw = SeasonDraw.objects.create(
+			season=self.season,
+			draw_seed='done-1',
+			method=DrawMethodChoices.INTERACTIVE,
+			status=DrawStatusChoices.COMPLETED,
+		)
+		with self.assertRaises(DrawError):
+			pick_team(season=self.season, draw=draw, season_team_id=self.pot_entries(1)[0].pk)
+
+	def _rigged_season(self):
+		season = Season.objects.create(name='2025-26')
+		entries = []
+
+		def make_entry(index, coefficient, association_name, association_code):
+			association = Association.objects.create(name=association_name, code=association_code)
+			team = Team.objects.create(name=f'Rig {index + 1}', short_name=f'R{index + 1}', association=association)
+			return SeasonTeam.objects.create(
+				season=season,
+				team=team,
+				uefa_club_coefficient=Decimal(str(coefficient)),
+				qualified_via=QualifiedViaChoices.LEAGUE_POSITION,
+			)
+
+		for index in range(27):  # pots 1-3: one unique association each
+			entries.append(make_entry(index, Decimal('120.000') - Decimal(index), f'RAssoc {index + 1}', f'{index + 100:03}'))
+
+		england = Association.objects.create(name='England', code='ENG')
+		for index in range(8):  # pot 4: eight English clubs
+			team = Team.objects.create(name=f'ENG {index + 1}', short_name=f'E{index + 1}', association=england)
+			entries.append(SeasonTeam.objects.create(
+				season=season,
+				team=team,
+				uefa_club_coefficient=Decimal('90.000') - Decimal(index),
+				qualified_via=QualifiedViaChoices.LEAGUE_POSITION,
+			))
+
+		espana = Association.objects.create(name='Spain', code='ESP')
+		team = Team.objects.create(name='Real Betis', short_name='BET', association=espana)
+		title_holder = SeasonTeam.objects.create(
+			season=season,
+			team=team,
+			uefa_club_coefficient=Decimal('82.000'),
+			qualified_via=QualifiedViaChoices.TITLE_HOLDER,
+		)
+		title_holder.is_title_holder = True
+		title_holder.save(update_fields=['is_title_holder', 'qualified_via'])
+		entries.append(title_holder)
+
+		seed_season_entries(season)
+		return season
+
+	def test_dead_end_guard_rejects_without_persisting(self):
+		season = self._rigged_season()
+		draw = start_or_resume(season=season, draw_seed='rigged-1')
+		first_pot1 = SeasonTeam.objects.filter(season=season, pot=1).order_by('seeding_position').first()
+
+		with self.assertRaises(DrawError) as ctx:
+			pick_team(season=season, draw=draw, season_team_id=first_pot1.pk)
+
+		self.assertIn('dead-end', str(ctx.exception))
+		self.assertEqual(SeasonMatchup.objects.filter(season=season).count(), 0)
+		self.assertEqual(InteractiveDrawPick.objects.filter(draw=draw).count(), 0)
+
+	def test_ceremony_respects_rule_six_blocked_pair_never_drawn(self):
+		home, away = self.pot_entries(1)[:2]
+		for season_name in ('2025-26', '2024-25'):
+			SeasonMatchupHistory.objects.create(season_name=season_name, home_team=home.team, away_team=away.team)
+			SeasonMatchupHistory.objects.create(season_name=season_name, home_team=away.team, away_team=home.team)
+
+		draw = start_or_resume(season=self.season, draw_seed='rule6-blocked')
+		self.run_full_ceremony(draw)
+
+		self.assert_draw_constraints(self.season)
+		self.assertEqual(
+			SeasonMatchup.objects.filter(
+				season=self.season,
+				home_team__team__in=[home.team, away.team],
+				away_team__team__in=[home.team, away.team],
+			).count(),
+			0,
+		)
+
+	def test_ceremony_never_places_blocked_team_as_home(self):
+		home, away = self.pot_entries(1)[:2]
+		for season_name in ('2025-26', '2024-25'):
+			SeasonMatchupHistory.objects.create(season_name=season_name, home_team=home.team, away_team=away.team)
+
+		draw = start_or_resume(season=self.season, draw_seed='rule6-home')
+		self.run_full_ceremony(draw)
+
+		self.assert_draw_constraints(self.season)
+		self.assertEqual(
+			SeasonMatchup.objects.filter(season=self.season, home_team=home, away_team=away).count(),
+			0,
+		)
+
+	def test_assign_opponents_is_deterministic_for_same_state(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+		team = self.pot_entries(1)[0]
+
+		first = assign_opponents_for_pick(season=self.season, draw=draw, season_team=team)
+		second = assign_opponents_for_pick(season=self.season, draw=draw, season_team=team)
+		self.assertEqual(first, second)
+		self.assertEqual(len(first), 8)
+
+		pick_team(season=self.season, draw=draw, season_team_id=team.pk)
+		for entry in self.pot_entries(1)[1:3]:
+			pick_team(season=self.season, draw=draw, season_team_id=entry.pk)
+
+		team2 = self.pot_entries(1)[3]
+		third = assign_opponents_for_pick(season=self.season, draw=draw, season_team=team2)
+		fourth = assign_opponents_for_pick(season=self.season, draw=draw, season_team=team2)
+		self.assertEqual(third, fourth)
+
+	def test_finalize_incomplete_draw_is_refused(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+		pick_team(season=self.season, draw=draw, season_team_id=self.pot_entries(1)[0].pk)
+
+		with self.assertRaises(DrawError):
+			finalize(draw)
+
+		draw.refresh_from_db()
+		self.assertEqual(draw.status, DrawStatusChoices.RUNNING)
+		self.assertEqual(SeasonMatchup.objects.filter(season=self.season, matchday__isnull=False).count(), 0)
+
+	def test_finalize_is_idempotent_after_auto_finalize(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+		self.run_full_ceremony(draw)
+
+		draw = finalize(draw)
+		self.assertEqual(draw.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 144)
+
+	def test_full_ceremony_on_real_seed_data_holds_constraints(self):
+		data_path = Path(__file__).resolve().parent / 'data' / 'ucl_league_phase_seed_input_2025_26.json'
+		payload = json.loads(data_path.read_text(encoding='utf-8'))
+		import_seed_input_payload(payload, set_active=True)
+		season = Season.objects.get(name=payload['season']['name'])
+		seed_season_entries(season)
+
+		draw = start_or_resume(season=season, draw_seed='manual-real')
+		for pot in range(1, 5):
+			for entry in SeasonTeam.objects.filter(season=season, pot=pot).order_by('seeding_position'):
+				pick_team(season=season, draw=draw, season_team_id=entry.pk)
+
+		draw.refresh_from_db()
+		self.assertEqual(draw.status, DrawStatusChoices.COMPLETED)
+		self.assertEqual(draw.matchups_created, 144)
+		self.assert_draw_constraints(season)
+
+
+class DomesticStandingJoinTests(TestCase):
+	def test_domestic_field_joins_latest_standing_and_returns_none_when_unmatched(self):
+		assoc = Association.objects.create(name='Italy', code='ITA')
+		season = Season.objects.create(name='2025-26')
+
+		como = Team.objects.create(name='Como', short_name='Como', association=assoc)
+		entry = SeasonTeam.objects.create(season=season, team=como, uefa_club_coefficient=Decimal('6.000'))
+
+		shakhtar = Team.objects.create(name='Shakhtar Donetsk', short_name='Shakhtar', association=assoc)
+		entry2 = SeasonTeam.objects.create(season=season, team=shakhtar, uefa_club_coefficient=Decimal('35.000'))
+
+		league = League.objects.create(code='SA', name='Serie A', country='Italy')
+		LeagueStanding.objects.create(
+			league=league,
+			season_year=2025,
+			position=2,
+			team_name='Como',
+			played=8,
+			goals_for=10,
+			goals_against=9,
+			goal_difference=1,
+		)
+		LeagueStanding.objects.create(
+			league=league,
+			season_year=2026,
+			position=4,
+			team_name='Como',
+			played=10,
+			goals_for=12,
+			goals_against=8,
+			goal_difference=4,
+		)
+
+		self.assertEqual(
+			CompactSeasonTeamSerializer(entry).data['domestic'],
+			{
+				'position': 4,
+				'played': 10,
+				'goals_for': 12,
+				'goals_against': 8,
+				'goal_difference': 4,
+			},
+		)
+		# A team with no standing row for its association gets null.
+		self.assertIsNone(CompactSeasonTeamSerializer(entry2).data['domestic'])

@@ -77,6 +77,9 @@ def generate_sequential_season_draw(
 
         with transaction.atomic():
             if reset:
+                from draw.services.interactive_draw import cancel_running_sessions
+
+                cancel_running_sessions(season)
                 SeasonMatchup.objects.filter(season=season).delete()
             elif SeasonMatchup.objects.filter(season=season).exists():
                 raise DrawError('Season already has generated matchups. Use reset=true to replace them.')

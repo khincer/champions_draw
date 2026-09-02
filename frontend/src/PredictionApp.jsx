@@ -4,7 +4,7 @@ import LeagueTable from './LeagueTable';
 import PlayoffBracket from './PlayoffBracket';
 import KnockoutBracket from './KnockoutBracket';
 import { loadLocal, saveLocal } from './predictionStorage';
-import { computeStandings } from './standingsCalc';
+import { computeStandings, defenseNorm, eliminationBoost, expectedGoals, teamStrength } from './standingsCalc';
 
 const SUB_TABS = [
   ['scores', 'Score Matches'],
@@ -29,6 +29,8 @@ export default function PredictionApp({
   const [remotePrediction, setRemotePrediction] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [savingMatchday, setSavingMatchday] = useState(false);
+  const [savingPlayoffs, setSavingPlayoffs] = useState(false);
+  const [savingKnockout, setSavingKnockout] = useState(false);
   const [error, setError] = useState('');
   const syncTimer = useRef(null);
 
@@ -197,10 +199,8 @@ export default function PredictionApp({
     setLocalData((prev) => {
       const updated = { ...prev, matchPredictions: { ...prev.matchPredictions } };
       for (const f of fixtures) {
-        const hCoeff = f.home_team.uefa_club_coefficient || 1;
-        const aCoeff = f.away_team.uefa_club_coefficient || 1;
-        const hg = randomGoals(hCoeff, aCoeff);
-        const ag = randomGoals(aCoeff, hCoeff);
+        const hg = randomGoals(f.home_team, f.away_team);
+        const ag = randomGoals(f.away_team, f.home_team);
         updated.matchPredictions[f.id] = {
           ...(updated.matchPredictions[f.id] || {}),
           home_goals: hg,
@@ -411,6 +411,143 @@ export default function PredictionApp({
     return { R16: r16, QF: qf, SF: sf, F: final };
   }, [standings, playoffMatchups, localData.knockoutPredictions]);
 
+  const leagueComplete = useMemo(
+    () => matchups.length > 0
+      && matchups.every((m) => {
+        const p = validPredictions[String(m.id)];
+        return p && p.home_goals != null && p.away_goals != null;
+      }),
+    [matchups, validPredictions],
+  );
+
+  const playoffsComplete = useMemo(
+    () => playoffMatchups.length > 0
+      && playoffMatchups.every((pm) => {
+        const p = localData.playoffPredictions[pm.matchup_index];
+        return p
+          && p.leg1_home_goals != null && p.leg1_away_goals != null
+          && p.leg2_home_goals != null && p.leg2_away_goals != null;
+      }),
+    [playoffMatchups, localData.playoffPredictions],
+  );
+
+  const knockoutComplete = useMemo(() => {
+    const rounds = Object.values(knockoutBracket);
+    if (!rounds.some((r) => r.some((m) => m.home_team && m.away_team))) return false;
+    return rounds.every((round) =>
+      round.every((m) => {
+        if (!m.home_team || !m.away_team) return true; // TBD slot, nothing to score yet
+        const p = localData.knockoutPredictions[`${m.round}_${m.bracket_position}`];
+        return p && p.home_goals != null && p.away_goals != null;
+      }),
+    );
+  }, [knockoutBracket, localData.knockoutPredictions]);
+
+  const handleRandomizePlayoffs = useCallback(() => {
+    if (!playoffMatchups.length) return;
+    const ctxByTeamId = new Map(
+      standings.map((row) => [row.team_id, { position: row.position, goalDiff: row.goal_diff }]),
+    );
+    setLocalData((prev) => {
+      const updated = { ...prev, playoffPredictions: { ...prev.playoffPredictions } };
+      for (const pm of playoffMatchups) {
+        updated.playoffPredictions[pm.matchup_index] = {
+          // Field names are seed-relative: leg1_home_goals belongs to the
+          // higher seed (home_team), who plays leg 1 AWAY (see PlayoffBracket).
+          leg1_home_goals: randomGoals(pm.home_team, pm.away_team, ctxByTeamId.get(pm.home_team.team_id) ?? null),
+          leg1_away_goals: randomGoals(pm.away_team, pm.home_team, ctxByTeamId.get(pm.away_team.team_id) ?? null),
+          leg2_home_goals: randomGoals(pm.home_team, pm.away_team, ctxByTeamId.get(pm.home_team.team_id) ?? null),
+          leg2_away_goals: randomGoals(pm.away_team, pm.home_team, ctxByTeamId.get(pm.away_team.team_id) ?? null),
+        };
+      }
+      saveLocal(seasonId, playerName, updated, latestDrawSeed);
+      return updated;
+    });
+  }, [playoffMatchups, standings, seasonId, playerName, latestDrawSeed]);
+
+  const handleRandomizeKnockout = useCallback(() => {
+    const ctxByTeamId = new Map(
+      standings.map((row) => [row.team_id, { position: row.position, goalDiff: row.goal_diff }]),
+    );
+    setLocalData((prev) => {
+      const updated = { ...prev, knockoutPredictions: { ...prev.knockoutPredictions } };
+      for (const roundMatches of Object.values(knockoutBracket)) {
+        for (const m of roundMatches) {
+          if (!m.home_team || !m.away_team) continue; // TBD slot (R16 before playoffs resolve)
+          const key = `${m.round}_${m.bracket_position}`;
+          updated.knockoutPredictions[key] = {
+            round: m.round,
+            bracket_position: m.bracket_position,
+            home_goals: randomGoals(m.home_team, m.away_team, ctxByTeamId.get(m.home_team.team_id) ?? null),
+            away_goals: randomGoals(m.away_team, m.home_team, ctxByTeamId.get(m.away_team.team_id) ?? null),
+          };
+        }
+      }
+      saveLocal(seasonId, playerName, updated, latestDrawSeed);
+      return updated;
+    });
+  }, [knockoutBracket, standings, seasonId, playerName, latestDrawSeed]);
+
+  const handleSavePlayoffs = useCallback(async () => {
+    if (!remotePrediction) return;
+    setSavingPlayoffs(true);
+    try {
+      const predictions = playoffMatchups
+        .filter((pm) => {
+          const p = localData.playoffPredictions[pm.matchup_index];
+          return p
+            && p.leg1_home_goals != null && p.leg1_away_goals != null
+            && p.leg2_home_goals != null && p.leg2_away_goals != null;
+        })
+        .map((pm) => {
+          const p = localData.playoffPredictions[pm.matchup_index];
+          return {
+            matchup_index: pm.matchup_index,
+            home_team: pm.home_team.team_id,
+            away_team: pm.away_team.team_id,
+            leg1_home_goals: p.leg1_home_goals,
+            leg1_away_goals: p.leg1_away_goals,
+            leg2_home_goals: p.leg2_home_goals,
+            leg2_away_goals: p.leg2_away_goals,
+          };
+        });
+
+      if (predictions.length > 0) {
+        await apiFetch(`/predictions/${remotePrediction.id}/playoffs/sync/`, {
+          method: 'POST',
+          body: JSON.stringify({ predictions }),
+        });
+      }
+
+      if (playoffsComplete) {
+        await apiFetch(`/predictions/${remotePrediction.id}/`, {
+          method: 'PATCH',
+          body: JSON.stringify({ is_playoffs_complete: true }),
+        });
+      }
+    } catch (e) {
+      setError('Failed to save playoffs: ' + e.message);
+    } finally {
+      setSavingPlayoffs(false);
+    }
+  }, [remotePrediction, playoffMatchups, localData.playoffPredictions, playoffsComplete]);
+
+  const handleSaveKnockout = useCallback(async () => {
+    if (!remotePrediction || !knockoutComplete) return;
+    setSavingKnockout(true);
+    try {
+      // Knockout scores are local-only by design; only the completion flag is synced.
+      await apiFetch(`/predictions/${remotePrediction.id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_knockout_complete: true }),
+      });
+    } catch (e) {
+      setError('Failed to save knockout: ' + e.message);
+    } finally {
+      setSavingKnockout(false);
+    }
+  }, [remotePrediction, knockoutComplete]);
+
   return (
     <div className="prediction-app">
       <div className="view-tabs prediction-tabs">
@@ -440,6 +577,11 @@ export default function PredictionApp({
                 <span className="muted">
                   {Object.values(validPredictions).filter(v => v.home_goals != null).length}/{matchups.length} scored
                 </span>
+                {leagueComplete && (
+                  <button className="button secondary" onClick={() => setSubTab('playoffs')}>
+                    Continue to Playoffs →
+                  </button>
+                )}
               </div>
               <MatchdayScoreBoard
                 matchups={matchups}
@@ -459,17 +601,65 @@ export default function PredictionApp({
           )}
 
           {subTab === 'playoffs' && (
-            <PlayoffBracket
-              matchups={playoffMatchups}
-              onScoreChange={handlePlayoffScoreChange}
-            />
+            <>
+              <div className="command-band">
+                <div>
+                  <h2>Playoff predictions</h2>
+                  <p>Score both legs of each two-legged tie. The lower seed hosts leg 1.</p>
+                </div>
+                <button
+                  className="button primary"
+                  onClick={handleSavePlayoffs}
+                  disabled={savingPlayoffs || !playoffMatchups.length}
+                >
+                  {savingPlayoffs ? 'Saving...' : 'Save Playoffs'}
+                </button>
+                {playoffsComplete && (
+                  <button className="button secondary" onClick={() => setSubTab('bracket')}>
+                    Continue to Knockout →
+                  </button>
+                )}
+                <button className="button secondary" onClick={handleRandomizePlayoffs} disabled={!playoffMatchups.length}>
+                  Randomize
+                </button>
+              </div>
+              <PlayoffBracket
+                matchups={playoffMatchups}
+                onScoreChange={handlePlayoffScoreChange}
+              />
+            </>
           )}
 
           {subTab === 'bracket' && (
-            <KnockoutBracket
-              bracket={knockoutBracket}
-              onScoreChange={handleKnockoutScoreChange}
-            />
+            <>
+              <div className="command-band">
+                <div>
+                  <h2>Knockout predictions</h2>
+                  <p>Score each single-leg knockout match. Winners advance automatically.</p>
+                </div>
+                <button
+                  className="button primary"
+                  onClick={handleSaveKnockout}
+                  disabled={savingKnockout || !knockoutComplete}
+                >
+                  {savingKnockout ? 'Saving...' : 'Save Knockout'}
+                </button>
+                <button
+                  className="button secondary"
+                  onClick={handleRandomizeKnockout}
+                  disabled={!Object.values(knockoutBracket).some((round) => round.some((m) => m.home_team && m.away_team))}
+                >
+                  Randomize
+                </button>
+                {knockoutComplete && (
+                  <span className="muted">Knockout complete — champion crowned</span>
+                )}
+              </div>
+              <KnockoutBracket
+                bracket={knockoutBracket}
+                onScoreChange={handleKnockoutScoreChange}
+              />
+            </>
           )}
         </div>
 
@@ -526,20 +716,32 @@ export default function PredictionApp({
   );
 }
 
-function randomGoals(teamCoeff, opponentCoeff) {
-  const ratio = teamCoeff / Math.max(opponentCoeff, 0.1);
-  const capped = Math.max(0.25, Math.min(4.0, ratio));
-  const shift = Math.round(Math.log2(capped));
+function randomGoals(team, opponent, ctx = null) {
+  const strengthTeam = ctx ? teamStrength(team) + eliminationBoost(team, ctx) : teamStrength(team);
+  const strengthOpp = ctx ? teamStrength(opponent) + eliminationBoost(opponent, ctx) : teamStrength(opponent);
+  const lambda = expectedGoals(strengthTeam, strengthOpp);
+  // defense-aware cap so elite defenses rarely ship 4-5
+  const maxGoalsFor = 3 + Math.round(2 * (1 - defenseNorm(opponent)));
+  return Math.min(samplePoisson(lambda), maxGoalsFor);
+}
 
-  const base = [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4];
-  const adjusted = base.map((w) => Math.max(0, Math.min(6, w + shift)));
-  return adjusted[Math.floor(Math.random() * adjusted.length)];
+// Knuth's exact Poisson sampler; expectedGoals clamps lambda to [0.15, 5.5],
+// and the 0..6 clamp is the same ceiling the old shifted-array had.
+function samplePoisson(lambda) {
+  const L = Math.exp(-lambda);
+  let k = 0;
+  let p = 1;
+  do {
+    k += 1;
+    p *= Math.random();
+  } while (p > L);
+  return Math.min(k - 1, 6);
 }
 
 function computePlayoffWinner(l1h, l1a, l2h, l2a, homeId, awayId) {
   if ([l1h, l1a, l2h, l2a].some(v => v == null)) return null;
-  const aggHome = l1a + l2h;
-  const aggAway = l1h + l2a;
+  const aggHome = l1h + l2h;
+  const aggAway = l1a + l2a;
   if (aggHome > aggAway) return homeId;
   if (aggAway > aggHome) return awayId;
   if (l2a > l1h) return awayId;

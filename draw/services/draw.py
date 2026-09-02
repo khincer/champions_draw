@@ -131,6 +131,9 @@ def _generate_season_draw(
 
         with transaction.atomic():
             if reset:
+                from draw.services.interactive_draw import cancel_running_sessions
+
+                cancel_running_sessions(season)
                 SeasonMatchup.objects.filter(season=season).delete()
             elif SeasonMatchup.objects.filter(season=season).exists():
                 raise DrawError('Season already has generated matchups. Use reset=true to replace them.')
@@ -194,14 +197,17 @@ def validate_draw_inputs(season: Season, entries: list[SeasonTeam], *, reset: bo
 def build_draw_graph(
     entries: list[SeasonTeam],
     rng: random.Random,
+    blocked_edges: set[tuple[int, int]] | None = None,
 ) -> dict[tuple[int, int], set[tuple[int, int]]]:
     entries_by_id = {entry.pk: entry for entry in entries}
     associations = sorted({entry.team.association_id for entry in entries})
+    blocked_edges = blocked_edges or set()
     possible_edges = [
         normalize_edge(first.pk, second.pk)
         for index, first in enumerate(entries)
         for second in entries[index + 1:]
         if associations_differ(first, second)
+        and normalize_edge(first.pk, second.pk) not in blocked_edges
     ]
     rng.shuffle(possible_edges)
 
