@@ -34,9 +34,9 @@ services:
     volumes:
       - db_data:/app/data
     command: >
-      sh -c "while true; do
-        echo '[cron] migrating...';
-        python manage.py migrate 2>&1;
+      sh -c "echo '[cron] waiting for initial migrate...';
+      sleep 15;
+      while true; do
         echo '[cron] syncing leagues...';
         python manage.py sync_leagues 2>&1;
         echo '[cron] sleeping 24h...';
