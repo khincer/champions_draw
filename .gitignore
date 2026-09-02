@@ -18,9 +18,14 @@ ENV/
 
 # Django local files
 db.sqlite3
-data/
+/data/
 staticfiles/
 media/
+
+# Local tooling artifacts
+.codegraph/
+.atl/
+test_probe_*.py
 
 # Environment and editor files
 .env
