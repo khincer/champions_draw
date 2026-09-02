@@ -104,6 +104,7 @@ def import_seed_input_payload(payload: dict, *, set_active: bool = False) -> Imp
                     'uefa_club_coefficient': parse_coefficient(entry_payload.get('uefa_club_coefficient')),
                     'is_title_holder': bool(entry_payload.get('is_title_holder', False)),
                     'qualified_via': parse_qualified_via(entry_payload.get('qualified_via')),
+                    'domestic_position': parse_optional_domestic_position(entry_payload.get('domestic_position')),
                     'seeding_position': None,
                     'pot': None,
                 },
@@ -262,3 +263,17 @@ def parse_qualified_via(value: str | None) -> str:
     if qualified_via not in VALID_QUALIFIED_VIA_VALUES:
         raise ValueError(f'Unsupported qualified_via value: {qualified_via}')
     return qualified_via
+
+
+def parse_optional_domestic_position(value) -> int | None:
+    """Read an optional domestic standings position (1 = champion) from a seed
+    entry, used by the frontend's strength blend to counter pure coefficient
+    ranking (e.g. Como are 4th in Serie A yet rank below Sabah (AZE) by
+    coefficient alone). Absent values stay None so the seed is not forced to
+    carry fabricated standings."""
+    if value is None or value == '':
+        return None
+    position = int(value)
+    if position < 1:
+        raise ValueError('domestic_position must be a positive integer.')
+    return position
