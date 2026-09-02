@@ -314,9 +314,9 @@
           "name": "Spain",
           "code": "ESP"
         },
-        "api_football_id": 536,
+        "api_football_id": 543,
         "api_football_name": "Real Betis",
-        "api_football_logo": "https://media.api-sports.io/football/teams/536.png",
+        "api_football_logo": "https://media.api-sports.io/football/teams/543.png",
         "uefa_reference_name": "Real Betis"
       },
       "uefa_club_coefficient": "69.500",
@@ -371,9 +371,9 @@
           "name": "Netherlands",
           "code": "NED"
         },
-        "api_football_id": 189,
+        "api_football_id": 209,
         "api_football_name": "Feyenoord",
-        "api_football_logo": "https://media.api-sports.io/football/teams/189.png",
+        "api_football_logo": "https://media.api-sports.io/football/teams/209.png",
         "uefa_reference_name": "Feyenoord"
       },
       "uefa_club_coefficient": "53.000",
@@ -466,9 +466,9 @@
           "name": "Ukraine",
           "code": "UKR"
         },
-        "api_football_id": 803,
+        "api_football_id": 550,
         "api_football_name": "Shakhtar Donetsk",
-        "api_football_logo": "https://media.api-sports.io/football/teams/803.png",
+        "api_football_logo": "https://media.api-sports.io/football/teams/550.png",
         "uefa_reference_name": "Shakhtar Donetsk"
       },
       "uefa_club_coefficient": "56.250",
@@ -599,9 +599,9 @@
           "name": "France",
           "code": "FRA"
         },
-        "api_football_id": 87,
+        "api_football_id": 116,
         "api_football_name": "RC Lens",
-        "api_football_logo": "https://media.api-sports.io/football/teams/87.png",
+        "api_football_logo": "https://media.api-sports.io/football/teams/116.png",
         "uefa_reference_name": "Lens"
       },
       "uefa_club_coefficient": "18.500",
@@ -618,9 +618,9 @@
           "name": "Austria",
           "code": "AUT"
         },
-        "api_football_id": 2035,
+        "api_football_id": 1026,
         "api_football_name": "LASK Linz",
-        "api_football_logo": "https://media.api-sports.io/football/teams/2035.png",
+        "api_football_logo": "https://media.api-sports.io/football/teams/1026.png",
         "uefa_reference_name": "LASK"
       },
       "uefa_club_coefficient": "12.000",
