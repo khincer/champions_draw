@@ -50,11 +50,18 @@ def generate_playoff_matchups(standings):
     return matchups
 
 
-def compute_playoff_winner(leg1_home, leg1_away, leg2_home, leg2_away, home_team_id, away_team_id):
+def compute_playoff_winner(leg1_home, leg1_away, leg2_home, leg2_away,
+                           home_team_id, away_team_id,
+                           et_home=None, et_away=None,
+                           pen_home=None, pen_away=None):
     """
-    Determine playoff winner from two-legged aggregate.
+    Determine playoff winner from two-legged aggregate + tiebreakers.
 
-    Returns team_id of the winner, or None if scores are not set.
+    Tiebreakers (applied in order):
+      1. Extra time goals added to aggregate
+      2. Penalty shootout winner (if still tied after ET)
+
+    Returns team_id of the winner, or None if scores are not set or still tied.
     """
     if any(x is None for x in [leg1_home, leg1_away, leg2_home, leg2_away]):
         return None
@@ -66,12 +73,22 @@ def compute_playoff_winner(leg1_home, leg1_away, leg2_home, leg2_away, home_team
         return home_team_id
     elif agg_away > agg_home:
         return away_team_id
-    else:
-        away_goals_leg2 = leg2_away
-        home_goals_leg1 = leg1_home
-        if away_goals_leg2 > home_goals_leg1:
+
+    # Aggregate tied — apply extra time (played in leg 2)
+    if et_home is not None and et_away is not None:
+        agg_home += et_home
+        agg_away += et_away
+        if agg_home > agg_away:
+            return home_team_id
+        elif agg_away > agg_home:
             return away_team_id
-        elif home_goals_leg1 > away_goals_leg2:
-            return home_team_id
-        else:
-            return home_team_id
+
+        # Still tied after ET — apply penalties
+        if pen_home is not None and pen_away is not None:
+            if pen_home > pen_away:
+                return home_team_id
+            elif pen_away > pen_home:
+                return away_team_id
+
+    # Still tied / no tiebreaker data — unresolved
+    return None

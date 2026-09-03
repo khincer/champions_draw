@@ -29,51 +29,127 @@ function Connector({ sources, targets }) {
   );
 }
 
+function ScoreRow({ team, goals, onChange, disabled, isAdvancing, className }) {
+  return (
+    <div className={`ko-team-row ${isAdvancing ? 'ko-advancing' : ''} ${className || ''}`}>
+      {team ? (
+        <>
+          <span className="team-logo xs">
+            {team.logo_url ? <img src={team.logo_url} alt="" /> : team.short_name?.slice(0, 3)}
+          </span>
+          <span className="ko-name">{team.short_name}</span>
+          <ScoreInput
+            value={goals}
+            onChange={onChange}
+            disabled={disabled}
+            animateOnChange
+          />
+        </>
+      ) : (
+        <span className="ko-name ko-tbd">TBD</span>
+      )}
+    </div>
+  );
+}
+
 function KnockoutMatch({ match, onScoreChange, disabled, isFinal }) {
-  const { home_team, away_team, home_goals, away_goals, winner } = match;
+  const {
+    home_team, away_team, home_goals, away_goals,
+    extra_time, penalties,
+    et_home_goals, et_away_goals,
+    pen_home_goals, pen_away_goals,
+    winner, round, bracket_position,
+  } = match;
   const winnerId = winner?.team_id;
+
+  // Check if regular time is tied
+  const regularTied = home_goals != null && away_goals != null && home_goals === away_goals;
+
+  // Check if ET is played and still tied
+  let etTied = false;
+  if (regularTied && et_home_goals != null && et_away_goals != null) {
+    etTied = (home_goals + et_home_goals) === (away_goals + et_away_goals);
+  }
+
+  // Tiebreaker description
+  let tieDesc = null;
+  if (winner && regularTied) {
+    if (penalties && pen_home_goals != null) {
+      tieDesc = `Pens ${pen_home_goals}–${pen_away_goals}`;
+    } else if (extra_time && et_home_goals != null) {
+      tieDesc = `ET ${home_goals + et_home_goals}–${away_goals + et_away_goals}`;
+    }
+  }
+
+  const koKey = (field) => (e) => onScoreChange?.(round, bracket_position, field, e);
 
   return (
     <div
       className={`ko-match ${winner ? 'ko-decided' : ''} ${isFinal ? 'ko-match-final' : ''}`}
       style={{ gridRow: `span ${ROW_SPANS[match.round] || 2}` }}
     >
-      <div className={`ko-team-row ${winnerId === home_team?.id ? 'ko-advancing' : ''}`}>
-        {home_team ? (
-          <>
-            <span className="team-logo xs">
-              {home_team.logo_url ? <img src={home_team.logo_url} alt="" /> : home_team.short_name?.slice(0, 3)}
-            </span>
-            <span className="ko-name">{home_team.short_name}</span>
-            <ScoreInput
-              value={home_goals}
-              onChange={(v) => onScoreChange?.(match.round, match.bracket_position, 'home_goals', v)}
-              disabled={disabled || !home_team}
-              animateOnChange
-            />
-          </>
-        ) : (
-          <span className="ko-name ko-tbd">TBD</span>
-        )}
-      </div>
-      <div className={`ko-team-row ${winnerId === away_team?.id ? 'ko-advancing' : ''}`}>
-        {away_team ? (
-          <>
-            <span className="team-logo xs">
-              {away_team.logo_url ? <img src={away_team.logo_url} alt="" /> : away_team.short_name?.slice(0, 3)}
-            </span>
-            <span className="ko-name">{away_team.short_name}</span>
-            <ScoreInput
-              value={away_goals}
-              onChange={(v) => onScoreChange?.(match.round, match.bracket_position, 'away_goals', v)}
-              disabled={disabled || !away_team}
-              animateOnChange
-            />
-          </>
-        ) : (
-          <span className="ko-name ko-tbd">TBD</span>
-        )}
-      </div>
+      <ScoreRow
+        team={home_team}
+        goals={home_goals}
+        onChange={koKey('home_goals')}
+        disabled={disabled || !home_team}
+        isAdvancing={winnerId === home_team?.id}
+      />
+      <ScoreRow
+        team={away_team}
+        goals={away_goals}
+        onChange={koKey('away_goals')}
+        disabled={disabled || !away_team}
+        isAdvancing={winnerId === away_team?.id}
+      />
+
+      {/* Extra time row — shown when 90-min score is tied */}
+      {regularTied && (
+        <div className="ko-tiebreaker">
+          <span className="ko-tb-label">ET</span>
+          <ScoreRow
+            team={home_team}
+            goals={et_home_goals}
+            onChange={koKey('et_home_goals')}
+            disabled={disabled}
+            isAdvancing={false}
+            className="ko-tb-row"
+          />
+          <ScoreRow
+            team={away_team}
+            goals={et_away_goals}
+            onChange={koKey('et_away_goals')}
+            disabled={disabled}
+            isAdvancing={false}
+            className="ko-tb-row"
+          />
+        </div>
+      )}
+
+      {/* Penalties row — shown when ET is played and still tied */}
+      {etTied && (
+        <div className="ko-tiebreaker ko-pens">
+          <span className="ko-tb-label">Pens</span>
+          <ScoreRow
+            team={home_team}
+            goals={pen_home_goals}
+            onChange={koKey('pen_home_goals')}
+            disabled={disabled}
+            isAdvancing={false}
+            className="ko-tb-row"
+          />
+          <ScoreRow
+            team={away_team}
+            goals={pen_away_goals}
+            onChange={koKey('pen_away_goals')}
+            disabled={disabled}
+            isAdvancing={false}
+            className="ko-tb-row"
+          />
+        </div>
+      )}
+
+      {tieDesc && <span className="ko-tie-desc">{tieDesc}</span>}
     </div>
   );
 }
@@ -91,6 +167,10 @@ export default function KnockoutBracket({ bracket, onScoreChange }) {
   return (
     <div className="ko-bracket-scroll">
       <h3 className="section-title">Knockout Phase</h3>
+      <p className="section-desc">
+        Single-leg knockout matches. If tied at 90 minutes, extra time is played;
+        if still tied, penalties decide the winner.
+      </p>
       <div className="ko-bracket">
         {ROUND_ORDER.map((roundKey, i) => {
           const matches = bracket[roundKey] || [];

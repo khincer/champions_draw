@@ -199,6 +199,12 @@ class PlayoffBracketAPIView(APIView):
                     'leg1_away_goals': None,
                     'leg2_home_goals': None,
                     'leg2_away_goals': None,
+                    'extra_time': False,
+                    'penalties': False,
+                    'et_home_goals': None,
+                    'et_away_goals': None,
+                    'pen_home_goals': None,
+                    'pen_away_goals': None,
                     'winner': None,
                 })
 
@@ -228,11 +234,19 @@ class PlayoffBracketSyncAPIView(APIView):
             pp.leg1_away_goals = item.get('leg1_away_goals', pp.leg1_away_goals)
             pp.leg2_home_goals = item.get('leg2_home_goals', pp.leg2_home_goals)
             pp.leg2_away_goals = item.get('leg2_away_goals', pp.leg2_away_goals)
+            pp.extra_time = item.get('extra_time', pp.extra_time)
+            pp.penalties = item.get('penalties', pp.penalties)
+            pp.et_home_goals = item.get('et_home_goals', pp.et_home_goals)
+            pp.et_away_goals = item.get('et_away_goals', pp.et_away_goals)
+            pp.pen_home_goals = item.get('pen_home_goals', pp.pen_home_goals)
+            pp.pen_away_goals = item.get('pen_away_goals', pp.pen_away_goals)
 
             pp.winner_id = compute_playoff_winner(
                 pp.leg1_home_goals, pp.leg1_away_goals,
                 pp.leg2_home_goals, pp.leg2_away_goals,
                 pp.home_team_id, pp.away_team_id,
+                pp.et_home_goals, pp.et_away_goals,
+                pp.pen_home_goals, pp.pen_away_goals,
             )
             pp.save()
             updated.append(PlayoffPredictionSerializer(pp).data)

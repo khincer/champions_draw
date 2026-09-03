@@ -29,6 +29,9 @@ class PlayoffPredictionSerializer(serializers.ModelSerializer):
             'id', 'matchup_index', 'home_team', 'away_team',
             'leg1_home_goals', 'leg1_away_goals',
             'leg2_home_goals', 'leg2_away_goals',
+            'extra_time', 'penalties',
+            'et_home_goals', 'et_away_goals',
+            'pen_home_goals', 'pen_away_goals',
             'winner',
         ]
 
@@ -40,6 +43,9 @@ class PlayoffPredictionWriteSerializer(serializers.ModelSerializer):
             'matchup_index', 'home_team', 'away_team',
             'leg1_home_goals', 'leg1_away_goals',
             'leg2_home_goals', 'leg2_away_goals',
+            'extra_time', 'penalties',
+            'et_home_goals', 'et_away_goals',
+            'pen_home_goals', 'pen_away_goals',
         ]
 
 
@@ -52,7 +58,10 @@ class KnockoutPredictionSerializer(serializers.ModelSerializer):
         model = KnockoutPrediction
         fields = [
             'id', 'round', 'bracket_position', 'home_team', 'away_team',
-            'home_goals', 'away_goals', 'extra_time', 'penalties', 'winner',
+            'home_goals', 'away_goals', 'extra_time', 'penalties',
+            'et_home_goals', 'et_away_goals',
+            'pen_home_goals', 'pen_away_goals',
+            'winner',
             'round_label',
         ]
         extra_kwargs = {
@@ -66,6 +75,8 @@ class KnockoutPredictionWriteSerializer(serializers.ModelSerializer):
         fields = [
             'round', 'bracket_position', 'home_team', 'away_team',
             'home_goals', 'away_goals', 'extra_time', 'penalties',
+            'et_home_goals', 'et_away_goals',
+            'pen_home_goals', 'pen_away_goals',
         ]
 
 

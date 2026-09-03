@@ -346,6 +346,12 @@ class PlayoffPrediction(models.Model):
 	leg1_away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
 	leg2_home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
 	leg2_away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	extra_time = models.BooleanField(default=False)
+	penalties = models.BooleanField(default=False)
+	et_home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	et_away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	pen_home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	pen_away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
 	winner = models.ForeignKey(SeasonTeam, on_delete=models.CASCADE, null=True, blank=True, related_name='playoff_wins')
 
 	class Meta:
@@ -376,6 +382,10 @@ class KnockoutPrediction(models.Model):
 	away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
 	extra_time = models.BooleanField(default=False)
 	penalties = models.BooleanField(default=False)
+	et_home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	et_away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	pen_home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	pen_away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
 	winner = models.ForeignKey(SeasonTeam, on_delete=models.CASCADE, null=True, blank=True, related_name='knockout_wins')
 
 	class Meta:

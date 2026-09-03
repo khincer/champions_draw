@@ -284,7 +284,11 @@ export default function PredictionApp({
       const l1a = stored.leg1_away_goals ?? null;
       const l2h = stored.leg2_home_goals ?? null;
       const l2a = stored.leg2_away_goals ?? null;
-      const winnerId = computePlayoffWinner(l1h, l1a, l2h, l2a, home.team_id, away.team_id);
+      const etH = stored.et_home_goals ?? null;
+      const etA = stored.et_away_goals ?? null;
+      const penH = stored.pen_home_goals ?? null;
+      const penA = stored.pen_away_goals ?? null;
+      const winnerId = computePlayoffWinner(l1h, l1a, l2h, l2a, home.team_id, away.team_id, etH, etA, penH, penA);
       const winnerTeam = winnerId === home.team_id ? home.team : (winnerId === away.team_id ? away.team : null);
       return {
         matchup_index: idx + 1,
@@ -294,6 +298,12 @@ export default function PredictionApp({
         leg1_away_goals: l1a,
         leg2_home_goals: l2h,
         leg2_away_goals: l2a,
+        extra_time: stored.extra_time || false,
+        penalties: stored.penalties || false,
+        et_home_goals: etH,
+        et_away_goals: etA,
+        pen_home_goals: penH,
+        pen_away_goals: penA,
         winner: winnerTeam,
       };
     }).filter(Boolean);
@@ -328,6 +338,12 @@ export default function PredictionApp({
         away_team: pw || null,
         home_goals: stored.home_goals ?? null,
         away_goals: stored.away_goals ?? null,
+        extra_time: stored.extra_time || false,
+        penalties: stored.penalties || false,
+        et_home_goals: stored.et_home_goals ?? null,
+        et_away_goals: stored.et_away_goals ?? null,
+        pen_home_goals: stored.pen_home_goals ?? null,
+        pen_away_goals: stored.pen_away_goals ?? null,
         winner: stored.winner || null,
       };
     }).filter(Boolean);
@@ -336,10 +352,14 @@ export default function PredictionApp({
       const match = r16.find(m => m.bracket_position === bp);
       if (!match) return null;
       if (match.winner) return match.winner;
-      const { home_goals: hg, away_goals: ag, home_team: ht, away_team: at } = match;
-      if (hg == null || ag == null || !ht || !at) return null;
-      const wId = hg > ag ? ht.team_id : (ag > hg ? at.team_id : ht.team_id);
-      return wId === ht.team_id ? ht : at;
+      const { home_team: ht, away_team: at } = match;
+      if (!ht || !at) return null;
+      const wId = computeKnockoutWinner(
+        match.home_goals, match.away_goals, ht.team_id, at.team_id,
+        match.et_home_goals, match.et_away_goals,
+        match.pen_home_goals, match.pen_away_goals,
+      );
+      return wId === ht.team_id ? ht : (wId === at.team_id ? at : null);
     };
 
     const qfMap = [[1,2],[3,4],[5,6],[7,8]];
@@ -355,6 +375,12 @@ export default function PredictionApp({
         away_team: at,
         home_goals: stored.home_goals ?? null,
         away_goals: stored.away_goals ?? null,
+        extra_time: stored.extra_time || false,
+        penalties: stored.penalties || false,
+        et_home_goals: stored.et_home_goals ?? null,
+        et_away_goals: stored.et_away_goals ?? null,
+        pen_home_goals: stored.pen_home_goals ?? null,
+        pen_away_goals: stored.pen_away_goals ?? null,
         winner: stored.winner || null,
       };
     }).filter(Boolean);
@@ -363,10 +389,14 @@ export default function PredictionApp({
       const match = qf.find(m => m.bracket_position === bp);
       if (!match) return null;
       if (match.winner) return match.winner;
-      const { home_goals: hg, away_goals: ag, home_team: ht, away_team: at } = match;
-      if (hg == null || ag == null || !ht || !at) return null;
-      const wId = hg > ag ? ht.team_id : (ag > hg ? at.team_id : ht.team_id);
-      return wId === ht.team_id ? ht : at;
+      const { home_team: ht, away_team: at } = match;
+      if (!ht || !at) return null;
+      const wId = computeKnockoutWinner(
+        match.home_goals, match.away_goals, ht.team_id, at.team_id,
+        match.et_home_goals, match.et_away_goals,
+        match.pen_home_goals, match.pen_away_goals,
+      );
+      return wId === ht.team_id ? ht : (wId === at.team_id ? at : null);
     };
 
     const sf = [[1,2],[3,4]].map(([p1, p2], i) => {
@@ -381,6 +411,12 @@ export default function PredictionApp({
         away_team: at,
         home_goals: stored.home_goals ?? null,
         away_goals: stored.away_goals ?? null,
+        extra_time: stored.extra_time || false,
+        penalties: stored.penalties || false,
+        et_home_goals: stored.et_home_goals ?? null,
+        et_away_goals: stored.et_away_goals ?? null,
+        pen_home_goals: stored.pen_home_goals ?? null,
+        pen_away_goals: stored.pen_away_goals ?? null,
         winner: stored.winner || null,
       };
     }).filter(Boolean);
@@ -389,10 +425,14 @@ export default function PredictionApp({
       const match = sf.find(m => m.bracket_position === bp);
       if (!match) return null;
       if (match.winner) return match.winner;
-      const { home_goals: hg, away_goals: ag, home_team: ht, away_team: at } = match;
-      if (hg == null || ag == null || !ht || !at) return null;
-      const wId = hg > ag ? ht.team_id : (ag > hg ? at.team_id : ht.team_id);
-      return wId === ht.team_id ? ht : at;
+      const { home_team: ht, away_team: at } = match;
+      if (!ht || !at) return null;
+      const wId = computeKnockoutWinner(
+        match.home_goals, match.away_goals, ht.team_id, at.team_id,
+        match.et_home_goals, match.et_away_goals,
+        match.pen_home_goals, match.pen_away_goals,
+      );
+      return wId === ht.team_id ? ht : (wId === at.team_id ? at : null);
     };
 
     const finalStored = localData.knockoutPredictions['F_1'] || {};
@@ -405,6 +445,12 @@ export default function PredictionApp({
       away_team: sf2,
       home_goals: finalStored.home_goals ?? null,
       away_goals: finalStored.away_goals ?? null,
+      extra_time: finalStored.extra_time || false,
+      penalties: finalStored.penalties || false,
+      et_home_goals: finalStored.et_home_goals ?? null,
+      et_away_goals: finalStored.et_away_goals ?? null,
+      pen_home_goals: finalStored.pen_home_goals ?? null,
+      pen_away_goals: finalStored.pen_away_goals ?? null,
       winner: finalStored.winner || null,
     }] : [];
 
@@ -451,14 +497,37 @@ export default function PredictionApp({
     setLocalData((prev) => {
       const updated = { ...prev, playoffPredictions: { ...prev.playoffPredictions } };
       for (const pm of playoffMatchups) {
-        updated.playoffPredictions[pm.matchup_index] = {
-          // Field names are seed-relative: leg1_home_goals belongs to the
-          // higher seed (home_team), who plays leg 1 AWAY (see PlayoffBracket).
-          leg1_home_goals: randomGoals(pm.home_team, pm.away_team, ctxByTeamId.get(pm.home_team.team_id) ?? null),
-          leg1_away_goals: randomGoals(pm.away_team, pm.home_team, ctxByTeamId.get(pm.away_team.team_id) ?? null),
-          leg2_home_goals: randomGoals(pm.home_team, pm.away_team, ctxByTeamId.get(pm.home_team.team_id) ?? null),
-          leg2_away_goals: randomGoals(pm.away_team, pm.home_team, ctxByTeamId.get(pm.away_team.team_id) ?? null),
+        const l1h = randomGoals(pm.home_team, pm.away_team, ctxByTeamId.get(pm.home_team.team_id) ?? null);
+        const l1a = randomGoals(pm.away_team, pm.home_team, ctxByTeamId.get(pm.away_team.team_id) ?? null);
+        const l2h = randomGoals(pm.home_team, pm.away_team, ctxByTeamId.get(pm.home_team.team_id) ?? null);
+        const l2a = randomGoals(pm.away_team, pm.home_team, ctxByTeamId.get(pm.away_team.team_id) ?? null);
+        const pred = {
+          leg1_home_goals: l1h,
+          leg1_away_goals: l1a,
+          leg2_home_goals: l2h,
+          leg2_away_goals: l2a,
+          extra_time: false,
+          penalties: false,
+          et_home_goals: null,
+          et_away_goals: null,
+          pen_home_goals: null,
+          pen_away_goals: null,
         };
+        // Check if aggregate tied — need extra time
+        if (l1h + l2h === l1a + l2a) {
+          pred.extra_time = true;
+          pred.et_home_goals = randomGoals(pm.home_team, pm.away_team, ctxByTeamId.get(pm.home_team.team_id) ?? null);
+          pred.et_away_goals = randomGoals(pm.away_team, pm.home_team, ctxByTeamId.get(pm.away_team.team_id) ?? null);
+          // Still tied after ET — need penalties
+          if (l1h + l2h + pred.et_home_goals === l1a + l2a + pred.et_away_goals) {
+            pred.penalties = true;
+            pred.pen_home_goals = 3 + Math.floor(Math.random() * 4);
+            pred.pen_away_goals = 3 + Math.floor(Math.random() * 4);
+            // Ensure pens aren't tied
+            if (pred.pen_home_goals === pred.pen_away_goals) pred.pen_away_goals += 1;
+          }
+        }
+        updated.playoffPredictions[pm.matchup_index] = pred;
       }
       saveLocal(seasonId, playerName, updated, latestDrawSeed);
       return updated;
@@ -475,12 +544,34 @@ export default function PredictionApp({
         for (const m of roundMatches) {
           if (!m.home_team || !m.away_team) continue; // TBD slot (R16 before playoffs resolve)
           const key = `${m.round}_${m.bracket_position}`;
-          updated.knockoutPredictions[key] = {
+          const hg = randomGoals(m.home_team, m.away_team, ctxByTeamId.get(m.home_team.team_id) ?? null);
+          const ag = randomGoals(m.away_team, m.home_team, ctxByTeamId.get(m.away_team.team_id) ?? null);
+          const pred = {
             round: m.round,
             bracket_position: m.bracket_position,
-            home_goals: randomGoals(m.home_team, m.away_team, ctxByTeamId.get(m.home_team.team_id) ?? null),
-            away_goals: randomGoals(m.away_team, m.home_team, ctxByTeamId.get(m.away_team.team_id) ?? null),
+            home_goals: hg,
+            away_goals: ag,
+            extra_time: false,
+            penalties: false,
+            et_home_goals: null,
+            et_away_goals: null,
+            pen_home_goals: null,
+            pen_away_goals: null,
           };
+          // Tied at 90 — need extra time
+          if (hg === ag) {
+            pred.extra_time = true;
+            pred.et_home_goals = randomGoals(m.home_team, m.away_team, ctxByTeamId.get(m.home_team.team_id) ?? null);
+            pred.et_away_goals = randomGoals(m.away_team, m.home_team, ctxByTeamId.get(m.away_team.team_id) ?? null);
+            // Still tied after ET — penalties
+            if (hg + pred.et_home_goals === ag + pred.et_away_goals) {
+              pred.penalties = true;
+              pred.pen_home_goals = 3 + Math.floor(Math.random() * 4);
+              pred.pen_away_goals = 3 + Math.floor(Math.random() * 4);
+              if (pred.pen_home_goals === pred.pen_away_goals) pred.pen_away_goals += 1;
+            }
+          }
+          updated.knockoutPredictions[key] = pred;
         }
       }
       saveLocal(seasonId, playerName, updated, latestDrawSeed);
@@ -509,6 +600,12 @@ export default function PredictionApp({
             leg1_away_goals: p.leg1_away_goals,
             leg2_home_goals: p.leg2_home_goals,
             leg2_away_goals: p.leg2_away_goals,
+            extra_time: p.extra_time || false,
+            penalties: p.penalties || false,
+            et_home_goals: p.et_home_goals ?? null,
+            et_away_goals: p.et_away_goals ?? null,
+            pen_home_goals: p.pen_home_goals ?? null,
+            pen_away_goals: p.pen_away_goals ?? null,
           };
         });
 
@@ -738,13 +835,48 @@ function samplePoisson(lambda) {
   return Math.min(k - 1, 6);
 }
 
-function computePlayoffWinner(l1h, l1a, l2h, l2a, homeId, awayId) {
+function computePlayoffWinner(l1h, l1a, l2h, l2a, homeId, awayId, etHome, etAway, penHome, penAway) {
   if ([l1h, l1a, l2h, l2a].some(v => v == null)) return null;
-  const aggHome = l1h + l2h;
-  const aggAway = l1a + l2a;
+  let aggHome = l1h + l2h;
+  let aggAway = l1a + l2a;
   if (aggHome > aggAway) return homeId;
   if (aggAway > aggHome) return awayId;
-  if (l2a > l1h) return awayId;
-  if (l1h > l2a) return homeId;
-  return homeId;
+
+  // Aggregate tied — apply extra time (played in leg 2)
+  if (etHome != null && etAway != null) {
+    aggHome += etHome;
+    aggAway += etAway;
+    if (aggHome > aggAway) return homeId;
+    if (aggAway > aggHome) return awayId;
+
+    // Still tied — apply penalties
+    if (penHome != null && penAway != null) {
+      if (penHome > penAway) return homeId;
+      if (penAway > penHome) return awayId;
+    }
+  }
+
+  return null; // tied, no tiebreaker data yet
+}
+
+function computeKnockoutWinner(hg, ag, homeId, awayId, etH, etA, penH, penA) {
+  if (hg == null || ag == null) return null;
+  if (hg > ag) return homeId;
+  if (ag > hg) return awayId;
+
+  // Tied at 90 — apply extra time
+  if (etH != null && etA != null) {
+    const totalH = hg + etH;
+    const totalA = ag + etA;
+    if (totalH > totalA) return homeId;
+    if (totalA > totalH) return awayId;
+
+    // Still tied — apply penalties
+    if (penH != null && penA != null) {
+      if (penH > penA) return homeId;
+      if (penA > penH) return awayId;
+    }
+  }
+
+  return null; // tied, need tiebreaker data
 }
