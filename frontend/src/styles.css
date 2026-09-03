@@ -1247,21 +1247,27 @@ select:focus,
 .legend-dot.e { background: #e5e5e5; }
 
 /* Playoff Bracket */
-.playoff-list { display: flex; flex-direction: column; gap: 10px; }
-.playoff-match { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-.playoff-head { display: flex; align-items: center; gap: 8px; }
-.playoff-num { width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: white; font-size: 10px; font-weight: 900; display: grid; place-items: center; flex: 0 0 auto; }
+.playoff-list { display: flex; flex-direction: column; gap: 12px; }
+.playoff-match { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px 16px; display: flex; flex-direction: column; gap: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: border-color 0.15s; }
+.playoff-match:hover { border-color: var(--line-strong); }
+.playoff-match.playoff-decided { border-color: #c6f0d8; }
+.playoff-head { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.playoff-num { width: 24px; height: 24px; border-radius: 6px; background: var(--blue); color: white; font-size: 11px; font-weight: 900; display: grid; place-items: center; flex: 0 0 auto; }
 .playoff-winner { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; color: var(--green); min-width: 0; }
-.playoff-won-badge { font-size: 9px; font-weight: 900; color: var(--green); background: #bbf7d0; padding: 1px 5px; border-radius: 4px; flex: 0 0 auto; }
+.playoff-won-badge { font-size: 9px; font-weight: 900; color: var(--green); background: #bbf7d0; padding: 2px 6px; border-radius: 4px; flex: 0 0 auto; }
 .playoff-pending { color: var(--muted); font-weight: 400; font-style: italic; }
-.playoff-agg { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 700; flex: 0 0 auto; }
-.playoff-leg-row { display: flex; align-items: center; gap: 8px; }
-.playoff-leg-label { flex: 0 0 46px; font-size: 10px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.playoff-side { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); }
+.playoff-agg { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 700; flex: 0 0 auto; background: var(--surface-soft); border: 1px solid var(--line); padding: 3px 8px; border-radius: 4px; }
+.playoff-leg-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.playoff-leg-row + .playoff-leg-row { border-top: 1px solid var(--line); }
+.playoff-leg-label { flex: 0 0 42px; font-size: 10px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.playoff-side { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); }
 .playoff-side .playoff-name { font-weight: 700; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .playoff-side .score-input { width: 36px; height: 28px; font-size: 13px; margin-left: auto; }
 .playoff-side:last-child .score-input { margin-left: 0; margin-right: auto; }
 .playoff-venue-icon { color: var(--muted); flex: 0 0 auto; }
+.playoff-tiebreaker { opacity: 0.92; background: #fefce8; border-radius: 6px; padding: 2px 6px; margin: 0 -6px; }
+.playoff-tiebreaker .playoff-leg-label { color: #a16207; }
+.playoff-tie-desc { font-size: 10px; font-weight: 700; color: #a16207; background: #fef9c3; padding: 2px 8px; border-radius: 4px; margin-left: 6px; }
 
 /* Knockout Bracket */
 .ko-bracket-scroll { overflow-x: auto; min-width: 0; }
@@ -1281,6 +1287,12 @@ select:focus,
 .ko-name { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ko-tbd { color: var(--muted); font-style: italic; }
 .ko-team-row .score-input { width: 30px; height: 22px; font-size: 12px; margin-left: auto; }
+.ko-tiebreaker { display: flex; flex-direction: column; gap: 0; border-top: 1px dashed var(--line); margin-top: 2px; padding-top: 2px; background: #fefce8; border-radius: 0 0 6px 6px; padding: 2px 3px 3px; }
+.ko-tiebreaker .ko-tb-label { font-size: 9px; font-weight: 800; color: #a16207; text-transform: uppercase; letter-spacing: 0.06em; padding: 0 5px; }
+.ko-tiebreaker .ko-tb-row { flex: 0 0 auto; padding: 1px 5px; }
+.ko-tiebreaker .ko-tb-row .score-input { width: 26px; height: 20px; font-size: 11px; }
+.ko-tiebreaker.ko-pens { background: #fef3c7; }
+.ko-tie-desc { font-size: 9px; font-weight: 700; color: #a16207; text-align: center; padding: 2px 0 0; }
 
 /* Prediction Sidebar Standings */
 .prediction-sidebar {
