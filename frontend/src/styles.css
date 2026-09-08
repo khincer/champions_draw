@@ -1133,7 +1133,30 @@ select:focus,
   font-weight: 900;
   font-size: 14px;
   justify-content: center;
+  flex-direction: column;
+  gap: 2px;
 }
+
+.fx-verdict {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.fx-verdict.exact { background: #dcfce7; color: #166534; }
+.fx-verdict.outcome { background: #fef9c3; color: #854d0e; }
+.fx-verdict.miss { background: #fee2e2; color: #991b1b; }
+
+.md-results-summary {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.md-results-summary .verdict-exact { color: #16a34a; }
+.md-results-summary .verdict-outcome { color: #d97706; }
+.md-results-summary .verdict-miss { color: #dc2626; }
 
 /* Real draw: two-column layout (fixtures card + live standings) */
 .real-layout {
@@ -1541,20 +1564,28 @@ select:focus,
 
 /* Homepage matches */
 .homepage-matches { display: grid; gap: 26px; padding: 24px; max-width: 1100px; }
-.homepage-day-section { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.homepage-day-section { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .homepage-day-section .match-section-title { grid-column: 1 / -1; margin-bottom: 0; }
 .match-section-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-.match-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
-.match-card.hub-card { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
-.hub-card-top { display: flex; align-items: center; justify-content: space-between; }
-.hub-md { font-size: 11px; font-weight: 600; color: var(--muted); }
-.hub-team { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.hub-team-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hub-score { font-weight: 800; font-size: 20px; text-align: center; padding: 2px 0; }
-.hub-status { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; color: #fff; }
+.home-game-card { overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); display: flex; flex-direction: column; }
+.home-game-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 18px 0; }
+.hub-eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 2px; }
+.hub-date { font-size: 13px; color: var(--muted); }
+.hub-matchup { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 18px; flex: 1; }
+.hub-team { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-width: 0; }
+.hub-team-name { font-weight: 700; font-size: 14px; line-height: 1.25; }
+.hub-team-short { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.hub-score-area { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.hub-score { font-size: 26px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.hub-score b { color: var(--muted); font-size: 20px; }
+.hub-kickoff { font-size: 16px; font-weight: 700; }
+.hub-score-caption { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+.home-game-card-footer { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding: 10px 18px; font-size: 12px; color: var(--muted); }
+.hub-status { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; color: #fff; display: inline-flex; align-items: center; gap: 6px; }
 .hub-live { background: #16a34a; animation: hub-pulse 1.6s ease-in-out infinite; }
 .hub-upcoming { background: #d97706; }
 .hub-final { background: #64748b; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: #fff; }
 @keyframes hub-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 
 /* League cards */
@@ -1573,6 +1604,30 @@ select:focus,
 .standings-table tr:hover { background: var(--surface-soft); }
 .standings-pos { font-weight: 700; width: 30px; text-align: center; }
 .standings-pts { font-weight: 700; text-align: center; width: 40px; }
+
+/* League detail + team page */
+.team-link { background: none; border: none; padding: 0; color: inherit; cursor: pointer; font: inherit; text-align: left; }
+.team-link:hover span { text-decoration: underline; }
+.team-row-highlight { background: var(--surface-soft); outline: 2px solid var(--blue); outline-offset: -2px; }
+.panel-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
+.panel-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+.fixture-mini-list { display: flex; flex-direction: column; gap: 6px; }
+.fixture-mini-heading { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; margin-top: 10px; }
+.fixture-mini { display: grid; grid-template-columns: 110px 1fr 46px; gap: 8px; align-items: center; padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 12px; }
+.fixture-mini-date { color: var(--muted); font-size: 11px; }
+.fixture-mini-teams { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fixture-mini-home, .fixture-mini-away { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fixture-mini-home { text-align: right; flex: 1; }
+.fixture-mini-away { flex: 1; }
+.fixture-mini-score { font-weight: 700; white-space: nowrap; }
+.fixture-mini-time { text-align: right; color: var(--muted); font-size: 11px; }
+.team-page-header { display: flex; align-items: center; gap: 14px; margin: 18px 0 20px; }
+.team-page-crest { width: 48px; height: 48px; object-fit: contain; }
+.league-badge { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--muted); }
+.ucl-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.ucl-card-row { display: flex; justify-content: space-between; font-size: 13px; }
+.ucl-card-row b { text-align: right; }
+.muted.small { font-size: 12px; }
 
 @media (max-width: 1120px) {
   .content-grid {
@@ -1604,11 +1659,17 @@ select:focus,
     grid-template-columns: minmax(0, 1fr) 100px minmax(0, 1fr) !important;
   }
 
-  .homepage-matches {
-    grid-template-columns: 1fr;
+  .homepage-day-section {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .standings-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .homepage-day-section {
     grid-template-columns: 1fr;
   }
 }

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import django
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound
@@ -15,6 +16,7 @@ from rest_framework.views import APIView
 from .models import (
 	InteractiveDrawPick,
 	League,
+	LeagueMatch,
 	LeagueStanding,
 	Prediction,
 	RealFixturePrediction,
@@ -493,6 +495,40 @@ class LeagueStandingListAPIView(APIView):
 		return Response({
 			'league': {'id': league.id, 'code': league.code, 'name': league.name, 'emblem_url': league.emblem_url},
 			'standings': data,
+		})
+
+
+class LeagueFixtureListAPIView(APIView):
+	def get(self, request, league_id):
+		league = get_object_or_404(League, pk=league_id)
+		now = django.utils.timezone.now()
+		qs = LeagueMatch.objects.filter(league=league)
+		finished = qs.filter(status='FINISHED', kickoff__lte=now).order_by('-kickoff')[:30]
+		upcoming = qs.filter(kickoff__gt=now).order_by('kickoff')[:30]
+
+		def ser(m):
+			return {
+				'id': m.match_id,
+				'home_name': m.home_name,
+				'away_name': m.away_name,
+				'home_short': m.home_short,
+				'away_short': m.away_short,
+				'home_crest': m.home_crest,
+				'away_crest': m.away_crest,
+				'kickoff': m.kickoff.isoformat() if m.kickoff else None,
+				'status': m.status,
+				'matchday': m.matchday,
+				'result': (
+					{'home_goals': m.home_goals, 'away_goals': m.away_goals}
+					if m.home_goals is not None and m.away_goals is not None
+					else None
+				),
+			}
+
+		return Response({
+			'league': {'id': league.id, 'code': league.code, 'name': league.name, 'emblem_url': league.emblem_url},
+			'finished': [ser(m) for m in finished],
+			'upcoming': [ser(m) for m in upcoming],
 		})
 
 

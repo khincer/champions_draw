@@ -38,6 +38,8 @@ services:
       sleep 15;
       echo '[cron] initial leagues sync...';
       python manage.py sync_leagues 2>&1;
+      echo '[cron] initial league fixtures sync...';
+      python manage.py sync_league_fixtures 2>&1;
       counter=0;
       while true; do
         echo '[cron] syncing real fixture results...';
@@ -46,6 +48,8 @@ services:
         if [ $((counter % 288)) -eq 0 ]; then
           echo '[cron] syncing leagues...';
           python manage.py sync_leagues 2>&1;
+          echo '[cron] syncing league fixtures...';
+          python manage.py sync_league_fixtures 2>&1;
         fi;
         echo '[cron] sleeping 5m...';
         sleep 300;

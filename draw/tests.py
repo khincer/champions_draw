@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -13,7 +13,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, RealFixturePrediction, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
+from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueMatch, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, RealFixturePrediction, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
 from .serializers import CompactSeasonTeamSerializer
 from .services.draw import DrawError, compute_forbidden_directions, generate_season_draw, previous_season_names
 from .services.import_seed_input import import_seed_input_payload
@@ -1531,3 +1531,44 @@ class SyncRealFixtureResultsTests(TestCase):
 		self.assertEqual(resolve('viking'), 'viking fk')
 		self.assertEqual(resolve('lens'), 'rc lens')
 		self.assertEqual(resolve('psg'), 'paris saint germain')
+
+
+class LeagueFixtureListAPITests(APITestCase):
+    def setUp(self):
+        self.league = League.objects.create(name='Premier League', code='PL', country='England')
+        self.client.force_authenticate(user=User.objects.create_user('t'))
+
+    def _fixture(self, match_id, home, away, kickoff, status, home_goals=None, away_goals=None):
+        return LeagueMatch.objects.create(
+            league=self.league,
+            match_id=match_id,
+            home_name=home,
+            away_name=away,
+            home_short=home,
+            away_short=away,
+            kickoff=kickoff,
+            status=status,
+            home_goals=home_goals,
+            away_goals=away_goals,
+        )
+
+    def test_finished_and_upcoming_split(self):
+        now = datetime.now(timezone.utc)
+        self._fixture(1, 'Arsenal', 'Chelsea', now - timedelta(days=1), 'FINISHED', 2, 1)
+        self._fixture(2, 'Man City', 'Liverpool', now + timedelta(hours=2), 'TIMED', None, None)
+        self._fixture(3, 'Spurs', 'Villa', now + timedelta(days=3), 'SCHEDULED', None, None)
+
+        resp = self.client.get(f'/api/leagues/{self.league.id}/matches/')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual([(m['home_name'], m['result']) for m in data['finished']], [('Arsenal', {'home_goals': 2, 'away_goals': 1})])
+        self.assertEqual(
+            [m['home_name'] for m in data['upcoming']],
+            ['Man City', 'Spurs'],
+        )
+
+    def test_result_null_when_no_score(self):
+        self._fixture(4, 'A', 'B', datetime.now(timezone.utc) + timedelta(days=2), 'SCHEDULED')
+        resp = self.client.get(f'/api/leagues/{self.league.id}/matches/')
+        upcoming = resp.json()['upcoming']
+        self.assertIsNone(upcoming[0]['result'])

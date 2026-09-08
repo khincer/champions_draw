@@ -42,6 +42,18 @@ function formatMatchdayHeader(value) {
   }).format(new Date(value));
 }
 
+function verdictFor(pred, result) {
+  if (!result || !pred || !Number.isFinite(Number(pred.home_goals)) || !Number.isFinite(Number(pred.away_goals))) return null;
+  const ph = Number(pred.home_goals);
+  const pa = Number(pred.away_goals);
+  const rh = Number(result.home_goals);
+  const ra = Number(result.away_goals);
+  if (ph === rh && pa === ra) return 'exact';
+  return Math.sign(ph - pa) === Math.sign(rh - ra) ? 'outcome' : 'miss';
+}
+
+const VERDICT_LABEL = { exact: 'Exact', outcome: 'Outcome', miss: 'Miss' };
+
 export default function RealDrawView({
   seasonId,
   setSeasonId,
@@ -227,10 +239,31 @@ export default function RealDrawView({
             {(() => {
               const fixtures = matchdays[String(currentMd)] || [];
               const headerDate = formatMatchdayHeader(fixtures[0]?.kickoff);
+              const mdSummary = fixtures.reduce(
+                (acc, f) => {
+                  const v = verdictFor(preds[f.id], f.result);
+                  if (v) acc[v] += 1;
+                  return acc;
+                },
+                { exact: 0, outcome: 0, miss: 0 },
+              );
+              const hasResults = mdSummary.exact + mdSummary.outcome + mdSummary.miss > 0;
               return (
                 <article className="matchday" key={currentMd}>
                   <div className="matchday-head">
-                    <strong>Matchday {currentMd}{headerDate ? `, ${headerDate}` : ''}</strong>
+                    <div>
+                      <strong>Matchday {currentMd}{headerDate ? `, ${headerDate}` : ''}</strong>
+                      {hasResults && (
+                        <p className="md-results-summary">
+                          Your record this matchday:
+                          <b className="verdict-exact"> {mdSummary.exact} exact</b>
+                          <span> · </span>
+                          <b className="verdict-outcome">{mdSummary.outcome} right outcome</b>
+                          <span> · </span>
+                          <b className="verdict-miss">{mdSummary.miss} wrong</b>
+                        </p>
+                      )}
+                    </div>
                     <div className="matchday-head-actions">
                       <button
                         type="button"
@@ -268,6 +301,7 @@ export default function RealDrawView({
                         const result = fixture.result;
                         if (result) {
                           // Played with a real result — show it, no input.
+                          const verdict = verdictFor(pred, result);
                           return (
                             <div className="fixture-row score-row" key={fixture.id}>
                               <div className="fx-status" title={formatKickoff(fixture.kickoff)}>Final</div>
@@ -276,7 +310,12 @@ export default function RealDrawView({
                                 <b>{fixture.home_team.name}</b>
                               </div>
                               <div className="score-group real-result">
-                                {result.home_goals}&ndash;{result.away_goals}
+                                <span className="real-score">{result.home_goals}&ndash;{result.away_goals}</span>
+                                {verdict && (
+                                  <span className={`fx-verdict ${verdict}`}>
+                                    {VERDICT_LABEL[verdict]} &middot; your pick {pred.home_goals}&ndash;{pred.away_goals}
+                                  </span>
+                                )}
                               </div>
                               <div className="team-badge right score-team">
                                 <b>{fixture.away_team.name}</b>

@@ -144,7 +144,7 @@ function SiteNav({ view, setView, setActiveTab }) {
           onClick={() => setView('teams')}
         >
           <LayoutGrid size={18} />
-          Teams
+          Leagues
         </button>
       </div>
     </nav>
@@ -153,28 +153,51 @@ function SiteNav({ view, setView, setActiveTab }) {
 
 /* ─── Homepage (live hub, la-cancha style) ─── */
 
-function MatchCard({ match }) {
+function HomeMatchCard({ match }) {
   const result = match.result;
-  const chipCls = result ? 'hub-final' : match.closed ? 'hub-live' : 'hub-upcoming';
-  const chipLabel = result ? 'Final' : match.closed ? 'Live' : shortTime(match.kickoff);
+  const status = result ? 'finished' : match.closed ? 'live' : 'upcoming';
+  const statusLabel = result ? 'Final' : match.closed ? 'Live' : 'Kickoff';
   return (
-    <div className="match-card hub-card">
-      <div className="hub-card-top">
-        <span className={`hub-status ${chipCls}`}>{chipLabel}</span>
-        <span className="hub-md">MD{match.matchday}</span>
+    <article className="home-game-card" aria-label={`${match.home_team.name} versus ${match.away_team.name}`}>
+      <header className="home-game-card-header">
+        <div>
+          <p className="hub-eyebrow">Champions League</p>
+          <p className="hub-date">{shortDay(match.kickoff)}</p>
+        </div>
+        <span className={`hub-status ${status === 'finished' ? 'hub-final' : status === 'live' ? 'hub-live' : 'hub-upcoming'}`}>
+          {status === 'live' && <span className="live-dot" aria-hidden="true" />}
+          {statusLabel}
+        </span>
+      </header>
+      <div className="hub-matchup">
+        <div className="hub-team">
+          <TeamLogo team={match.home_team} size="md" />
+          <p className="hub-team-name">{match.home_team.name}</p>
+          {match.home_team.short_name && <p className="hub-team-short">{match.home_team.short_name}</p>}
+        </div>
+        <div className="hub-score-area">
+          {result ? (
+            <p className="hub-score">
+              <span>{result.home_goals}</span>
+              <b>:</b>
+              <span>{result.away_goals}</span>
+            </p>
+          ) : (
+            <p className="hub-kickoff">{shortTime(match.kickoff)}</p>
+          )}
+          <p className="hub-score-caption">{status === 'finished' ? 'Result' : status === 'live' ? 'Live' : 'Kickoff'}</p>
+        </div>
+        <div className="hub-team">
+          <TeamLogo team={match.away_team} size="md" />
+          <p className="hub-team-name">{match.away_team.name}</p>
+          {match.away_team.short_name && <p className="hub-team-short">{match.away_team.short_name}</p>}
+        </div>
       </div>
-      <div className="hub-team">
-        <TeamLogo team={match.home_team} size="sm" noFallback />
-        <span className="hub-team-name">{match.home_team.name}</span>
-      </div>
-      <div className="hub-score">
-        {result ? `${result.home_goals}–${result.away_goals}` : 'vs'}
-      </div>
-      <div className="hub-team">
-        <TeamLogo team={match.away_team} size="sm" noFallback />
-        <span className="hub-team-name">{match.away_team.name}</span>
-      </div>
-    </div>
+      <footer className="home-game-card-footer">
+        <span>Matchday {match.matchday}</span>
+        <span aria-hidden="true">↗</span>
+      </footer>
+    </article>
   );
 }
 
@@ -217,7 +240,7 @@ function Homepage({ matches }) {
               <CalendarDays size={16} />
               {label} &middot; {shortDay(dayMatches[0].kickoff)}
             </div>
-            {dayMatches.map((m) => <MatchCard key={m.id} match={m} />)}
+            {dayMatches.map((m) => <HomeMatchCard key={m.id} match={m} />)}
           </div>
         ) : null,
       )}
@@ -227,26 +250,274 @@ function Homepage({ matches }) {
 
 /* ─── Teams Browser ─── */
 
-function TeamsBrowser({ leagues, selectedLeague, leagueStandings, setSelectedLeague, setLeagueStandings }) {
+function normTeamName(s) {
+  return (s || '')
+    .toLowerCase()
+    .replace(/\b(fc|cf|afc|sc|sv|club)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function LeagueFixtureRow({ m }) {
+  const done = m.status === 'FINISHED' && m.result;
+  return (
+    <div className="fixture-mini">
+      <div className="fixture-mini-date">{shortDay(m.kickoff)}</div>
+      <div className="fixture-mini-teams">
+        <span className="fixture-mini-home">{m.home_name}</span>
+        <span className="fixture-mini-score">
+          {done ? `${m.result.home_goals}–${m.result.away_goals}` : 'vs'}
+        </span>
+        <span className="fixture-mini-away">{m.away_name}</span>
+      </div>
+      <div className="fixture-mini-time">{done ? 'FT' : shortTime(m.kickoff)}</div>
+    </div>
+  );
+}
+
+function TeamPage({ team, league, standings, matches, leagues, onBack }) {
+  const [ucl, setUcl] = useState(null);
+
+  useEffect(() => {
+    if (league && league.code === 'CL') {
+      setUcl(null);
+      return undefined;
+    }
+    const cl = (leagues || []).find((l) => l.code === 'CL');
+    if (!cl) {
+      setUcl(null);
+      return undefined;
+    }
+    let cancelled = false;
+    Promise.all([
+      apiFetch(`/leagues/${cl.id}/standings/`),
+      apiFetch(`/leagues/${cl.id}/matches/`),
+    ])
+      .then(([st, mt]) => {
+        if (cancelled) return;
+        setUcl({
+          standings: Array.isArray(st) ? st : (st.standings || []),
+          matches: mt || { finished: [], upcoming: [] },
+        });
+      })
+      .catch(() => { if (!cancelled) setUcl(null); });
+    return () => { cancelled = true; };
+  }, [league, leagues]);
+
+  const norm = normTeamName;
+  const standing = (standings || []).find(
+    (r) => norm(r.team_name || r.team?.name) === norm(team.name),
+  );
+  const teamMatches = (list) => (list || []).filter(
+    (m) => norm(m.home_name) === norm(team.name) || norm(m.away_name) === norm(team.name),
+  );
+  const finished = teamMatches(matches && matches.finished);
+  const upcoming = teamMatches(matches && matches.upcoming);
+  const uclStanding = ucl
+    ? ucl.standings.find((r) => norm(r.team_name || r.team?.name) === norm(team.name))
+    : null;
+  const uclFinished = ucl ? teamMatches(ucl.matches.finished) : [];
+  const uclUpcoming = ucl ? teamMatches(ucl.matches.upcoming) : [];
+  const isUcl = league && league.code === 'CL';
+
+  return (
+    <div style={{ padding: '24px', maxWidth: 1280 }}>
+      <button className="back-button" onClick={onBack}>
+        <ArrowLeft size={16} />
+        Back to {league ? league.name : 'league'}
+      </button>
+      <div className="team-page-header">
+        {team.crest ? <img src={team.crest} alt="" className="team-page-crest" /> : null}
+        <h2 style={{ margin: 0 }}>{team.name}</h2>
+        {league && <span className="league-badge">{league.name}</span>}
+      </div>
+      <div className="standings-layout">
+        <div>
+          <h3 className="panel-title">
+            {isUcl ? 'Champions League table' : `League table — ${league ? league.name : ''}`}
+          </h3>
+          {standing ? (
+            <table className="standings-table">
+              <thead>
+                <tr>
+                  <th className="standings-pos">#</th>
+                  <th>Team</th>
+                  <th>P</th>
+                  <th>W</th>
+                  <th>D</th>
+                  <th>L</th>
+                  <th className="standings-pts">Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(standings || []).map((row, i) => (
+                  <tr
+                    key={row.team?.id || i}
+                    className={norm(row.team_name || row.team?.name) === norm(team.name) ? 'team-row-highlight' : ''}
+                  >
+                    <td className="standings-pos">{row.position || i + 1}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {row.team_crest ? (
+                          <img src={row.team_crest} alt="" style={{ width: 20, height: 20 }} />
+                        ) : row.team?.crest ? (
+                          <img src={row.team.crest} alt="" style={{ width: 20, height: 20 }} />
+                        ) : row.team?.logo_url ? (
+                          <img src={row.team.logo_url} alt="" style={{ width: 20, height: 20 }} />
+                        ) : null}
+                        {row.team?.name || row.team_name}
+                      </div>
+                    </td>
+                    <td>{row.playedGames ?? row.played}</td>
+                    <td>{row.won ?? row.wins}</td>
+                    <td>{row.draw ?? row.draws}</td>
+                    <td>{row.lost ?? row.losses}</td>
+                    <td className="standings-pts">{row.points}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="muted">No standing found for {team.name} in this league.</p>
+          )}
+
+          {(finished.length || upcoming.length) ? (
+            <>
+              <h3 className="panel-title">Fixtures</h3>
+              {finished.length ? (
+                <div className="fixture-mini-list">
+                  <div className="fixture-mini-heading">Recent results</div>
+                  {finished.slice(0, 6).map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
+                </div>
+              ) : null}
+              {upcoming.length ? (
+                <div className="fixture-mini-list">
+                  <div className="fixture-mini-heading">Upcoming</div>
+                  {upcoming.slice(0, 6).map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+
+        <aside>
+          {!isUcl ? (
+            <div className="panel-card">
+              <h3 className="panel-title">Champions League</h3>
+              {ucl ? (
+                uclStanding ? (
+                  <div className="ucl-card">
+                    <div className="ucl-card-row">
+                      <span>Position</span>
+                      <b>{uclStanding.position}</b>
+                    </div>
+                    <div className="ucl-card-row">
+                      <span>Points</span>
+                      <b>{uclStanding.points}</b>
+                    </div>
+                    <div className="ucl-card-row">
+                      <span>Record</span>
+                      <b>
+                        {uclStanding.won ?? uclStanding.wins}W · {uclStanding.draw ?? uclStanding.draws}D ·{' '}
+                        {uclStanding.lost ?? uclStanding.losses}L
+                      </b>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="muted small">Not in this UCL season.</p>
+                )
+              ) : (
+                <StateMessage icon={Activity} title="Loading" text="Checking Champions League data" />
+              )}
+              {uclFinished.length ? (
+                <div className="fixture-mini-list">
+                  <div className="fixture-mini-heading">UCL results</div>
+                  {uclFinished.slice(0, 4).map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
+                </div>
+              ) : null}
+              {uclUpcoming.length ? (
+                <div className="fixture-mini-list">
+                  <div className="fixture-mini-heading">UCL upcoming</div>
+                  {uclUpcoming.slice(0, 4).map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="panel-card">
+            <h3 className="panel-title">Honours</h3>
+            <p className="muted small">
+              Trophy history is not synced yet. Add API-Football sync (key already in .env) to populate it.
+            </p>
+          </div>
+          <div className="panel-card">
+            <h3 className="panel-title">Squad</h3>
+            <p className="muted small">
+              Player data is not synced yet. Add API-Football sync (key already in .env) to populate it.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function TeamsBrowser({
+  leagues, selectedLeague, leagueStandings, setSelectedLeague, setLeagueStandings,
+  leagueMatches, setLeagueMatches, viewTeam, setViewTeam,
+}) {
   const [loadingStandings, setLoadingStandings] = useState(false);
+  const [loadingMatches, setLoadingMatches] = useState(false);
 
   async function handleSelectLeague(league) {
     setSelectedLeague(league);
+    setViewTeam(null);
+    setLeagueStandings([]);
+    setLeagueMatches({ finished: [], upcoming: [] });
     setLoadingStandings(true);
     try {
       const data = await apiFetch(`/leagues/${league.id}/standings/`);
-      setLeagueStandings(Array.isArray(data) ? data : data.standings || []);
+      setLeagueStandings(Array.isArray(data) ? data : (data.standings || []));
     } catch {
       setLeagueStandings([]);
     } finally {
       setLoadingStandings(false);
     }
+    setLoadingMatches(true);
+    try {
+      const data = await apiFetch(`/leagues/${league.id}/matches/`);
+      setLeagueMatches(data || { finished: [], upcoming: [] });
+    } catch {
+      setLeagueMatches({ finished: [], upcoming: [] });
+    } finally {
+      setLoadingMatches(false);
+    }
+  }
+
+  if (viewTeam) {
+    return (
+      <TeamPage
+        team={viewTeam}
+        league={selectedLeague}
+        standings={leagueStandings}
+        matches={leagueMatches}
+        leagues={leagues}
+        onBack={() => setViewTeam(null)}
+      />
+    );
   }
 
   if (selectedLeague) {
     return (
-      <div style={{ padding: '24px', maxWidth: 1100 }}>
-        <button className="back-button" onClick={() => { setSelectedLeague(null); setLeagueStandings([]); }}>
+      <div style={{ padding: '24px', maxWidth: 1280 }}>
+        <button
+          className="back-button"
+          onClick={() => {
+            setSelectedLeague(null);
+            setLeagueStandings([]);
+            setLeagueMatches({ finished: [], upcoming: [] });
+          }}
+        >
           <ArrowLeft size={16} />
           Back to leagues
         </button>
@@ -273,16 +544,24 @@ function TeamsBrowser({ leagues, selectedLeague, leagueStandings, setSelectedLea
                     <tr key={row.team?.id || i}>
                       <td className="standings-pos">{row.position || i + 1}</td>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {row.team_crest ? (
-                            <img src={row.team_crest} alt="" style={{ width: 20, height: 20 }} />
-                          ) : row.team?.crest ? (
-                            <img src={row.team.crest} alt="" style={{ width: 20, height: 20 }} />
-                          ) : row.team?.logo_url ? (
-                            <img src={row.team.logo_url} alt="" style={{ width: 20, height: 20 }} />
-                          ) : null}
-                          {row.team?.name || row.team_name}
-                        </div>
+                        <button
+                          className="team-link"
+                          onClick={() => setViewTeam({
+                            name: row.team?.name || row.team_name,
+                            crest: row.team_crest || row.team?.crest || row.team?.logo_url,
+                          })}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {row.team_crest ? (
+                              <img src={row.team_crest} alt="" style={{ width: 20, height: 20 }} />
+                            ) : row.team?.crest ? (
+                              <img src={row.team.crest} alt="" style={{ width: 20, height: 20 }} />
+                            ) : row.team?.logo_url ? (
+                              <img src={row.team.logo_url} alt="" style={{ width: 20, height: 20 }} />
+                            ) : null}
+                            <span>{row.team?.name || row.team_name}</span>
+                          </div>
+                        </button>
                       </td>
                       <td>{row.playedGames ?? row.played}</td>
                       <td>{row.won ?? row.wins}</td>
@@ -295,6 +574,25 @@ function TeamsBrowser({ leagues, selectedLeague, leagueStandings, setSelectedLea
               </table>
             ) : <p className="muted">No standings available.</p>}
           </div>
+
+          <aside>
+            <h3 className="panel-title">Results</h3>
+            {loadingMatches ? (
+              <StateMessage icon={Activity} title="Loading" text="Fetching fixtures" />
+            ) : leagueMatches.finished && leagueMatches.finished.length ? (
+              <div className="fixture-mini-list">
+                {leagueMatches.finished.map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
+              </div>
+            ) : <p className="muted small">No finished matches yet.</p>}
+            <h3 className="panel-title" style={{ marginTop: 24 }}>Upcoming</h3>
+            {loadingMatches ? (
+              <StateMessage icon={Activity} title="Loading" text="Fetching fixtures" />
+            ) : leagueMatches.upcoming && leagueMatches.upcoming.length ? (
+              <div className="fixture-mini-list">
+                {leagueMatches.upcoming.map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
+              </div>
+            ) : <p className="muted small">No upcoming matches.</p>}
+          </aside>
         </div>
       </div>
     );
@@ -325,6 +623,8 @@ function App() {
   const [leagues, setLeagues] = useState([]);
   const [selectedLeague, setSelectedLeague] = useState(null);
   const [leagueStandings, setLeagueStandings] = useState([]);
+  const [leagueMatches, setLeagueMatches] = useState({ finished: [], upcoming: [] });
+  const [viewTeam, setViewTeam] = useState(null);
 
   const [seasons, setSeasons] = useState([]);
   const [selectedSeasonId, setSelectedSeasonId] = useState('');
@@ -539,6 +839,10 @@ function App() {
               leagueStandings={leagueStandings}
               setSelectedLeague={setSelectedLeague}
               setLeagueStandings={setLeagueStandings}
+              leagueMatches={leagueMatches}
+              setLeagueMatches={setLeagueMatches}
+              viewTeam={viewTeam}
+              setViewTeam={setViewTeam}
             />
             <AppFooter />
           </section>
@@ -822,7 +1126,7 @@ function ViewTabs({ activeTab, setActiveTab }) {
         ['matchdays', 'Fixtures'],
         ['predict', 'Predict'],
         ['pots', 'Pots'],
-        ['teams', 'Teams'],
+        ['teams', 'Leagues'],
         ['history', 'Saved runs'],
       ].map(([key, label]) => (
         <button key={key} className={activeTab === key ? 'active' : ''} onClick={() => setActiveTab(key)}>

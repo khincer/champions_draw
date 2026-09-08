@@ -465,3 +465,27 @@ class LeagueStanding(models.Model):
 
 	def __str__(self) -> str:
 		return f'{self.position}. {self.team_name} ({self.league.code})'
+
+
+class LeagueMatch(models.Model):
+	"""A fixture in a real league, synced from football-data.org."""
+	league = models.ForeignKey(League, on_delete=models.CASCADE, related_name='matches')
+	match_id = models.BigIntegerField(unique=True, help_text='football-data.org fixture id')
+	home_name = models.CharField(max_length=100)
+	away_name = models.CharField(max_length=100)
+	home_short = models.CharField(max_length=60, blank=True, default='')
+	away_short = models.CharField(max_length=60, blank=True, default='')
+	home_crest = models.URLField(max_length=500, blank=True, default='')
+	away_crest = models.URLField(max_length=500, blank=True, default='')
+	kickoff = models.DateTimeField(null=True, blank=True)
+	status = models.CharField(max_length=20, default='SCHEDULED')
+	matchday = models.PositiveSmallIntegerField(null=True, blank=True)
+	home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['kickoff']
+
+	def __str__(self) -> str:
+		return f'{self.home_name} vs {self.away_name} ({self.league.code})'
