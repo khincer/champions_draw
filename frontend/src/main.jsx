@@ -1,9 +1,10 @@
 import { render } from 'preact';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   Activity,
   AlertCircle,
   ArrowLeft,
+  CalendarDays,
   CheckCircle2,
   History,
   Home,
@@ -20,6 +21,7 @@ import championsLeagueLogoUrl from './assets/uefa-champions-league-logo.svg';
 import './styles.css';
 import CareerApp, { hasSavedCareer } from './CareerApp';
 import PredictionApp from './PredictionApp';
+import RealDrawView from './RealDrawView';
 import { clearLocal, loadLocal } from './predictionStorage';
 
 const API_ROOT = '/api';
@@ -67,14 +69,31 @@ export function groupBy(items, key) {
   }, {});
 }
 
-function shortDate(value) {
-  if (!value) return 'Pending';
+function shortTime(value) {
+  if (!value) return 'TBD';
   return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
+}
+
+function shortDay(value) {
+  if (!value) return '';
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(value));
+}
+
+// Kickoff falls within [yesterday 00:00, tomorrow 00:00) in local time.
+function inHomeRange(matchup) {
+  const kickoff = matchup.kickoff ? new Date(matchup.kickoff) : null;
+  if (!kickoff) return false;
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return kickoff >= start && kickoff < end;
 }
 
 /* ─── Site Nav Sidebar ─── */
@@ -92,6 +111,15 @@ function SiteNav({ view, setView, setActiveTab }) {
         >
           <Home size={18} />
           Home
+        </button>
+
+        <div className="site-nav-section">Official</div>
+        <button
+          className={`site-nav-link ${view === 'real' ? 'active' : ''}`}
+          onClick={() => setView('real')}
+        >
+          <Swords size={18} />
+          Real Draw
         </button>
 
         <div className="site-nav-section">Simulators</div>
@@ -123,18 +151,58 @@ function SiteNav({ view, setView, setActiveTab }) {
   );
 }
 
-/* ─── Homepage ─── */
+/* ─── Homepage (live hub, la-cancha style) ─── */
 
-function Homepage({ homeMatches }) {
-  const { recent, upcoming } = homeMatches;
+function MatchCard({ match }) {
+  const result = match.result;
+  const chipCls = result ? 'hub-final' : match.closed ? 'hub-live' : 'hub-upcoming';
+  const chipLabel = result ? 'Final' : match.closed ? 'Live' : shortTime(match.kickoff);
+  return (
+    <div className="match-card hub-card">
+      <div className="hub-card-top">
+        <span className={`hub-status ${chipCls}`}>{chipLabel}</span>
+        <span className="hub-md">MD{match.matchday}</span>
+      </div>
+      <div className="hub-team">
+        <TeamLogo team={match.home_team} size="sm" noFallback />
+        <span className="hub-team-name">{match.home_team.name}</span>
+      </div>
+      <div className="hub-score">
+        {result ? `${result.home_goals}–${result.away_goals}` : 'vs'}
+      </div>
+      <div className="hub-team">
+        <TeamLogo team={match.away_team} size="sm" noFallback />
+        <span className="hub-team-name">{match.away_team.name}</span>
+      </div>
+    </div>
+  );
+}
 
-  if (!recent.length && !upcoming.length) {
+function Homepage({ matches }) {
+  const inRange = useMemo(
+    () => matches.filter(inHomeRange).sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || '')),
+    [matches],
+  );
+
+  const groups = useMemo(() => {
+    const today = new Date().toDateString();
+    return inRange.reduce(
+      (acc, m) => {
+        const key = new Date(m.kickoff).toDateString() === today ? 'Today' : 'Yesterday';
+        acc[key].push(m);
+        return acc;
+      },
+      { Today: [], Yesterday: [] },
+    );
+  }, [inRange]);
+
+  if (!inRange.length) {
     return (
       <div className="homepage-matches">
         <StateMessage
           icon={Trophy}
-          title="Welcome to the Champions League simulator"
-          text="No matches yet. Run a simulation to generate fixtures, or check back once the season begins."
+          title="No matches today"
+          text="Today and yesterday games appear here with live results as they happen."
         />
       </div>
     );
@@ -142,36 +210,17 @@ function Homepage({ homeMatches }) {
 
   return (
     <div className="homepage-matches">
-      <div>
-        <div className="match-section-title">
-          <History size={16} />
-          Recent Results
-        </div>
-        {recent.length ? recent.map((m) => (
-          <div className="match-card" key={m.id}>
-            <TeamBadge team={m.home_team} />
-            <span className="score">{m.home_score}&ndash;{m.away_score}</span>
-            <TeamBadge team={m.away_team} align="right" />
-            <span className="match-meta">MD{m.matchday}</span>
+      {Object.entries(groups).map(([label, dayMatches]) =>
+        dayMatches.length ? (
+          <div key={label} className="homepage-day-section">
+            <div className="match-section-title">
+              <CalendarDays size={16} />
+              {label} &middot; {shortDay(dayMatches[0].kickoff)}
+            </div>
+            {dayMatches.map((m) => <MatchCard key={m.id} match={m} />)}
           </div>
-        )) : <p className="muted">No results yet.</p>}
-      </div>
-      <div>
-        <div className="match-section-title">
-          <Play size={16} />
-          Upcoming Fixtures
-        </div>
-        {upcoming.length ? upcoming.map((m) => (
-          <div className="match-card" key={m.id}>
-            <TeamBadge team={m.home_team} />
-            <span className="score">
-              {m.kickoff ? shortDate(m.kickoff) : 'TBD'}
-            </span>
-            <TeamBadge team={m.away_team} align="right" />
-            <span className="match-meta">MD{m.matchday}</span>
-          </div>
-        )) : <p className="muted">No upcoming fixtures.</p>}
-      </div>
+        ) : null,
+      )}
     </div>
   );
 }
@@ -225,7 +274,9 @@ function TeamsBrowser({ leagues, selectedLeague, leagueStandings, setSelectedLea
                       <td className="standings-pos">{row.position || i + 1}</td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {row.team?.crest ? (
+                          {row.team_crest ? (
+                            <img src={row.team_crest} alt="" style={{ width: 20, height: 20 }} />
+                          ) : row.team?.crest ? (
                             <img src={row.team.crest} alt="" style={{ width: 20, height: 20 }} />
                           ) : row.team?.logo_url ? (
                             <img src={row.team.logo_url} alt="" style={{ width: 20, height: 20 }} />
@@ -255,9 +306,9 @@ function TeamsBrowser({ leagues, selectedLeague, leagueStandings, setSelectedLea
       <div className="leagues-grid">
         {leagues.map((league) => (
           <button className="league-card" key={league.id} onClick={() => handleSelectLeague(league)}>
-            {league.emblem && <img src={league.emblem} alt="" />}
+            {league.emblem_url && <img src={league.emblem_url} alt="" />}
             <div className="league-card-name">{league.name}</div>
-            {league.area?.name && <div className="league-card-country">{league.area.name}</div>}
+            {league.country && <div className="league-card-country">{league.country}</div>}
           </button>
         ))}
       </div>
@@ -269,7 +320,8 @@ function TeamsBrowser({ leagues, selectedLeague, leagueStandings, setSelectedLea
 
 function App() {
   const [view, setView] = useState('home');
-  const [homeMatches, setHomeMatches] = useState({ recent: [], upcoming: [] });
+  const [homeMatches, setHomeMatches] = useState([]);
+  const homeMatchesRef = useRef([]);
   const [leagues, setLeagues] = useState([]);
   const [selectedLeague, setSelectedLeague] = useState(null);
   const [leagueStandings, setLeagueStandings] = useState([]);
@@ -298,12 +350,23 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (view === 'home') {
-      apiFetch('/homepage/matches/')
-        .then(setHomeMatches)
-        .catch(() => setHomeMatches({ recent: [], upcoming: [] }));
+    if (view !== 'home' || !selectedSeasonId) return undefined;
+    async function loadRealMatches() {
+      try {
+        const payload = await apiFetch(`/ui/seasons/${selectedSeasonId}/real-fixtures/`);
+        homeMatchesRef.current = payload.matchups;
+        setHomeMatches(payload.matchups);
+      } catch {
+        // Homepage is best-effort; the real draw view surfaces errors.
+      }
     }
-  }, [view]);
+    loadRealMatches();
+    // Keep refreshing while any today/yesterday match is not finished yet.
+    const timer = window.setInterval(() => {
+      if (homeMatchesRef.current.some((m) => inHomeRange(m) && !m.result)) loadRealMatches();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [view, selectedSeasonId]);
 
   useEffect(() => {
     if (view === 'teams' && !leagues.length) {
@@ -463,7 +526,7 @@ function App() {
       <main className="app-main">
         {view === 'home' && (
           <section className="workspace">
-            <Homepage homeMatches={homeMatches} />
+            <Homepage matches={homeMatches} />
             <AppFooter />
           </section>
         )}
@@ -491,6 +554,17 @@ function App() {
             />
             <AppFooter />
           </main>
+        )}
+
+        {view === 'real' && (
+          <RealDrawView
+            seasons={seasons}
+            seasonId={selectedSeasonId}
+            setSeasonId={setSelectedSeasonId}
+            playerName={playerName}
+            setPlayerName={setPlayerName}
+            apiFetch={apiFetch}
+          />
         )}
 
         {view === 'workspace' && (
@@ -805,14 +879,14 @@ function TeamBadge({ team, align }) {
   );
 }
 
-function TeamLogo({ team, size = 'md', className = '' }) {
+function TeamLogo({ team, size = 'md', className = '', noFallback = false }) {
   const [failed, setFailed] = useState(false);
   const showImage = team.logo_url && !failed;
   return (
     <span className={`team-logo ${size} ${className}`.trim()}>
       {showImage ? (
         <img src={team.logo_url} alt={`${team.name} badge`} loading="lazy" onError={() => setFailed(true)} />
-      ) : (
+      ) : noFallback ? null : (
         <span>{team.short_name.slice(0, 3)}</span>
       )}
     </span>

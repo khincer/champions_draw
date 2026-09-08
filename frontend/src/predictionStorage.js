@@ -55,6 +55,31 @@ export function setPlayerName(name) {
   localStorage.setItem(PLAYER_KEY, name);
 }
 
+// Real-draw predictions live under their own stable key so simulated-draw
+// reseeds (clearLocal) never discard them.
+const REAL_STORAGE_PREFIX = 'champions_draw_real_prediction_';
+
+function getRealStorageKey(seasonId, playerName) {
+  return `${REAL_STORAGE_PREFIX}${seasonId}_${playerName || 'Guest'}`;
+}
+
+export function loadRealLocal(seasonId, playerName) {
+  try {
+    const raw = localStorage.getItem(getRealStorageKey(seasonId, playerName));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveRealLocal(seasonId, playerName, predictions) {
+  try {
+    localStorage.setItem(getRealStorageKey(seasonId, playerName), JSON.stringify(predictions || {}));
+  } catch {
+    // localStorage might be full or unavailable
+  }
+}
+
 // Merge local and remote data (local wins for unsaved changes)
 export function mergePredictionData(local, remote) {
   const result = getDefaultState();

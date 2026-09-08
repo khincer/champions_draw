@@ -36,11 +36,19 @@ services:
     command: >
       sh -c "echo '[cron] waiting for initial migrate...';
       sleep 15;
+      echo '[cron] initial leagues sync...';
+      python manage.py sync_leagues 2>&1;
+      counter=0;
       while true; do
-        echo '[cron] syncing leagues...';
-        python manage.py sync_leagues 2>&1;
-        echo '[cron] sleeping 24h...';
-        sleep 86400;
+        echo '[cron] syncing real fixture results...';
+        python manage.py sync_real_fixture_results 2>&1;
+        counter=$((counter + 1));
+        if [ $((counter % 288)) -eq 0 ]; then
+          echo '[cron] syncing leagues...';
+          python manage.py sync_leagues 2>&1;
+        fi;
+        echo '[cron] sleeping 5m...';
+        sleep 300;
       done"
 
 volumes:

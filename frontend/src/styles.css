@@ -489,9 +489,9 @@ select:focus,
 }
 
 .team-logo.sm {
-  width: 22px;
-  height: 22px;
-  font-size: 7px;
+  width: 30px;
+  height: 30px;
+  font-size: 10px;
 }
 
 .team-logo.md {
@@ -1106,7 +1106,7 @@ select:focus,
 }
 
 .score-row {
-  grid-template-columns: 1fr 100px 1fr !important;
+  grid-template-columns: minmax(88px, auto) minmax(0, 1fr) 100px minmax(0, 1fr) !important;
 }
 
 .score-team {
@@ -1114,7 +1114,113 @@ select:focus,
 }
 
 .score-team b {
+  font-size: 14px;
+}
+
+/* Real draw rows: a left status column (Final / kickoff), elnine-style. */
+.fixture-row .fx-status {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.fixture-row .fx-status.waiting {
+  color: var(--gold);
+}
+
+.score-group.real-result {
+  font-weight: 900;
+  font-size: 14px;
+  justify-content: center;
+}
+
+/* Real draw: two-column layout (fixtures card + live standings) */
+.real-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 16px;
+  align-items: start;
+}
+
+.real-layout .matchday-card-wrap {
+  min-width: 0;
+}
+
+.real-standings {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+  position: sticky;
+  top: 20px;
+}
+
+.real-standings-head {
+  height: 44px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+}
+
+.real-standings-head strong {
+  font-size: 14px;
+}
+
+.real-standings-head span {
+  color: var(--muted);
   font-size: 12px;
+}
+
+.real-standings-scroll {
+  overflow-y: auto;
+  max-height: calc(100vh - 280px);
+}
+
+.real-league-table {
+  font-size: 12px;
+}
+
+.real-league-table .tbl-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.real-league-table td,
+.real-league-table th {
+  padding: 6px 5px;
+}
+
+.real-league-table th.tbl-team,
+.real-league-table td.tbl-team {
+  text-align: left;
+}
+
+.real-league-table .team-logo.xs {
+  width: 26px;
+  height: 26px;
+  font-size: 9px;
+}
+
+.real-league-table .team-logo.xs img {
+  padding: 2px;
+}
+
+/* Prev/next matchday controls inside the card header */
+.md-nav-btn {
+  min-height: 28px !important;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+.md-nav-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 /* Team Logo xs */
@@ -1434,11 +1540,22 @@ select:focus,
 .app-main { flex: 1; margin-left: 220px; min-width: 0; }
 
 /* Homepage matches */
-.homepage-matches { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 24px; max-width: 1100px; }
-.match-section-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-.match-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
-.match-card .score { font-weight: 700; font-size: 16px; min-width: 48px; text-align: center; }
-.match-card .match-meta { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.homepage-matches { display: grid; gap: 26px; padding: 24px; max-width: 1100px; }
+.homepage-day-section { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.homepage-day-section .match-section-title { grid-column: 1 / -1; margin-bottom: 0; }
+.match-section-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.match-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.match-card.hub-card { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
+.hub-card-top { display: flex; align-items: center; justify-content: space-between; }
+.hub-md { font-size: 11px; font-weight: 600; color: var(--muted); }
+.hub-team { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hub-team-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-score { font-weight: 800; font-size: 20px; text-align: center; padding: 2px 0; }
+.hub-status { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; color: #fff; }
+.hub-live { background: #16a34a; animation: hub-pulse 1.6s ease-in-out infinite; }
+.hub-upcoming { background: #d97706; }
+.hub-final { background: #64748b; }
+@keyframes hub-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 
 /* League cards */
 .leagues-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 24px; }
@@ -1460,6 +1577,14 @@ select:focus,
 @media (max-width: 1120px) {
   .content-grid {
     grid-template-columns: 1fr;
+  }
+
+  .real-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .real-standings {
+    position: static;
   }
 
   .inspector {
@@ -1561,6 +1686,11 @@ select:focus,
 
   .score-row {
     grid-template-columns: minmax(0, 1fr) 100px minmax(0, 1fr) !important;
+  }
+
+  .score-row .fx-status {
+    grid-column: 1 / -1;
+    text-align: left;
   }
 }
 
