@@ -12,6 +12,7 @@ import {
   ListOrdered,
   Plane,
   Play,
+  RefreshCw,
   Swords,
   Trophy,
   UserRound,
@@ -264,18 +265,24 @@ function LeagueFixtureRow({ m }) {
     <div className="fixture-mini">
       <div className="fixture-mini-date">{shortDay(m.kickoff)}</div>
       <div className="fixture-mini-teams">
-        <span className="fixture-mini-home">{m.home_name}</span>
+        <span className="fixture-mini-home">
+          {m.home_crest ? <img src={m.home_crest} alt="" className="fixture-mini-crest" /> : null}
+          {m.home_name}
+        </span>
         <span className="fixture-mini-score">
           {done ? `${m.result.home_goals}–${m.result.away_goals}` : 'vs'}
         </span>
-        <span className="fixture-mini-away">{m.away_name}</span>
+        <span className="fixture-mini-away">
+          {m.away_name}
+          {m.away_crest ? <img src={m.away_crest} alt="" className="fixture-mini-crest" /> : null}
+        </span>
       </div>
       <div className="fixture-mini-time">{done ? 'FT' : shortTime(m.kickoff)}</div>
     </div>
   );
 }
 
-function TeamPage({ team, league, standings, matches, leagues, onBack }) {
+function TeamPage({ team, league, standings, matches, leagues, onBack, onRefresh }) {
   const [ucl, setUcl] = useState(null);
 
   useEffect(() => {
@@ -322,10 +329,15 @@ function TeamPage({ team, league, standings, matches, leagues, onBack }) {
 
   return (
     <div style={{ padding: '24px', maxWidth: 1280 }}>
-      <button className="back-button" onClick={onBack}>
-        <ArrowLeft size={16} />
-        Back to {league ? league.name : 'league'}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button className="back-button" onClick={onBack}>
+          <ArrowLeft size={16} />
+          Back to {league ? league.name : 'league'}
+        </button>
+        <button className="back-button" onClick={onRefresh}>
+          <RefreshCw size={14} /> Refresh
+        </button>
+      </div>
       <div className="team-page-header">
         {team.crest ? <img src={team.crest} alt="" className="team-page-crest" /> : null}
         <h2 style={{ margin: 0 }}>{team.name}</h2>
@@ -469,11 +481,7 @@ function TeamsBrowser({
   const [loadingStandings, setLoadingStandings] = useState(false);
   const [loadingMatches, setLoadingMatches] = useState(false);
 
-  async function handleSelectLeague(league) {
-    setSelectedLeague(league);
-    setViewTeam(null);
-    setLeagueStandings([]);
-    setLeagueMatches({ finished: [], upcoming: [] });
+  async function loadLeagueData(league) {
     setLoadingStandings(true);
     try {
       const data = await apiFetch(`/leagues/${league.id}/standings/`);
@@ -494,6 +502,19 @@ function TeamsBrowser({
     }
   }
 
+  // Fetch standings + results on mount (re-entering the tab) and whenever the
+  // selected league changes, so fresh cron-synced data appears without a click.
+  useEffect(() => {
+    if (selectedLeague) loadLeagueData(selectedLeague);
+  }, [selectedLeague]);
+
+  function handleSelectLeague(league) {
+    setSelectedLeague(league);
+    setViewTeam(null);
+    setLeagueStandings([]);
+    setLeagueMatches({ finished: [], upcoming: [] });
+  }
+
   if (viewTeam) {
     return (
       <TeamPage
@@ -503,6 +524,7 @@ function TeamsBrowser({
         matches={leagueMatches}
         leagues={leagues}
         onBack={() => setViewTeam(null)}
+        onRefresh={() => loadLeagueData(selectedLeague)}
       />
     );
   }
@@ -510,17 +532,22 @@ function TeamsBrowser({
   if (selectedLeague) {
     return (
       <div style={{ padding: '24px', maxWidth: 1280 }}>
-        <button
-          className="back-button"
-          onClick={() => {
-            setSelectedLeague(null);
-            setLeagueStandings([]);
-            setLeagueMatches({ finished: [], upcoming: [] });
-          }}
-        >
-          <ArrowLeft size={16} />
-          Back to leagues
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <button
+            className="back-button"
+            onClick={() => {
+              setSelectedLeague(null);
+              setLeagueStandings([]);
+              setLeagueMatches({ finished: [], upcoming: [] });
+            }}
+          >
+            <ArrowLeft size={16} />
+            Back to leagues
+          </button>
+          <button className="back-button" onClick={() => loadLeagueData(selectedLeague)}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
         <div className="standings-layout">
           <div>
             <h2 style={{ marginTop: 16 }}>{selectedLeague.name}</h2>

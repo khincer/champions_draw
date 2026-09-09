@@ -1616,9 +1616,10 @@ select:focus,
 .fixture-mini { display: grid; grid-template-columns: 110px 1fr 46px; gap: 8px; align-items: center; padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 12px; }
 .fixture-mini-date { color: var(--muted); font-size: 11px; }
 .fixture-mini-teams { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.fixture-mini-home, .fixture-mini-away { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fixture-mini-home { text-align: right; flex: 1; }
+.fixture-mini-home, .fixture-mini-away { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.fixture-mini-home { text-align: right; flex: 1; justify-content: flex-end; }
 .fixture-mini-away { flex: 1; }
+.fixture-mini-crest { width: 16px; height: 16px; object-fit: contain; flex: none; }
 .fixture-mini-score { font-weight: 700; white-space: nowrap; }
 .fixture-mini-time { text-align: right; color: var(--muted); font-size: 11px; }
 .team-page-header { display: flex; align-items: center; gap: 14px; margin: 18px 0 20px; }
