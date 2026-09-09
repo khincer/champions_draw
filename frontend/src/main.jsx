@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   History,
   Home,
   LayoutGrid,
@@ -480,6 +481,7 @@ function TeamsBrowser({
 }) {
   const [loadingStandings, setLoadingStandings] = useState(false);
   const [loadingMatches, setLoadingMatches] = useState(false);
+  const [showNextMatches, setShowNextMatches] = useState(false);
 
   async function loadLeagueData(league) {
     setLoadingStandings(true);
@@ -548,7 +550,7 @@ function TeamsBrowser({
             <RefreshCw size={14} /> Refresh
           </button>
         </div>
-        <div className="standings-layout">
+        <div className="standings-layout standings-layout--league">
           <div>
             <h2 style={{ marginTop: 16 }}>{selectedLeague.name}</h2>
             {loadingStandings ? (
@@ -603,7 +605,7 @@ function TeamsBrowser({
           </div>
 
           <aside>
-            <h3 className="panel-title">Results</h3>
+            <h3 className="panel-title">Last Results</h3>
             {loadingMatches ? (
               <StateMessage icon={Activity} title="Loading" text="Fetching fixtures" />
             ) : leagueMatches.finished && leagueMatches.finished.length ? (
@@ -611,14 +613,22 @@ function TeamsBrowser({
                 {leagueMatches.finished.map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
               </div>
             ) : <p className="muted small">No finished matches yet.</p>}
-            <h3 className="panel-title" style={{ marginTop: 24 }}>Upcoming</h3>
-            {loadingMatches ? (
-              <StateMessage icon={Activity} title="Loading" text="Fetching fixtures" />
-            ) : leagueMatches.upcoming && leagueMatches.upcoming.length ? (
-              <div className="fixture-mini-list">
-                {leagueMatches.upcoming.map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
-              </div>
-            ) : <p className="muted small">No upcoming matches.</p>}
+            <button
+              className="next-matches-toggle"
+              onClick={() => setShowNextMatches((v) => !v)}
+            >
+              <ChevronDown size={16} className={showNextMatches ? '' : 'arrow-closed'} />
+              Next matches
+            </button>
+            {showNextMatches ? (
+              loadingMatches ? (
+                <StateMessage icon={Activity} title="Loading" text="Fetching fixtures" />
+              ) : leagueMatches.upcoming && leagueMatches.upcoming.length ? (
+                <div className="fixture-mini-list" style={{ marginTop: 8 }}>
+                  {leagueMatches.upcoming.map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
+                </div>
+              ) : <p className="muted small">No upcoming matches.</p>
+            ) : null}
           </aside>
         </div>
       </div>

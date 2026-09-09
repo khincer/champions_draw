@@ -1598,6 +1598,7 @@ select:focus,
 
 /* Standings table */
 .standings-layout { display: grid; grid-template-columns: 1fr 360px; gap: 24px; padding: 24px; }
+.standings-layout--league { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
 .standings-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .standings-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--line-strong); font-weight: 700; font-size: 11px; text-transform: uppercase; color: var(--muted); }
 .standings-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
@@ -1613,7 +1614,7 @@ select:focus,
 .panel-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
 .fixture-mini-list { display: flex; flex-direction: column; gap: 6px; }
 .fixture-mini-heading { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; margin-top: 10px; }
-.fixture-mini { display: grid; grid-template-columns: 110px 1fr 46px; gap: 8px; align-items: center; padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 12px; }
+.fixture-mini { display: grid; grid-template-columns: 110px 1fr 46px; gap: 8px; align-items: center; padding: 12px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 12px; }
 .fixture-mini-date { color: var(--muted); font-size: 11px; }
 .fixture-mini-teams { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .fixture-mini-home, .fixture-mini-away { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
@@ -1622,6 +1623,9 @@ select:focus,
 .fixture-mini-crest { width: 16px; height: 16px; object-fit: contain; flex: none; }
 .fixture-mini-score { font-weight: 700; white-space: nowrap; }
 .fixture-mini-time { text-align: right; color: var(--muted); font-size: 11px; }
+.next-matches-toggle { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 700; }
+.next-matches-toggle svg { transition: transform 0.15s ease; }
+.next-matches-toggle svg.arrow-closed { transform: rotate(-90deg); }
 .team-page-header { display: flex; align-items: center; gap: 14px; margin: 18px 0 20px; }
 .team-page-crest { width: 48px; height: 48px; object-fit: contain; }
 .league-badge { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--muted); }
