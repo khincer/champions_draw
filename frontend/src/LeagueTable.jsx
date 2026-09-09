@@ -16,14 +16,14 @@ export default function LeagueTable({ teams, matchPredictions }) {
             <tr>
               <th>#</th>
               <th className="tbl-team">Team</th>
+              <th>Pts</th>
               <th>Pld</th>
+              <th>GD</th>
               <th>W</th>
               <th>D</th>
               <th>L</th>
               <th>GF</th>
               <th>GA</th>
-              <th>GD</th>
-              <th>Pts</th>
             </tr>
           </thead>
           <tbody>
@@ -44,16 +44,16 @@ export default function LeagueTable({ teams, matchPredictions }) {
                     </span>
                     <span className="tbl-name">{row.team?.short_name || row.short_name}</span>
                   </td>
+                  <td className="tbl-pts"><strong>{row.points}</strong></td>
                   <td>{row.played}</td>
+                  <td className={row.goal_diff > 0 ? 'gd-pos' : row.goal_diff < 0 ? 'gd-neg' : ''}>
+                    {row.goal_diff > 0 ? '+' : ''}{row.goal_diff}
+                  </td>
                   <td>{row.wins}</td>
                   <td>{row.draws}</td>
                   <td>{row.losses}</td>
                   <td>{row.goals_for}</td>
                   <td>{row.goals_against}</td>
-                  <td className={row.goal_diff > 0 ? 'gd-pos' : row.goal_diff < 0 ? 'gd-neg' : ''}>
-                    {row.goal_diff > 0 ? '+' : ''}{row.goal_diff}
-                  </td>
-                  <td className="tbl-pts"><strong>{row.points}</strong></td>
                 </tr>
               );
             })}

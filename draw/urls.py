@@ -13,8 +13,11 @@ from .predictions_views import (
 from .views import (
 	HomepageMatchesAPIView,
 	InteractivePickAPIView,
-	LeagueListAPIView,
-	LeagueStandingListAPIView,
+LeagueListAPIView,
+    LeagueStandingListAPIView,
+    LeagueFixtureListAPIView,
+	RealPredictionSyncAPIView,
+	RealSeasonFixturesAPIView,
 	SeasonDrawAPIView,
 	SeasonDrawListAPIView,
 	SeasonListAPIView,
@@ -36,12 +39,15 @@ urlpatterns = [
     path('seasons/<int:pk>/draws/', SeasonDrawListAPIView.as_view(), name='season-draw-list'),
     path('seasons/<int:pk>/matchups/', SeasonMatchupListAPIView.as_view(), name='season-matchup-list'),
     path('ui/seasons/<int:pk>/state/', UiSeasonStateAPIView.as_view(), name='ui-season-state'),
+    path('ui/seasons/<int:pk>/real-fixtures/', RealSeasonFixturesAPIView.as_view(), name='ui-season-real-fixtures'),
+    path('ui/seasons/<int:pk>/real-predictions/', RealPredictionSyncAPIView.as_view(), name='ui-season-real-predictions'),
     path('teams/', TeamListAPIView.as_view(), name='team-list'),
     path('teams/overview/', TeamOverviewAPIView.as_view(), name='team-overview'),
     path('teams/<int:pk>/', TeamDetailAPIView.as_view(), name='team-detail'),
     # Leagues & standings
     path('leagues/', LeagueListAPIView.as_view(), name='league-list'),
     path('leagues/<int:league_id>/standings/', LeagueStandingListAPIView.as_view(), name='league-standings'),
+    path('leagues/<int:league_id>/matches/', LeagueFixtureListAPIView.as_view(), name='league-matches'),
     # Homepage
     path('homepage/matches/', HomepageMatchesAPIView.as_view(), name='homepage-matches'),
     # Prediction endpoints

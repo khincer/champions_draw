@@ -400,6 +400,26 @@ class KnockoutPrediction(models.Model):
 		return f'{self.get_round_display()} #{self.bracket_position}: {self.home_team} vs {self.away_team}'
 
 
+class RealFixturePrediction(models.Model):
+	prediction = models.ForeignKey(Prediction, on_delete=models.CASCADE, related_name='real_fixture_predictions')
+	matchday = models.PositiveSmallIntegerField()
+	home_team = models.ForeignKey(SeasonTeam, on_delete=models.CASCADE, related_name='home_real_preds')
+	away_team = models.ForeignKey(SeasonTeam, on_delete=models.CASCADE, related_name='away_real_preds')
+	home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+
+	class Meta:
+		constraints = [
+			models.UniqueConstraint(
+				fields=['prediction', 'home_team', 'away_team'],
+				name='unique_real_prediction',
+			),
+		]
+
+	def __str__(self) -> str:
+		return f'{self.home_team} vs {self.away_team}: {self.home_goals}-{self.away_goals}'
+
+
 class League(models.Model):
 	"""A real-world league fetched from football-data.org."""
 	code = models.CharField(max_length=10, unique=True, help_text='API code, e.g. PL, BL1, CL')
@@ -445,3 +465,27 @@ class LeagueStanding(models.Model):
 
 	def __str__(self) -> str:
 		return f'{self.position}. {self.team_name} ({self.league.code})'
+
+
+class LeagueMatch(models.Model):
+	"""A fixture in a real league, synced from football-data.org."""
+	league = models.ForeignKey(League, on_delete=models.CASCADE, related_name='matches')
+	match_id = models.BigIntegerField(unique=True, help_text='football-data.org fixture id')
+	home_name = models.CharField(max_length=100)
+	away_name = models.CharField(max_length=100)
+	home_short = models.CharField(max_length=60, blank=True, default='')
+	away_short = models.CharField(max_length=60, blank=True, default='')
+	home_crest = models.URLField(max_length=500, blank=True, default='')
+	away_crest = models.URLField(max_length=500, blank=True, default='')
+	kickoff = models.DateTimeField(null=True, blank=True)
+	status = models.CharField(max_length=20, default='SCHEDULED')
+	matchday = models.PositiveSmallIntegerField(null=True, blank=True)
+	home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['kickoff']
+
+	def __str__(self) -> str:
+		return f'{self.home_name} vs {self.away_name} ({self.league.code})'
