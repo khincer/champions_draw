@@ -36,28 +36,40 @@
       "kickoff": "2026-09-08T21:00:00",
       "home": "Borussia Dortmund",
       "away": "Villarreal",
-      "result": null
+      "result": {
+        "home_goals": 3,
+        "away_goals": 2
+      }
     },
     {
       "matchday": 1,
       "kickoff": "2026-09-08T21:00:00",
       "home": "Porto",
       "away": "Manchester City",
-      "result": null
+      "result": {
+        "home_goals": 0,
+        "away_goals": 2
+      }
     },
     {
       "matchday": 1,
       "kickoff": "2026-09-08T21:00:00",
       "home": "Lille",
       "away": "Real Betis",
-      "result": null
+      "result": {
+        "home_goals": 2,
+        "away_goals": 3
+      }
     },
     {
       "matchday": 1,
       "kickoff": "2026-09-08T21:00:00",
       "home": "Real Madrid",
       "away": "Inter",
-      "result": null
+      "result": {
+        "home_goals": 2,
+        "away_goals": 1
+      }
     },
     {
       "matchday": 1,

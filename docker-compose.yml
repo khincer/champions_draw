@@ -14,6 +14,7 @@ services:
       DJANGO_DEBUG: "1"
     volumes:
       - db_data:/app/data
+      - fixtures_data:/app/draw/data
     command: >
       sh -c "python manage.py migrate &&
       python manage.py import_seed_input draw/data/ucl_league_phase_seed_input_2025_26.json --set-active --seed &&
@@ -33,6 +34,7 @@ services:
       DJANGO_SETTINGS_MODULE: champions_draw.settings
     volumes:
       - db_data:/app/data
+      - fixtures_data:/app/draw/data
     command: >
       sh -c "echo '[cron] waiting for initial migrate...';
       sleep 15;
@@ -57,4 +59,5 @@ services:
 
 volumes:
   db_data:
+  fixtures_data:
 
