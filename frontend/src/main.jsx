@@ -156,7 +156,7 @@ function SiteNav({ view, setView, setActiveTab }) {
 
 /* ─── Homepage (live hub, la-cancha style) ─── */
 
-function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId }) {
+function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef }) {
   const result = match.result;
   const eligible = result || (match.kickoff && new Date(match.kickoff) <= new Date());
   const status = result ? 'finished' : match.closed ? 'live' : 'upcoming';
@@ -223,7 +223,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId }) {
   );
 }
 
-function Homepage({ matches, liveScores, onOpenMatch, seasonId }) {
+function Homepage({ matches, liveScores, onOpenMatch, seasonId, detailReturnFocusRef }) {
   const inRange = useMemo(
     () => matches.filter(inHomeRange).sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || '')),
     [matches],
@@ -262,7 +262,7 @@ function Homepage({ matches, liveScores, onOpenMatch, seasonId }) {
               <CalendarDays size={16} />
               {label} &middot; {shortDay(dayMatches[0].kickoff)}
             </div>
-            {dayMatches.map((m) => <HomeMatchCard key={m.id} match={m} liveScore={liveScores[m.id]} onOpenMatch={onOpenMatch} seasonId={seasonId} />)}
+            {dayMatches.map((m) => <HomeMatchCard key={m.id} match={m} liveScore={liveScores[m.id]} onOpenMatch={onOpenMatch} seasonId={seasonId} detailReturnFocusRef={detailReturnFocusRef} />)}
           </div>
         ) : null,
       )}
@@ -914,7 +914,7 @@ function App() {
         <div hidden={!!matchDetail}>
         {view === 'home' && (
           <section className="workspace">
-            <Homepage matches={homeMatches} liveScores={liveScores} onOpenMatch={openMatch} seasonId={selectedSeasonId} />
+            <Homepage matches={homeMatches} liveScores={liveScores} onOpenMatch={openMatch} seasonId={selectedSeasonId} detailReturnFocusRef={detailReturnFocusRef} />
             <AppFooter />
           </section>
         )}
