@@ -23,6 +23,7 @@ import championsLeagueLogoUrl from './assets/uefa-champions-league-logo.svg';
 import './styles.css';
 import CareerApp, { hasSavedCareer } from './CareerApp';
 import PredictionApp from './PredictionApp';
+import MatchDetailView from './MatchDetailView';
 import RealDrawView from './RealDrawView';
 import { clearLocal, loadLocal } from './predictionStorage';
 
@@ -155,8 +156,9 @@ function SiteNav({ view, setView, setActiveTab }) {
 
 /* ─── Homepage (live hub, la-cancha style) ─── */
 
-function HomeMatchCard({ match }) {
+function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId }) {
   const result = match.result;
+  const eligible = result || (match.kickoff && new Date(match.kickoff) <= new Date());
   const status = result ? 'finished' : match.closed ? 'live' : 'upcoming';
   const statusLabel = result ? 'Final' : match.closed ? 'Live' : 'Kickoff';
   return (
@@ -184,6 +186,12 @@ function HomeMatchCard({ match }) {
               <b>:</b>
               <span>{result.away_goals}</span>
             </p>
+          ) : liveScore ? (
+            <p className="hub-score hub-score-live">
+              <span>{liveScore.home_goals}</span>
+              <b>:</b>
+              <span>{liveScore.away_goals}</span>
+            </p>
           ) : (
             <p className="hub-kickoff">{shortTime(match.kickoff)}</p>
           )}
@@ -197,13 +205,25 @@ function HomeMatchCard({ match }) {
       </div>
       <footer className="home-game-card-footer">
         <span>Matchday {match.matchday}</span>
-        <span aria-hidden="true">↗</span>
+        {eligible ? (
+          <button
+            className="hub-open-match"
+            type="button"
+            aria-label="View match details"
+            ref={detailReturnFocusRef}
+            onClick={() => onOpenMatch(match.id, seasonId)}
+          >
+            <span aria-hidden="true">↗</span>
+          </button>
+        ) : (
+          <span aria-hidden="true">↗</span>
+        )}
       </footer>
     </article>
   );
 }
 
-function Homepage({ matches }) {
+function Homepage({ matches, liveScores, onOpenMatch, seasonId }) {
   const inRange = useMemo(
     () => matches.filter(inHomeRange).sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || '')),
     [matches],
@@ -242,7 +262,7 @@ function Homepage({ matches }) {
               <CalendarDays size={16} />
               {label} &middot; {shortDay(dayMatches[0].kickoff)}
             </div>
-            {dayMatches.map((m) => <HomeMatchCard key={m.id} match={m} />)}
+            {dayMatches.map((m) => <HomeMatchCard key={m.id} match={m} liveScore={liveScores[m.id]} onOpenMatch={onOpenMatch} seasonId={seasonId} />)}
           </div>
         ) : null,
       )}
@@ -657,6 +677,7 @@ function App() {
   const [view, setView] = useState('home');
   const [homeMatches, setHomeMatches] = useState([]);
   const homeMatchesRef = useRef([]);
+  const [liveScores, setLiveScores] = useState({});
   const [leagues, setLeagues] = useState([]);
   const [selectedLeague, setSelectedLeague] = useState(null);
   const [leagueStandings, setLeagueStandings] = useState([]);
@@ -681,6 +702,17 @@ function App() {
   const [notice, setNotice] = useState('');
   const [predictionApi] = useState({});
   const [careerAvailable, setCareerAvailable] = useState(() => hasSavedCareer());
+  const [matchDetail, setMatchDetail] = useState(null);
+  const detailReturnFocusRef = useRef(null);
+
+  function openMatch(fixtureId, seasonId) {
+    setMatchDetail({ fixtureId, seasonId });
+  }
+
+  function closeMatch() {
+    setMatchDetail(null);
+    detailReturnFocusRef.current?.focus();
+  }
 
   useEffect(() => {
     loadInitialData();
@@ -704,6 +736,24 @@ function App() {
     }, 60_000);
     return () => window.clearInterval(timer);
   }, [view, selectedSeasonId]);
+
+  // Poll live scores while any closed match lacks a final result.
+  useEffect(() => {
+    if (view !== 'home' || !selectedSeasonId) return undefined;
+    const anyAwaiting = homeMatchesRef.current.some((m) => m.closed && !m.result);
+    if (!anyAwaiting) return undefined;
+    const pollLive = async () => {
+      try {
+        const data = await apiFetch(`/ui/seasons/${selectedSeasonId}/live-scores/`);
+        setLiveScores(data.live || {});
+      } catch {
+        // Live scores are best-effort.
+      }
+    };
+    pollLive();
+    const timer = window.setInterval(pollLive, 30_000);
+    return () => window.clearInterval(timer);
+  }, [view, selectedSeasonId, homeMatches]);
 
   useEffect(() => {
     if (view === 'teams' && !leagues.length) {
@@ -861,9 +911,10 @@ function App() {
     <div className="app-layout">
       <SiteNav view={view} setView={setView} setActiveTab={setActiveTab} />
       <main className="app-main">
+        <div hidden={!!matchDetail}>
         {view === 'home' && (
           <section className="workspace">
-            <Homepage matches={homeMatches} />
+            <Homepage matches={homeMatches} liveScores={liveScores} onOpenMatch={openMatch} seasonId={selectedSeasonId} />
             <AppFooter />
           </section>
         )}
@@ -905,6 +956,7 @@ function App() {
             playerName={playerName}
             setPlayerName={setPlayerName}
             apiFetch={apiFetch}
+            onOpenMatch={openMatch}
           />
         )}
 
@@ -996,6 +1048,15 @@ function App() {
               </>
             )}
           </section>
+        )}
+        </div>
+        {matchDetail && (
+          <MatchDetailView
+            fixtureId={matchDetail.fixtureId}
+            seasonId={matchDetail.seasonId}
+            onBack={closeMatch}
+            detailReturnFocusRef={detailReturnFocusRef}
+          />
         )}
       </main>
     </div>

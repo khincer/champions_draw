@@ -10,6 +10,7 @@ import { computeStandings } from './standingsCalc';
 import { buildPredictionsImage } from './sharePredictionsImage';
 
 const SYNC_DELAY_MS = 1200;
+const LIVE_POLL_MS = 30000;
 
 function TeamLogo({ team }) {
   return (
@@ -61,11 +62,13 @@ export default function RealDrawView({
   playerName,
   setPlayerName,
   apiFetch,
+  onOpenMatch,
 }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [currentMd, setCurrentMd] = useState(1);
   const [preds, setPreds] = useState(() => loadRealLocal(seasonId, playerName));
+  const [live, setLive] = useState({});
   const predsRef = useRef(preds);
   const syncTimer = useRef(null);
 
@@ -149,6 +152,34 @@ export default function RealDrawView({
   }
 
   const matchdays = useMemo(() => groupBy(data?.matchups || [], 'matchday'), [data]);
+
+  // A fixture is 'awaiting' once predictions close and no final result has
+  // landed yet -- that is the window where a live score can exist.
+  const anyAwaiting = useMemo(
+    () => Boolean(data && data.matchups && data.matchups.some((f) => f.closed && !f.result)),
+    [data],
+  );
+
+  // Poll the fixtures + live scores every 30s while a matchday is in play.
+  // Refetching fixtures also picks up final results as the sync writes them.
+  // Polling stops (and live is cleared) once every closed match has a result.
+  useEffect(() => {
+    if (!seasonId || !anyAwaiting) {
+      setLive({});
+      return undefined;
+    }
+    const poll = () => {
+      apiFetch(`/ui/seasons/${seasonId}/real-fixtures/`)
+        .then(setData)
+        .catch(() => {});
+      apiFetch(`/ui/seasons/${seasonId}/live-scores/`)
+        .then((payload) => setLive(payload.live || {}))
+        .catch(() => {}); // source down → keep 'Awaiting result' rows
+    };
+    poll();
+    const timer = setInterval(poll, LIVE_POLL_MS);
+    return () => clearInterval(timer);
+  }, [seasonId, anyAwaiting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Real standings: computed from the actual results inside the fixtures
   // payload, which the backend adds as fixtures are played.
@@ -310,11 +341,29 @@ export default function RealDrawView({
                                 <b>{fixture.home_team.name}</b>
                               </div>
                               <div className="score-group real-result">
-                                <span className="real-score">{result.home_goals}&ndash;{result.away_goals}</span>
-                                {verdict && (
-                                  <span className={`fx-verdict ${verdict}`}>
-                                    {VERDICT_LABEL[verdict]} &middot; your pick {pred.home_goals}&ndash;{pred.away_goals}
-                                  </span>
+                                {onOpenMatch ? (
+                                  <a
+                                    className="real-row-link"
+                                    href="#"
+                                    aria-label={`${fixture.home_team.name} vs ${fixture.away_team.name} — view match details`}
+                                    onClick={(e) => { e.preventDefault(); onOpenMatch(fixture.id, seasonId); }}
+                                  >
+                                    <span className="real-score">{result.home_goals}&ndash;{result.away_goals}</span>
+                                    {verdict && (
+                                      <span className={`fx-verdict ${verdict}`}>
+                                        {VERDICT_LABEL[verdict]} &middot; your pick {pred.home_goals}&ndash;{pred.away_goals}
+                                      </span>
+                                    )}
+                                  </a>
+                                ) : (
+                                  <>
+                                    <span className="real-score">{result.home_goals}&ndash;{result.away_goals}</span>
+                                    {verdict && (
+                                      <span className={`fx-verdict ${verdict}`}>
+                                        {VERDICT_LABEL[verdict]} &middot; your pick {pred.home_goals}&ndash;{pred.away_goals}
+                                      </span>
+                                    )}
+                                  </>
                                 )}
                               </div>
                               <div className="team-badge right score-team">
@@ -325,6 +374,43 @@ export default function RealDrawView({
                           );
                         }
                         const disabled = Boolean(fixture.closed);
+                        const liveScore = !result && live[fixture.id];
+                        if (liveScore) {
+                          // In play — show the current score, no input.
+                          return (
+                            <div className="fixture-row score-row" key={fixture.id}>
+                              <div className="fx-status live" title={formatKickoff(fixture.kickoff)}>
+                                LIVE {liveScore.status}
+                              </div>
+                              <div className="team-badge score-team">
+                                <TeamLogo team={fixture.home_team} />
+                                <b>{fixture.home_team.name}</b>
+                              </div>
+                              <div className="score-group real-result">
+                                {onOpenMatch ? (
+                                  <a
+                                    className="real-row-link"
+                                    href="#"
+                                    aria-label={`${fixture.home_team.name} vs ${fixture.away_team.name} — view match details`}
+                                    onClick={(e) => { e.preventDefault(); onOpenMatch(fixture.id, seasonId); }}
+                                  >
+                                    <span className="real-score">{liveScore.home_goals}&ndash;{liveScore.away_goals}</span>
+                                    <span className="fx-verdict live">Live</span>
+                                  </a>
+                                ) : (
+                                  <>
+                                    <span className="real-score">{liveScore.home_goals}&ndash;{liveScore.away_goals}</span>
+                                    <span className="fx-verdict live">Live</span>
+                                  </>
+                                )}
+                              </div>
+                              <div className="team-badge right score-team">
+                                <b>{fixture.away_team.name}</b>
+                                <TeamLogo team={fixture.away_team} />
+                              </div>
+                            </div>
+                          );
+                        }
                         return (
                           <div className="fixture-row score-row" key={fixture.id}>
                             <div
