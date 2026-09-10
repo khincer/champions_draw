@@ -1,4 +1,5 @@
 import json
+import time
 from collections import Counter, defaultdict
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
@@ -12,6 +13,13 @@ from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from .management.commands.sync_real_fixture_results import (
+    PROMIEDOS_URL,
+    fetch,
+    parse_promiedos_live,
+    resolve,
+)
 
 from .models import (
 	InteractiveDrawPick,
@@ -36,6 +44,7 @@ from .serializers import (
 )
 from .services.draw import DrawError, generate_season_draw
 from .services.interactive_draw import current_pot, pick_team, start_or_resume
+from .services.match_details import build_header, find_listing_match, load_football_data_listing, map_detail
 from .services.seeding import SeedingError, seed_season_entries
 
 
@@ -429,6 +438,110 @@ class RealPredictionSyncAPIView(APIView):
 			synced += 1
 
 		return Response({'synced': synced}, status=status.HTTP_200_OK)
+
+
+# Short TTL so several viewers polling every 30s don't each hit promiedos; a
+# 15s cache caps upstream traffic at ~4 fetches/min regardless of audience.
+_PROMIEDOS_LIVE_CACHE = {'at': 0.0, 'html': None}
+
+
+def _fetch_promiedos_live_html():
+	now = time.monotonic()
+	cached = _PROMIEDOS_LIVE_CACHE
+	if cached['html'] is None or now - cached['at'] > 15:
+		cached['html'] = fetch(PROMIEDOS_URL, source='Promiedos')
+		cached['at'] = now
+	return cached['html']
+
+
+class LiveScoresAPIView(APIView):
+	"""Current in-play scores for the real fixtures, labeled by fixture id.
+
+	Polled by the frontend every 30s while a matchday is in progress. Nothing
+	is persisted here: final results keep flowing through the fixtures JSON.
+	A promiedos outage returns 502 with an empty payload, so the UI simply
+	keeps showing 'Awaiting result' rows instead of failing.
+	"""
+
+	def get(self, request, pk):
+		season = get_object_or_404(Season, pk=pk)
+		matchups = _load_real_fixtures(season)
+
+		fixture_id_by_pair = {}
+		for m in matchups:
+			key = (resolve(m['home_team']['name']), resolve(m['away_team']['name']))
+			fixture_id_by_pair.setdefault(key, m['id'])
+
+		try:
+			live_games = parse_promiedos_live(_fetch_promiedos_live_html())
+		except (RuntimeError, ValueError, KeyError, IndexError, json.JSONDecodeError) as exc:
+			return Response({'live': {}, 'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+		live = {}
+		for game in live_games:
+			fixture_id = fixture_id_by_pair.get((resolve(game['home']), resolve(game['away'])))
+			if fixture_id is None:
+				continue  # not one of our league-phase fixtures
+			live[fixture_id] = {
+				'home_goals': game['home_goals'],
+				'away_goals': game['away_goals'],
+				'status': game['status'],
+			}
+		return Response({'live': live}, status=status.HTTP_200_OK)
+
+
+class MatchDetailsAPIView(APIView):
+	"""Match detail: header from own fixtures, detail from football-data listing."""
+
+	def get(self, request, pk, fixture_id):
+		season = get_object_or_404(Season, pk=pk)
+		now = datetime.now(timezone.utc)
+		fixtures = _load_real_fixtures(season)
+
+		fixture = None
+		for f in fixtures:
+			if f['id'] == fixture_id:
+				fixture = f
+				break
+		if fixture is None:
+			raise NotFound(f'Fixture not found: {fixture_id}')
+
+		# Eligibility: must have a result OR kickoff has passed
+		result = fixture.get('result')
+		kickoff_dt = datetime.fromisoformat(fixture['kickoff'].replace('Z', '+00:00'))
+		if result is None and now < kickoff_dt:
+			raise NotFound('Fixture not yet eligible for details')
+
+		header = build_header(fixture, now)
+
+		detail = None
+		detail_error = None
+		try:
+			listing = load_football_data_listing(season.name)
+			match = find_listing_match(
+				listing,
+				home_name=fixture['home_team']['name'],
+				away_name=fixture['away_team']['name'],
+				matchday=fixture['matchday'],
+			)
+			detail = map_detail(match)
+			if detail is None:
+				detail_error = (
+					f"No football-data mapping found for "
+					f"{fixture['home_team']['name']} vs {fixture['away_team']['name']}"
+				)
+		except (RuntimeError, KeyError) as exc:
+			detail = None
+			detail_error = f'Upstream listing unavailable: {exc}'
+
+		return Response({
+			'fixture': {k: v for k, v in fixture.items() if k not in ('home_entry', 'away_entry')},
+			'header': header,
+			'detail': detail,
+			'detail_error': detail_error,
+			'timeline': None,
+			'lineups': None,
+		}, status=status.HTTP_200_OK)
 
 
 def get_season_matchups(season: Season):

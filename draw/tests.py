@@ -1390,6 +1390,209 @@ class RealPredictionSyncApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data, {'player_name': 'Nobody', 'predictions': []})
 
+	def test_live_scores_maps_in_play_matches_to_fixture_ids(self):
+		url = reverse('draw:ui-season-live-scores', args=[self.season.pk])
+		with mock.patch('draw.views._fetch_promiedos_live_html', return_value='cached'):
+			with mock.patch('draw.views.parse_promiedos_live', return_value=[
+				{'home': 'fc barcelona', 'away': 'feyenoord', 'home_goals': 2, 'away_goals': 0, 'status': "28'"},
+				{'home': 'not a team', 'away': 'either', 'home_goals': 0, 'away_goals': 0, 'status': 'HT'},
+			]):
+				response = self.client.get(url)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data, {
+			'live': {
+				'real-1-7': {'home_goals': 2, 'away_goals': 0, 'status': "28'"},
+			},
+		})
+
+	def test_live_scores_unreachable_source_returns_502(self):
+		url = reverse('draw:ui-season-live-scores', args=[self.season.pk])
+		with mock.patch('draw.views._fetch_promiedos_live_html', side_effect=RuntimeError('boom')):
+			response = self.client.get(url)
+
+		self.assertEqual(response.status_code, 502)
+		self.assertEqual(response.data['live'], {})
+
+
+class MatchDetailsApiTests(APITestCase):
+	"""Tests for GET /api/ui/seasons/<pk>/match-details/<fixture_id>/"""
+
+	@staticmethod
+	def _make_datetime_stub(fixed_now):
+		"""Stub for draw.views.datetime: real parsing, pinned now()."""
+		class _Stub:
+			fromisoformat = staticmethod(datetime.fromisoformat)
+
+			@staticmethod
+			def now(tz=None):
+				return fixed_now
+
+		return _Stub
+
+	def setUp(self):
+		from draw.services.match_details import clear_listing_cache
+		clear_listing_cache()
+
+		self.season = Season.objects.create(name='2026-27')
+		with open(
+			Path(__file__).resolve().parent / 'data' / 'ucl_league_phase_real_fixtures_2026_27.json',
+			encoding='utf-8',
+		) as f:
+			fixtures = json.load(f)['fixtures']
+		team_names = sorted({fx['home'] for fx in fixtures} | {fx['away'] for fx in fixtures})
+		assert len(team_names) == 36
+		for index, name in enumerate(team_names):
+			association = Association.objects.create(name=name, code=f'{index + 1:03}')
+			team = Team.objects.create(name=name, short_name=name[:3], association=association)
+			SeasonTeam.objects.create(
+				season=self.season,
+				team=team,
+				uefa_club_coefficient=Decimal('50.000'),
+			)
+
+		# Fake fixture list for patched _load_real_fixtures
+		self._fake_fixtures = [
+			{
+				'id': 'real-1-1',
+				'home_team': {'name': 'AEK Athens', 'logo_url': 'http://test/aek.png'},
+				'away_team': {'name': 'LASK', 'logo_url': 'http://test/lask.png'},
+				'matchday': 1,
+				'home_goals': 1,
+				'away_goals': 0,
+				'status': 'SCHEDULED',
+				'kickoff': '2026-09-08T18:45:00Z',
+				'result': {'home_goals': 1, 'away_goals': 0},
+				'closed': True,
+			},
+			{
+				'id': 'real-8-1',
+				'home_team': {'name': 'AEK Athens', 'logo_url': 'http://test/aek.png'},
+				'away_team': {'name': 'LASK', 'logo_url': 'http://test/lask.png'},
+				'matchday': 8,
+				'home_goals': None,
+				'away_goals': None,
+				'status': 'SCHEDULED',
+				'kickoff': '2027-01-27T21:00:00Z',
+				'result': None,
+				'closed': False,
+			},
+		]
+
+		# Fake football-data listing for patched load_football_data_listing
+		self._fake_listing = {
+			'matches': [
+				{
+					'stage': 'LEAGUE_STAGE',
+					'matchday': 1,
+					'status': 'FINISHED',
+					'homeTeam': {'name': 'AEK Athens'},
+					'awayTeam': {'name': 'LASK'},
+					'score': {'fullTime': {'home': 1, 'away': 0}},
+					'venue': 'Agia Sophia Stadium',
+					'referees': [{'name': 'S. Marciniak', 'type': 'REFEREE'}],
+					'odds': {'homeWin': 2.1, 'draw': 3.4, 'awayWin': 3.5},
+					'utcDate': '2026-09-08T16:45:00Z',
+				},
+			],
+		}
+
+	def _get(self, fixture_id, now):
+		with mock.patch('draw.views.datetime', self._make_datetime_stub(now)):
+			with mock.patch('draw.views._load_real_fixtures', return_value=self._fake_fixtures):
+				return self.client.get(
+					reverse('draw:ui-season-match-details', args=[self.season.pk, fixture_id])
+				)
+
+	def test_played_fixture_returns_200_with_header_and_detail(self):
+		now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+		with mock.patch(
+			'draw.views.load_football_data_listing',
+			return_value=self._fake_listing,
+		):
+			response = self._get('real-1-1', now)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['header']['status'], 'FINISHED')
+		self.assertEqual(response.data['header']['score']['home_goals'], 1)
+		self.assertEqual(response.data['header']['score']['away_goals'], 0)
+		self.assertIsNotNone(response.data['detail'])
+		self.assertEqual(response.data['detail']['venue'], 'Agia Sophia Stadium')
+		self.assertEqual(response.data['detail']['referees'][0]['name'], 'S. Marciniak')
+		self.assertEqual(response.data['detail']['odds']['homeWin'], 2.1)
+		self.assertIsNone(response.data['timeline'])
+		self.assertIsNone(response.data['lineups'])
+
+	def test_scheduled_fixture_returns_404(self):
+		now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+		response = self._get('real-8-1', now)
+		self.assertEqual(response.status_code, 404)
+
+	def test_unknown_fixture_id_returns_404(self):
+		now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+		response = self._get('real-99-99', now)
+		self.assertEqual(response.status_code, 404)
+
+	def test_missing_season_returns_404(self):
+		now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+		with mock.patch('draw.views.datetime', self._make_datetime_stub(now)):
+			with mock.patch('draw.views._load_real_fixtures', return_value=self._fake_fixtures):
+				response = self.client.get(
+					reverse('draw:ui-season-match-details', args=[9999, 'real-1-1'])
+				)
+		self.assertEqual(response.status_code, 404)
+
+	def test_upstream_failure_returns_200_with_detail_error(self):
+		now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+		with mock.patch(
+			'draw.views.load_football_data_listing',
+			side_effect=RuntimeError('football-data fetch failed'),
+		):
+			response = self._get('real-1-1', now)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertIsNone(response.data['detail'])
+		self.assertIn('Upstream listing unavailable', response.data['detail_error'])
+		self.assertIsNotNone(response.data['header'])
+
+	def test_unmapped_teams_returns_200_with_detail_error(self):
+		now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+		empty_listing = {'matches': []}
+		with mock.patch(
+			'draw.views.load_football_data_listing',
+			return_value=empty_listing,
+		):
+			response = self._get('real-1-1', now)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertIsNone(response.data['detail'])
+		self.assertIn('No football-data mapping found', response.data['detail_error'])
+
+	def test_cache_reuse_across_two_loads(self):
+		from draw.services.match_details import load_football_data_listing
+		with mock.patch.dict('os.environ', {'API_FOOTBALL_DATA_KEY': 'test-key'}):
+			with mock.patch(
+				'draw.services.match_details.fetch_football_data',
+				return_value=self._fake_listing,
+			) as mock_fetch:
+				load_football_data_listing('2026-27')
+				load_football_data_listing('2026-27')
+				self.assertEqual(mock_fetch.call_count, 1)
+
+	def test_clear_listing_cache_resets_state(self):
+		from draw.services.match_details import load_football_data_listing, clear_listing_cache
+		with mock.patch.dict('os.environ', {'API_FOOTBALL_DATA_KEY': 'test-key'}):
+			with mock.patch(
+				'draw.services.match_details.fetch_football_data',
+				return_value=self._fake_listing,
+			) as mock_fetch:
+				load_football_data_listing('2026-27')
+				self.assertEqual(mock_fetch.call_count, 1)
+				clear_listing_cache()
+				load_football_data_listing('2026-27')
+				self.assertEqual(mock_fetch.call_count, 2)
+
+
 class SyncRealFixtureResultsTests(TestCase):
 	def test_parse_schedule_keeps_played_league_phase_rows_only(self):
 		from draw.management.commands.sync_real_fixture_results import parse_schedule
@@ -1513,6 +1716,39 @@ class SyncRealFixtureResultsTests(TestCase):
 		self.assertEqual(matches, [
 			{'home': 'club brugge', 'away': 'aston villa', 'home_goals': 2, 'away_goals': 3},
 			{'home': 'aek athens', 'away': 'lask linz', 'home_goals': 1, 'away_goals': 0},
+		])
+
+	def test_parse_promiedos_live_keeps_in_play_matches_only(self):
+		import json
+		from draw.management.commands.sync_real_fixture_results import parse_promiedos_live
+
+		payload = {
+			'props': {'pageProps': {'data': {'games': {'filters': [
+				{'name': 'Partidos actuales', 'games': [
+					{'id': 'a', 'game_time_status_to_display': 'Final',
+					 'teams': [{'name': 'Brujas', 'url_name': 'club-brugge'},
+					           {'name': 'Aston Villa', 'url_name': 'aston-villa'}],
+					 'scores': [2, 3]},
+					{'id': 'b', 'game_time_status_to_display': 'Prog.',
+					 'teams': [{'name': 'FC Porto', 'url_name': 'fc-porto'},
+					           {'name': 'Manchester City', 'url_name': 'manchester-city'}],
+					 'scores': []},
+					{'id': 'c', 'game_time_status_to_display': "28'",
+					 'teams': [{'name': 'Stuttgart', 'url_name': 'stuttgart'},
+					           {'name': 'Viking', 'url_name': 'viking'}],
+					 'scores': [2, 1]},
+				]},
+			]}}},
+		}}
+		html_text = (
+			'<div id="root"></div>'
+			'<script id="__NEXT_DATA__" type="application/json">'
+			f'{json.dumps(payload)}'
+			'</script>'
+		)
+		matches = parse_promiedos_live(html_text)
+		self.assertEqual(matches, [
+			{'home': 'stuttgart', 'away': 'viking', 'home_goals': 2, 'away_goals': 1, 'status': "28'"},
 		])
 
 	def test_promiedos_names_resolve_to_fixture_names(self):
