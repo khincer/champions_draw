@@ -2,11 +2,13 @@
 real fixtures JSON (draw/data/ucl_league_phase_real_fixtures_2026_27.json).
 
 Sources:
-  football-data (default): https://api.football-data.org/v4/competitions/CL/matches
+  promiedos (default): free, no API key; real-time scores parsed from the
+      page's embedded __NEXT_DATA__ JSON. Same source the live-scores
+      endpoint uses.
+  football-data: https://api.football-data.org/v4/competitions/CL/matches
       Free tier covers the Champions League; requires API_FOOTBALL_DATA_KEY.
+      Can lag behind on FINISHED status shortly after a match ends.
   fbref: free and needs no API key, but FBref blocks many networks.
-  promiedos: free, no API key; scores parsed from the page's embedded
-      __NEXT_DATA__ JSON. Good fallback when the other two are unreachable.
 
 Only each fixture's `result` field is touched; kickoffs, team names, and
 structure stay as-is.
@@ -202,6 +204,33 @@ _PROMIEDOS_NEXT_DATA_RE = re.compile(
 )
 
 
+def _promiedos_games(html_text):
+    """Return the raw games list from promiedos' __NEXT_DATA__ JSON."""
+    m = _PROMIEDOS_NEXT_DATA_RE.search(html_text)
+    if not m:
+        raise ValueError('No __NEXT_DATA__ script found in promiedos HTML')
+    payload = json.loads(m.group(1))
+    filters = payload['props']['pageProps']['data']['games']['filters']
+    games = []
+    for group in filters:
+        games.extend(group.get('games') or [])
+    return games
+
+
+def _promiedos_match(game):
+    """Map one promiedos game dict to {home, away, home_goals, away_goals, status?}."""
+    teams = game.get('teams') or []
+    scores = game.get('scores') or []
+    if len(teams) < 2 or len(scores) < 2:
+        return None
+    return {
+        'home': (teams[0].get('url_name') or teams[0].get('name')).replace('-', ' '),
+        'away': (teams[1].get('url_name') or teams[1].get('name')).replace('-', ' '),
+        'home_goals': int(scores[0]),
+        'away_goals': int(scores[1]),
+    }
+
+
 def parse_promiedos(html_text):
     """Return finished league-phase matches from promiedos' __NEXT_DATA__ JSON.
 
@@ -210,27 +239,34 @@ def parse_promiedos(html_text):
     Team names come from the machine-friendly url_name field, with its url
     hyphens translated to spaces so resolve()/_ALIASES can match fixtures.
     """
-    m = _PROMIEDOS_NEXT_DATA_RE.search(html_text)
-    if not m:
-        raise ValueError('No __NEXT_DATA__ script found in promiedos HTML')
-    payload = json.loads(m.group(1))
-    filters = payload['props']['pageProps']['data']['games']['filters']
+    return [
+        m for m in (
+            _promiedos_match(game)
+            for game in _promiedos_games(html_text)
+            if game.get('game_time_status_to_display') == 'Final'
+        )
+        if m
+    ]
 
+
+def parse_promiedos_live(html_text):
+    """Return in-play league-phase matches as {home, away, home_goals, away_goals, status}.
+
+    Finished games are marked 'Final' and scheduled ones 'Prog.' (with an
+    empty scores array); any other status -- e.g. "28'", "HT" -- is a game in
+    play, and its scores array holds the current goals. Used by the live-
+    scores API, never for persisting results.
+    """
     matches = []
-    for group in filters:
-        for game in group.get('games') or []:
-            if game.get('game_time_status_to_display') != 'Final':
-                continue
-            teams = game.get('teams') or []
-            scores = game.get('scores') or []
-            if len(teams) < 2 or len(scores) < 2:
-                continue
-            matches.append({
-                'home': (teams[0].get('url_name') or teams[0].get('name')).replace('-', ' '),
-                'away': (teams[1].get('url_name') or teams[1].get('name')).replace('-', ' '),
-                'home_goals': int(scores[0]),
-                'away_goals': int(scores[1]),
-            })
+    for game in _promiedos_games(html_text):
+        status = game.get('game_time_status_to_display') or ''
+        if status == 'Final':
+            continue
+        m = _promiedos_match(game)
+        if m is None:
+            continue  # scheduled/suspended: no score line yet
+        m['status'] = status
+        matches.append(m)
     return matches
 
 
@@ -329,8 +365,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--source',
             choices=['football-data', 'fbref', 'promiedos'],
-            default='football-data',
-            help='Result provider (default: football-data, uses API_FOOTBALL_DATA_KEY).',
+            default='promiedos',
+            help='Result provider (default: promiedos — real-time, no API key; football-data lags on FINISHED).',
         )
         parser.add_argument('--season', type=int, default=2026, help='Season year for football-data (default: 2026).')
         parser.add_argument('--url', default=FBREF_URL, help='FBref schedule URL (source=fbref only).')

@@ -458,6 +458,29 @@ select:focus,
   background: var(--surface-soft);
 }
 
+/* Probabilistic prediction line under each fixture (Predict feature). */
+.fixture-wrap {
+  border-radius: 6px;
+}
+
+.fixture-wrap .fixture-row {
+  border-radius: 6px 6px 0 0;
+}
+
+.match-odds {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 2px 10px 6px;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px dashed var(--line);
+}
+
+.match-odds span b {
+  color: var(--ink);
+}
+
 .team-badge {
   min-width: 0;
   display: inline-flex;

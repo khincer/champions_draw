@@ -46,6 +46,7 @@ from .services.draw import DrawError, generate_season_draw
 from .services.interactive_draw import current_pot, pick_team, start_or_resume
 from .services.match_details import build_header, find_listing_match, load_football_data_listing, map_detail
 from .services.seeding import SeedingError, seed_season_entries
+from .services.standings import compute_standings
 
 
 def get_requested_or_active_season(request) -> Season:
@@ -586,7 +587,119 @@ class LeagueListAPIView(generics.ListAPIView):
 			}
 			for lg in leagues
 		]
+		conmebol_emblems = {
+			'LIB': 'https://media.api-sports.io/football/leagues/13.png',
+			'SUD': 'https://media.api-sports.io/football/leagues/11.png',
+		}
+		conmebol = [
+			{
+				'id': f'season-{s.pk}',
+				'code': s.competition,
+				'name': s.name,
+				'country': 'CONMEBOL',
+				'emblem_url': conmebol_emblems.get(s.competition),
+				'kind': 'season',
+				'season_id': s.pk,
+			}
+			for s in Season.objects.filter(competition__in=['LIB', 'SUD']).order_by('-name')
+		]
+		data.extend(conmebol)
 		return Response(data)
+
+
+# --- Season group standings (CONMEBOL) ---
+
+
+class SeasonGroupStandingsAPIView(APIView):
+	"""Group-stage standings for a CONMEBOL season.
+
+	Groups are derived from the matchup graph: every SeasonMatchup with a
+	matchday becomes an edge between its two SeasonTeam nodes, and each
+	connected component is one group (8 groups of 4 in the CONMEBOL format,
+	but derived generically). Components are labeled 'A', 'B', ... in
+	alphabetical order of their member team names."""
+
+	def get(self, request, pk):
+		season = get_object_or_404(Season, pk=pk)
+		if season.competition not in ('LIB', 'SUD'):
+			raise NotFound('Group standings only exist for CONMEBOL seasons.')
+
+		matchups = list(
+			SeasonMatchup.objects.select_related('home_team__team', 'away_team__team')
+			.filter(season=season, matchday__isnull=False)
+		)
+
+		# Union-find over SeasonTeam ids; each connected component is a group.
+		parent = {}
+
+		def find(node):
+			root = node
+			while parent[root] != root:
+				root = parent[root]
+			while parent[node] != node:
+				parent[node], node = root, parent[node]
+			return root
+
+		def union(a, b):
+			ra, rb = find(a), find(b)
+			if ra != rb:
+				parent[rb] = ra
+
+		for m in matchups:
+			parent.setdefault(m.home_team_id, m.home_team_id)
+			parent.setdefault(m.away_team_id, m.away_team_id)
+			union(m.home_team_id, m.away_team_id)
+
+		components = {}
+		for node_id in parent:
+			components.setdefault(find(node_id), []).append(node_id)
+
+		entries = {
+			st.id: st
+			for st in SeasonTeam.objects.select_related('team', 'team__association')
+			.filter(season=season, id__in=parent)
+		}
+
+		def team_payload(st):
+			return {
+				'id': st.id,
+				'name': st.team.name,
+				'short_name': st.team.short_name or st.team.name,
+				'logo_url': st.team.logo_url or '',
+				'association': st.team.association.code if st.team.association else '',
+			}
+
+		def standings_payload(member_ids):
+			teams = [team_payload(entries[nid]) for nid in member_ids]
+			group_matchups = [
+				m for m in matchups
+				if m.home_team_id in member_ids and m.away_team_id in member_ids
+			]
+			return compute_standings(
+				teams,
+				[{
+					'home_team_id': m.home_team_id,
+					'away_team_id': m.away_team_id,
+					'home_goals': m.home_goals,
+					'away_goals': m.away_goals,
+				} for m in group_matchups],
+			)
+
+		# Label components A..Z ordered by their member team names.
+		member_ids_by_component = sorted(
+			components.values(),
+			key=lambda ids: [entries[nid].team.name for nid in ids],
+		)
+		groups = []
+		for idx, raw_ids in enumerate(member_ids_by_component):
+			label = chr(ord('A') + idx)
+			member_ids = sorted(raw_ids, key=lambda nid: entries[nid].team.name)
+			groups.append({
+				'group': label,
+				'standings': standings_payload(member_ids),
+			})
+
+		return Response({'season_id': season.pk, 'groups': groups})
 
 
 class LeagueStandingListAPIView(APIView):
@@ -649,36 +762,71 @@ class LeagueFixtureListAPIView(APIView):
 
 
 class HomepageMatchesAPIView(APIView):
+	"""Homepage feed: today/yesterday real fixtures for the newest UCL season
+	plus every CONMEBOL (Libertadores/Sudamericana) season's matchups.
+
+	The frontend filters by inHomeRange client-side, so all rows are served and
+	the kickoff-bearing subset renders. Rows carry a per-match season_id and
+	competition label; only UCL rows are openable (match details resolve for
+	them; CONMEBOL matchups have no detail endpoint)."""
+
 	def get(self, request):
-		season = get_requested_or_active_season(request)
-		matchups = list(
-			SeasonMatchup.objects.select_related(
-				'home_team__team', 'away_team__team',
-			).filter(season=season)
-		)
-
-		recent = []
-		upcoming = []
-		for m in matchups:
-			row = {
-				'id': m.id,
-				'home_team': CompactSeasonTeamSerializer(m.home_team).data,
-				'away_team': CompactSeasonTeamSerializer(m.away_team).data,
-				'matchday': m.matchday,
-				'home_goals': m.home_goals,
-				'away_goals': m.away_goals,
-				'status': m.status,
-				'kickoff': m.kickoff.isoformat() if m.kickoff else None,
-			}
-			if m.status == 'FINISHED':
-				recent.append(row)
-			elif m.status in ('SCHEDULED', 'TIMED', '') and m.kickoff:
-				upcoming.append(row)
-
-		recent.sort(key=lambda r: r['matchday'] or 0, reverse=True)
-		upcoming.sort(key=lambda r: r['kickoff'] or '')
-
-		return Response({
-			'recent': recent[:20],
-			'upcoming': upcoming[:20],
-		})
+		rows = []
+		# The UCL block is best-effort: real fixtures only load for the newest
+		# UCL season (2026-27), and any failure must not take down the CONMEBOL
+		# rows below. An explicit ?season= override wins when provided.
+		try:
+			season_name = request.query_params.get('season')
+			if season_name:
+				ucl_season = get_object_or_404(Season, name=season_name)
+			else:
+				ucl_season = Season.objects.filter(competition='UCL').order_by('-name').first()
+			if ucl_season is not None:
+				for f in _load_real_fixtures(ucl_season):
+					rows.append({
+						'id': f['id'],
+						'season_id': ucl_season.id,
+						'competition': 'Champions League',
+						'openable': True,
+						'home_team': f['home_team'],
+						'away_team': f['away_team'],
+						'matchday': f['matchday'],
+						'kickoff': f['kickoff'],
+						'result': f.get('result'),
+						'closed': f.get('closed', False),
+						'status': f.get('status', 'SCHEDULED'),
+					})
+		except Exception:
+			# UCL fixture loading must never take down the feed; the CONMEBOL
+			# rows below still render even when this fails.
+			pass
+		conmebol_seasons = list(Season.objects.filter(competition__in=['LIB', 'SUD']).order_by('-name'))
+		if conmebol_seasons:
+			matchups = list(
+				SeasonMatchup.objects.select_related(
+					'home_team__team', 'away_team__team',
+				).filter(season__in=conmebol_seasons)
+			)
+			competition_label = {'LIB': 'Libertadores', 'SUD': 'Sudamericana'}
+			for m in matchups:
+				if not m.kickoff:
+					continue
+				rows.append({
+					'id': f'sm-{m.id}',
+					'season_id': m.season_id,
+					'competition': competition_label.get(m.season.competition, m.season.competition),
+					'openable': False,
+					'home_team': CompactSeasonTeamSerializer(m.home_team).data,
+					'away_team': CompactSeasonTeamSerializer(m.away_team).data,
+					'matchday': m.matchday,
+					'kickoff': m.kickoff.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z'),
+					'result': (
+						{'home_goals': m.home_goals, 'away_goals': m.away_goals}
+						if m.status == 'FINISHED' and m.home_goals is not None and m.away_goals is not None
+						else None
+					),
+					'closed': m.status == 'FINISHED',
+					'status': m.status,
+				})
+		rows.sort(key=lambda r: r['kickoff'] or '')
+		return Response({'matchups': rows})

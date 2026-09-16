@@ -5,6 +5,7 @@ import PlayoffBracket from './PlayoffBracket';
 import KnockoutBracket from './KnockoutBracket';
 import { loadLocal, saveLocal } from './predictionStorage';
 import { computeStandings, defenseNorm, eliminationBoost, expectedGoals, teamStrength } from './standingsCalc';
+import { predictMatch } from './matchOdds';
 
 const SUB_TABS = [
   ['scores', 'Score Matches'],
@@ -203,6 +204,37 @@ export default function PredictionApp({
         const ag = randomGoals(f.away_team, f.home_team);
         updated.matchPredictions[f.id] = {
           ...(updated.matchPredictions[f.id] || {}),
+          home_goals: hg,
+          away_goals: ag,
+          home_team_id: f.home_team.id,
+          away_team_id: f.away_team.id,
+        };
+      }
+      saveLocal(seasonId, playerName, updated, latestDrawSeed);
+      return updated;
+    });
+  }, [matchups, seasonId, playerName, latestDrawSeed]);
+
+  // Fill only unscored fixtures with the modal scoreline of the joint Poisson
+  // model. Unlike Randomize, Predict never overwrites a manual pick.
+  const handlePredictMatchday = useCallback((matchday) => {
+    const md = String(matchday);
+    const byMatchday = {};
+    for (const m of matchups) {
+      if (!byMatchday[m.matchday]) byMatchday[m.matchday] = [];
+      byMatchday[m.matchday].push(m);
+    }
+    const fixtures = byMatchday[md] || [];
+    if (!fixtures.length) return;
+
+    setLocalData((prev) => {
+      const updated = { ...prev, matchPredictions: { ...prev.matchPredictions } };
+      for (const f of fixtures) {
+        const existing = updated.matchPredictions[f.id] || {};
+        if (existing.home_goals != null && existing.away_goals != null) continue;
+        const [hg, ag] = predictMatch(f.home_team, f.away_team).modal_score;
+        updated.matchPredictions[f.id] = {
+          ...existing,
           home_goals: hg,
           away_goals: ag,
           home_team_id: f.home_team.id,
@@ -689,6 +721,7 @@ export default function PredictionApp({
                 onSave={handleSaveMatchday}
                 isSaving={savingMatchday}
                 onRandomize={handleRandomizeMatchday}
+                onPredict={handlePredictMatchday}
               />
             </>
           )}
