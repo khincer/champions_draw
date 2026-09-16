@@ -1637,6 +1637,12 @@ select:focus,
 .hub-score-live { color: #dc2626; animation: live-pulse 1.6s ease-in-out infinite; }
 @keyframes hub-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 
+/* Homepage latest results strip */
+.homepage-results { display: flex; flex-direction: column; gap: 14px; }
+.homepage-carousel { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+.homepage-carousel .home-game-card { flex: 0 0 280px; scroll-snap-align: start; }
+.homepage-carousel .home-game-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
 /* League cards */
 .leagues-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 24px; }
 .league-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px; transition: border-color 0.15s; }

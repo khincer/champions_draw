@@ -157,13 +157,17 @@ function SiteNav({ view, setView, setActiveTab }) {
 
 /* ─── Homepage (live hub, la-cancha style) ─── */
 
-function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef }) {
+function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef, focusable }) {
   const result = match.result;
   const eligible = result || (match.kickoff && new Date(match.kickoff) <= new Date());
   const status = result ? 'finished' : match.closed ? 'live' : 'upcoming';
   const statusLabel = result ? 'Final' : match.closed ? 'Live' : 'Kickoff';
   return (
-    <article className="home-game-card" aria-label={`${match.home_team.name} versus ${match.away_team.name}`}>
+    <article
+      className="home-game-card"
+      aria-label={`${match.home_team.name} versus ${match.away_team.name}`}
+      tabIndex={focusable ? 0 : undefined}
+    >
       <header className="home-game-card-header">
         <div>
           <p className="hub-eyebrow">{match.competition || 'Champions League'}</p>
@@ -242,6 +246,16 @@ function Homepage({ matches, liveScores, onOpenMatch, seasonId, detailReturnFocu
     );
   }, [inRange]);
 
+  const latestResults = useMemo(
+    () =>
+      matches
+        .filter((m) => m.result)
+        .sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || ''))
+        // ponytail: hardcoded cap of 6 cards; raise when the homepage routinely shows more fresh results
+        .slice(0, 6),
+    [matches],
+  );
+
   if (!inRange.length) {
     return (
       <div className="homepage-matches">
@@ -256,6 +270,27 @@ function Homepage({ matches, liveScores, onOpenMatch, seasonId, detailReturnFocu
 
   return (
     <div className="homepage-matches">
+      {latestResults.length > 0 && (
+        <section role="region" aria-label="Latest results" className="homepage-results">
+          <div className="match-section-title">
+            <History size={16} />
+            Latest results
+          </div>
+          <div className="homepage-carousel">
+            {latestResults.map((m) => (
+              <HomeMatchCard
+                key={m.id}
+                match={m}
+                liveScore={liveScores[m.id]}
+                onOpenMatch={onOpenMatch}
+                seasonId={seasonId}
+                detailReturnFocusRef={detailReturnFocusRef}
+                focusable
+              />
+            ))}
+          </div>
+        </section>
+      )}
       {Object.entries(groups).map(([label, dayMatches]) =>
         dayMatches.length ? (
           <div key={label} className="homepage-day-section">
