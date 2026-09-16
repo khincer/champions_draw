@@ -44,4 +44,10 @@ function pairPlayoffTies(matchups) {
   return ties;
 }
 
-export { computeAgg, pairPlayoffTies };
+/* Aggregate line for a tie card: "agg 4–3" from the {home, away} object, or
+   the "agg –" placeholder when no leg has scores (or the tie is lone-legged). */
+function formatAggregate(agg) {
+  return agg == null ? 'agg –' : `agg ${agg.home}–${agg.away}`;
+}
+
+export { computeAgg, pairPlayoffTies, formatAggregate };

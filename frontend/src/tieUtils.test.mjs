@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { pairPlayoffTies, computeAgg } from './tieUtils.js';
+import { pairPlayoffTies, computeAgg, formatAggregate } from './tieUtils.js';
 
 function matchup(overrides = {}) {
   return {
@@ -89,4 +89,19 @@ test('group matchups with a numeric matchday are excluded; explicit null and mis
   delete missingField.matchday;
   const ties = pairPlayoffTies([groupLeg, explicitNull, missingField]);
   assert.deepEqual(ties.map((tie) => tie.legs[0].id).sort(), [2, 3]);
+});
+
+/* formatAggregate — LPV-4 "agg X–Y" line rendered from the {home, away}
+   object, with the "agg –" placeholder when the tie is unplayed or
+   single-legged (aggregate null). */
+test('formatAggregate renders the aggregate line from a played tie', () => {
+  assert.equal(formatAggregate({ home: 4, away: 3 }), 'agg 4–3');
+});
+
+test('formatAggregate renders the placeholder for unplayed or lone-leg ties', () => {
+  assert.equal(formatAggregate(null), 'agg –');
+});
+
+test('formatAggregate keeps a zero-zero aggregate (placeholder only when null)', () => {
+  assert.equal(formatAggregate({ home: 0, away: 0 }), 'agg 0–0');
 });
