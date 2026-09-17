@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import Button from './components/Button';
+import SegmentControl from './components/SegmentControl';
+import StandingsTable from './components/StandingsTable';
 import MatchdayScoreBoard from './MatchdayScoreBoard';
-import LeagueTable from './LeagueTable';
 import PlayoffBracket from './PlayoffBracket';
 import KnockoutBracket from './KnockoutBracket';
 import { loadLocal, saveLocal } from './predictionStorage';
@@ -679,18 +681,20 @@ export default function PredictionApp({
 
   return (
     <div className="prediction-app">
-      <div className="view-tabs prediction-tabs">
-        {SUB_TABS.map(([key, label]) => (
-          <button
-            key={key}
-            className={subTab === key ? 'active' : ''}
-            onClick={() => setSubTab(key)}
-            disabled={key === 'playoffs' && matchups.length > 0 && Object.keys(validPredictions).length < matchups.length * 0.5}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SegmentControl
+        className="view-tabs prediction-tabs"
+        label="Prediction sections"
+        value={subTab}
+        onChange={setSubTab}
+        items={SUB_TABS.map(([key, label]) => ({
+          key,
+          label,
+          disabled:
+            key === 'playoffs'
+            && matchups.length > 0
+            && Object.keys(validPredictions).length < matchups.length * 0.5,
+        }))}
+      />
 
       {error && <div className="message-bar error">{error}</div>}
 
@@ -707,9 +711,9 @@ export default function PredictionApp({
                   {Object.values(validPredictions).filter(v => v.home_goals != null).length}/{matchups.length} scored
                 </span>
                 {leagueComplete && (
-                  <button className="button secondary" onClick={() => setSubTab('playoffs')}>
+                  <Button onClick={() => setSubTab('playoffs')}>
                     Continue to Playoffs →
-                  </button>
+                  </Button>
                 )}
               </div>
               <MatchdayScoreBoard
@@ -727,7 +731,17 @@ export default function PredictionApp({
           )}
 
           {subTab === 'standings' && (
-            <LeagueTable teams={seasonState?.teams} matchPredictions={validPredictions} />
+            <div className="league-table-wrap">
+              <h3 className="section-title">League Phase Standings</h3>
+              <StandingsTable
+                rows={standings}
+                variant="league"
+                nameMode="short"
+                playedHeader="Pld"
+                legend="league"
+                scrollClassName="league-table-scroll"
+              />
+            </div>
           )}
 
           {subTab === 'playoffs' && (
@@ -737,21 +751,21 @@ export default function PredictionApp({
                   <h2>Playoff predictions</h2>
                   <p>Score both legs of each two-legged tie. The lower seed hosts leg 1.</p>
                 </div>
-                <button
-                  className="button primary"
+                <Button
+                  variant="primary"
                   onClick={handleSavePlayoffs}
                   disabled={savingPlayoffs || !playoffMatchups.length}
                 >
                   {savingPlayoffs ? 'Saving...' : 'Save Playoffs'}
-                </button>
+                </Button>
                 {playoffsComplete && (
-                  <button className="button secondary" onClick={() => setSubTab('bracket')}>
+                  <Button onClick={() => setSubTab('bracket')}>
                     Continue to Knockout →
-                  </button>
+                  </Button>
                 )}
-                <button className="button secondary" onClick={handleRandomizePlayoffs} disabled={!playoffMatchups.length}>
+                <Button onClick={handleRandomizePlayoffs} disabled={!playoffMatchups.length}>
                   Randomize
-                </button>
+                </Button>
               </div>
               <PlayoffBracket
                 matchups={playoffMatchups}
@@ -767,20 +781,19 @@ export default function PredictionApp({
                   <h2>Knockout predictions</h2>
                   <p>Score each single-leg knockout match. Winners advance automatically.</p>
                 </div>
-                <button
-                  className="button primary"
+                <Button
+                  variant="primary"
                   onClick={handleSaveKnockout}
                   disabled={savingKnockout || !knockoutComplete}
                 >
                   {savingKnockout ? 'Saving...' : 'Save Knockout'}
-                </button>
-                <button
-                  className="button secondary"
+                </Button>
+                <Button
                   onClick={handleRandomizeKnockout}
                   disabled={!Object.values(knockoutBracket).some((round) => round.some((m) => m.home_team && m.away_team))}
                 >
                   Randomize
-                </button>
+                </Button>
                 {knockoutComplete && (
                   <span className="muted">Knockout complete — champion crowned</span>
                 )}
@@ -801,44 +814,13 @@ export default function PredictionApp({
                 {Object.values(validPredictions).filter(v => v.home_goals != null).length}/{matchups.length} played
               </span>
             </div>
-            <div className="sidebar-standings-scroll">
-              <table className="sidebar-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Team</th>
-                    <th>Pts</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {standings.slice(0, 36).map((row) => {
-                    let cls = '';
-                    if (row.position <= 8) cls = 'r-qual';
-                    else if (row.position <= 24) cls = 'r-play';
-                    else cls = 'r-elim';
-                    return (
-                      <tr className={cls} key={row.team_id}>
-                        <td className="sp">{row.position}</td>
-                        <td className="st">
-                          <span className="team-logo xs">
-                            {row.team?.logo_url
-                              ? <img src={row.team.logo_url} alt="" />
-                              : row.team?.short_name?.slice(0, 3)}
-                          </span>
-                          {row.team?.short_name || row.short_name}
-                        </td>
-                        <td className="spts">{row.points}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="sidebar-legend">
-              <span><span className="sq" /> 1-8</span>
-              <span><span className="sp" /> 9-24</span>
-              <span><span className="se" /> 25-36</span>
-            </div>
+            <StandingsTable
+              rows={standings.slice(0, 36)}
+              variant="sidebar"
+              nameMode="short"
+              legend="sidebar"
+              scrollClassName="sidebar-standings-scroll"
+            />
           </div>
         </aside>
       </section>

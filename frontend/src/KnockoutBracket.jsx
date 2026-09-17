@@ -1,3 +1,5 @@
+import Crest from './components/Crest';
+import { StateMessage } from './components/States';
 import ScoreInput from './ScoreInput';
 
 const ROUND_LABELS = { R16: 'Round of 16', QF: 'Quarter-finals', SF: 'Semi-finals', F: 'Final' };
@@ -34,9 +36,7 @@ function ScoreRow({ team, goals, onChange, disabled, isAdvancing, className }) {
     <div className={`ko-team-row ${isAdvancing ? 'ko-advancing' : ''} ${className || ''}`}>
       {team ? (
         <>
-          <span className="team-logo xs">
-            {team.logo_url ? <img src={team.logo_url} alt="" /> : team.short_name?.slice(0, 3)}
-          </span>
+          <Crest team={team} size="xs" />
           <span className="ko-name">{team.short_name}</span>
           <ScoreInput
             value={goals}
@@ -157,10 +157,10 @@ function KnockoutMatch({ match, onScoreChange, disabled, isFinal }) {
 export default function KnockoutBracket({ bracket, onScoreChange }) {
   if (!bracket || Object.keys(bracket).length === 0) {
     return (
-      <div className="state-message">
-        <strong>Knockout rounds not yet available</strong>
-        <span>Complete the playoff round to unlock the knockout bracket.</span>
-      </div>
+      <StateMessage
+        title="Knockout rounds not yet available"
+        text="Complete the playoff round to unlock the knockout bracket."
+      />
     );
   }
 

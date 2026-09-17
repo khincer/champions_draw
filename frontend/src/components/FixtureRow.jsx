@@ -1,0 +1,98 @@
+import Crest, { TeamBadge } from './Crest';
+
+/* Single fixture/match row (Design.md §7.5).
+   Replaces five hand-rolled rows: the league fixture line (`mini`), the draw
+   board row, the team-page fixture row (`team`) and the two prediction rows
+   (`row` with a `score-row` class). Competition, kickoff, both crests, the
+   score-or-time centre and the status text all live here; every number uses
+   tabular figures via the `.score-group` / `.fixture-mini-score` rules.
+
+   Status is never color-only: the status cell always carries text, and
+   `statusTone` only adds the existing live/waiting emphasis on top.
+
+   The kickoff reaches the row as `date`/`time` (`mini`) or `statusTitle`, and
+   the competition slot exists as `competition` (§7.5). No current adopter
+   passes it — the five replaced rows all sat under a parent card header that
+   already named the competition — so the slot stays opt-in and renders nothing
+   until a caller supplies it.
+
+   Shells are the ones the replaced rows already used, so no stylesheet rule
+   had to be retuned:
+   - `row`  → `.fixture-row` (+ `score-row`), [status] home centre away
+   - `mini` → `.fixture-mini`, date home/centre/away time
+   - `team` → `.team-fixture-row` (flex), [leading] home centre away [trailing] */
+function Side({ team, align, badge, layout, nameMode }) {
+  const full = team?.name || '';
+  const short = team?.short_name || full;
+  const label = nameMode === 'short' ? short : full;
+
+  if (badge) return <TeamBadge team={team} align={align} />;
+
+  if (layout === 'mini') {
+    return (
+      <span className={align === 'right' ? 'fixture-mini-away' : 'fixture-mini-home'}>
+        {align === 'right' ? null : <Crest team={team} size="xs" />}
+        {label}
+        {align === 'right' ? <Crest team={team} size="xs" /> : null}
+      </span>
+    );
+  }
+
+  return (
+    <div className={`team-badge score-team ${align === 'right' ? 'right' : ''}`.trim()}>
+      {align === 'right' ? <b>{label}</b> : <Crest team={team} size="sm" />}
+      {align === 'right' ? <Crest team={team} size="sm" /> : <b>{label}</b>}
+    </div>
+  );
+}
+
+export default function FixtureRow({
+  layout = 'row',
+  className = '',
+  competition,
+  leading,
+  trailing,
+  status,
+  statusTone,
+  statusTitle,
+  date,
+  time,
+  home,
+  away,
+  nameMode = 'short',
+  badge = false,
+  center,
+  scoreText,
+}) {
+  if (layout === 'mini') {
+    return (
+      <div className={`fixture-mini ${className}`.trim()}>
+        <div className="fixture-mini-date">{date}</div>
+        <div className="fixture-mini-teams">
+          <Side team={home} layout="mini" nameMode={nameMode} />
+          <span className="fixture-mini-score">{scoreText}</span>
+          <Side team={away} layout="mini" nameMode={nameMode} align="right" />
+        </div>
+        <div className="fixture-mini-time">{time}</div>
+      </div>
+    );
+  }
+
+  const statusCell = status || competition ? (
+    <div className={`fx-status ${statusTone || ''}`.trim()} title={statusTitle}>
+      {competition ? <span className="fx-competition">{competition}</span> : null}
+      {status}
+    </div>
+  ) : null;
+
+  return (
+    <div className={`${layout === 'team' ? 'team-fixture-row' : 'fixture-row'} ${className}`.trim()}>
+      {leading}
+      {statusCell}
+      <Side team={home} layout={layout} nameMode={nameMode} badge={badge} />
+      {center}
+      <Side team={away} layout={layout} nameMode={nameMode} badge={badge} align="right" />
+      {trailing}
+    </div>
+  );
+}

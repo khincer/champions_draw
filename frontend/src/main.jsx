@@ -27,6 +27,13 @@ import CareerApp, { hasSavedCareer } from './CareerApp';
 import PredictionApp from './PredictionApp';
 import MatchDetailView from './MatchDetailView';
 import RealDrawView from './RealDrawView';
+import Badge from './components/Badge';
+import Button from './components/Button';
+import Crest from './components/Crest';
+import FixtureRow from './components/FixtureRow';
+import SegmentControl from './components/SegmentControl';
+import StandingsTable from './components/StandingsTable';
+import { StateMessage } from './components/States';
 import { clearLocal, loadLocal } from './predictionStorage';
 import { formatAggregate, pairPlayoffTies } from './tieUtils';
 import { apiFetch } from './lib/api';
@@ -140,7 +147,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
       </header>
       <div className="hub-matchup">
         <div className="hub-team">
-          <TeamLogo team={match.home_team} size="md" />
+          <Crest team={match.home_team} size="md" />
           <p className="hub-team-name">{match.home_team.name}</p>
           {match.home_team.short_name && <p className="hub-team-short">{match.home_team.short_name}</p>}
         </div>
@@ -163,7 +170,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
           <p className="hub-score-caption">{status === 'finished' ? 'Result' : status === 'live' ? 'Live' : 'Kickoff'}</p>
         </div>
         <div className="hub-team">
-          <TeamLogo team={match.away_team} size="md" />
+          <Crest team={match.away_team} size="md" />
           <p className="hub-team-name">{match.away_team.name}</p>
           {match.away_team.short_name && <p className="hub-team-short">{match.away_team.short_name}</p>}
         </div>
@@ -271,23 +278,15 @@ function Homepage({ matches, liveScores, onOpenMatch, seasonId, detailReturnFocu
 function LeagueFixtureRow({ m }) {
   const done = m.status === 'FINISHED' && m.result;
   return (
-    <div className="fixture-mini">
-      <div className="fixture-mini-date">{shortDay(m.kickoff)}</div>
-      <div className="fixture-mini-teams">
-        <span className="fixture-mini-home">
-          {m.home_crest ? <img src={m.home_crest} alt="" className="fixture-mini-crest" /> : null}
-          {m.home_name}
-        </span>
-        <span className="fixture-mini-score">
-          {done ? `${m.result.home_goals}–${m.result.away_goals}` : 'vs'}
-        </span>
-        <span className="fixture-mini-away">
-          {m.away_name}
-          {m.away_crest ? <img src={m.away_crest} alt="" className="fixture-mini-crest" /> : null}
-        </span>
-      </div>
-      <div className="fixture-mini-time">{done ? 'FT' : shortTime(m.kickoff)}</div>
-    </div>
+    <FixtureRow
+      layout="mini"
+      date={shortDay(m.kickoff)}
+      time={done ? 'FT' : shortTime(m.kickoff)}
+      scoreText={done ? `${m.result.home_goals}–${m.result.away_goals}` : 'vs'}
+      home={{ name: m.home_name, short_name: m.home_name, logo_url: m.home_crest }}
+      away={{ name: m.away_name, short_name: m.away_name, logo_url: m.away_crest }}
+      nameMode="full"
+    />
   );
 }
 
@@ -348,7 +347,9 @@ function TeamPage({ team, league, standings, matches, leagues, onBack, onRefresh
         </button>
       </div>
       <div className="team-page-header">
-        {team.crest ? <img src={team.crest} alt="" className="team-page-crest" /> : null}
+        {team.crest ? (
+          <Crest team={{ name: team.name, logo_url: team.crest }} size="md" className="team-page-crest" />
+        ) : null}
         <h2 style={{ margin: 0 }}>{team.name}</h2>
         {league && <span className="league-badge">{league.name}</span>}
       </div>
@@ -358,48 +359,12 @@ function TeamPage({ team, league, standings, matches, leagues, onBack, onRefresh
             {isUcl ? 'Champions League table' : `League table — ${league ? league.name : ''}`}
           </h3>
           {standing ? (
-            <table className="standings-table">
-              <thead>
-                <tr>
-                  <th className="standings-pos">#</th>
-                  <th>Team</th>
-                  <th>P</th>
-                  <th>W</th>
-                  <th>D</th>
-                  <th>L</th>
-                  <th className="standings-pts">Pts</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(standings || []).map((row, i) => (
-                  <tr
-                    key={row.team?.id || i}
-                    className={norm(row.team_name || row.team?.name || row.name) === norm(team.name) ? 'team-row-highlight' : ''}
-                  >
-                    <td className="standings-pos">{row.position || i + 1}</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {row.logo_url ? (
-                          <img src={row.logo_url} alt="" style={{ width: 20, height: 20 }} />
-                        ) : row.team_crest ? (
-                          <img src={row.team_crest} alt="" style={{ width: 20, height: 20 }} />
-                        ) : row.team?.crest ? (
-                          <img src={row.team.crest} alt="" style={{ width: 20, height: 20 }} />
-                        ) : row.team?.logo_url ? (
-                          <img src={row.team.logo_url} alt="" style={{ width: 20, height: 20 }} />
-                        ) : null}
-                        {row.name || row.team?.name || row.team_name}
-                      </div>
-                    </td>
-                    <td>{row.playedGames ?? row.played}</td>
-                    <td>{row.won ?? row.wins}</td>
-                    <td>{row.draw ?? row.draws}</td>
-                    <td>{row.lost ?? row.losses}</td>
-                    <td className="standings-pts">{row.points}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <StandingsTable
+              rows={standings || []}
+              variant="standings"
+              nameMode="full"
+              highlight={(row) => norm(row.team_name || row.team?.name || row.name) === norm(team.name)}
+            />
           ) : (
             <p className="muted">No standing found for {team.name} in this league.</p>
           )}
@@ -502,53 +467,15 @@ function GroupStandingsTables({ rows, onOpenTeam }) {
       {groupOrder.map((group) => (
         <section key={group} className="group-standing-block">
           <h3 className="group-title">Group {group}</h3>
-          <table className="standings-table">
-            <thead>
-              <tr>
-                <th className="standings-pos">#</th>
-                <th>Team</th>
-                <th>P</th>
-                <th>W</th>
-                <th>D</th>
-                <th>L</th>
-                <th className="standings-pts">Pts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.filter((r) => r.group === group).map((row, i) => (
-                <tr key={row.team_id || row.team?.id || i}>
-                  <td className="standings-pos">{row.position || i + 1}</td>
-                  <td>
-                    <button
-                      className="team-link"
-                      onClick={() => onOpenTeam({
-                        name: row.name || row.team?.name || row.team_name,
-                        crest: row.logo_url || row.team_crest || row.team?.crest || row.team?.logo_url,
-                      })}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {row.logo_url ? (
-                          <img src={row.logo_url} alt="" style={{ width: 20, height: 20 }} />
-                        ) : row.team_crest ? (
-                          <img src={row.team_crest} alt="" style={{ width: 20, height: 20 }} />
-                        ) : row.team?.crest ? (
-                          <img src={row.team.crest} alt="" style={{ width: 20, height: 20 }} />
-                        ) : row.team?.logo_url ? (
-                          <img src={row.team.logo_url} alt="" style={{ width: 20, height: 20 }} />
-                        ) : null}
-                        <span>{row.name || row.team?.name || row.team_name}</span>
-                      </div>
-                    </button>
-                  </td>
-                  <td>{row.played ?? row.playedGames}</td>
-                  <td>{row.wins ?? row.won}</td>
-                  <td>{row.draws ?? row.draw}</td>
-                  <td>{row.losses ?? row.lost}</td>
-                  <td className="standings-pts">{row.points}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <StandingsTable
+            rows={rows.filter((r) => r.group === group)}
+            variant="standings"
+            nameMode="full"
+            onTeamClick={(row) => onOpenTeam({
+              name: row.name || row.team?.name || row.team_name,
+              crest: row.logo_url || row.team_crest || row.team?.crest || row.team?.logo_url,
+            })}
+          />
         </section>
       ))}
     </div>
@@ -568,7 +495,7 @@ function PlayoffTieCard({ tie }) {
             <span className="playoff-leg-label">Leg {i + 1}</span>
             <div className="playoff-side">
               <Home size={12} className="playoff-venue-icon" />
-              <TeamLogo team={m.home_team} size="sm" />
+              <Crest team={m.home_team} size="sm" />
               <span className="playoff-name">{m.home_team?.short_name || m.home_team?.name}</span>
             </div>
             <span className="score-sep">
@@ -576,7 +503,7 @@ function PlayoffTieCard({ tie }) {
             </span>
             <div className="playoff-side">
               <span className="playoff-name">{m.away_team?.short_name || m.away_team?.name}</span>
-              <TeamLogo team={m.away_team} size="sm" />
+              <Crest team={m.away_team} size="sm" />
               <Plane size={12} className="playoff-venue-icon" />
             </div>
             <span className="tie-kickoff">{shortTime(m.kickoff)}</span>
@@ -700,24 +627,16 @@ function TeamsBrowser({
           </button>
         </div>
         {selectedLeague.kind === 'season' && (
-          <div className="segment-control" role="group" aria-label="League phase">
-            <button
-              type="button"
-              className={leaguePhase === 'group' ? 'active' : ''}
-              aria-pressed={leaguePhase === 'group'}
-              onClick={() => setLeaguePhase('group')}
-            >
-              Group Stage
-            </button>
-            <button
-              type="button"
-              className={leaguePhase === 'playoffs' ? 'active' : ''}
-              aria-pressed={leaguePhase === 'playoffs'}
-              onClick={() => setLeaguePhase('playoffs')}
-            >
-              Playoffs
-            </button>
-          </div>
+          <SegmentControl
+            className="segment-control"
+            label="League phase"
+            value={leaguePhase}
+            onChange={setLeaguePhase}
+            items={[
+              { key: 'group', label: 'Group Stage' },
+              { key: 'playoffs', label: 'Playoffs' },
+            ]}
+          />
         )}
         {selectedLeague.kind === 'season' && leaguePhase === 'playoffs' ? (
           playoffTies.length ? (
@@ -736,51 +655,15 @@ function TeamsBrowser({
             ) : selectedLeague.kind === 'season' && leagueStandings.length ? (
               <GroupStandingsTables rows={leagueStandings} onOpenTeam={(team) => setViewTeam(team)} />
             ) : leagueStandings.length ? (
-              <table className="standings-table">
-                <thead>
-                  <tr>
-                    <th className="standings-pos">#</th>
-                    <th>Team</th>
-                    <th>P</th>
-                    <th>W</th>
-                    <th>D</th>
-                    <th>L</th>
-                    <th className="standings-pts">Pts</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leagueStandings.map((row, i) => (
-                    <tr key={row.team?.id || i}>
-                      <td className="standings-pos">{row.position || i + 1}</td>
-                      <td>
-                        <button
-                          className="team-link"
-                          onClick={() => setViewTeam({
-                            name: row.team?.name || row.team_name,
-                            crest: row.team_crest || row.team?.crest || row.team?.logo_url,
-                          })}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {row.team_crest ? (
-                              <img src={row.team_crest} alt="" style={{ width: 20, height: 20 }} />
-                            ) : row.team?.crest ? (
-                              <img src={row.team.crest} alt="" style={{ width: 20, height: 20 }} />
-                            ) : row.team?.logo_url ? (
-                              <img src={row.team.logo_url} alt="" style={{ width: 20, height: 20 }} />
-                            ) : null}
-                            <span>{row.team?.name || row.team_name}</span>
-                          </div>
-                        </button>
-                      </td>
-                      <td>{row.playedGames ?? row.played}</td>
-                      <td>{row.won ?? row.wins}</td>
-                      <td>{row.draw ?? row.draws}</td>
-                      <td>{row.lost ?? row.losses}</td>
-                      <td className="standings-pts">{row.points}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <StandingsTable
+                rows={leagueStandings}
+                variant="standings"
+                nameMode="full"
+                onTeamClick={(row) => setViewTeam({
+                  name: row.team?.name || row.team_name,
+                  crest: row.team_crest || row.team?.crest || row.team?.logo_url,
+                })}
+              />
             ) : <p className="muted">No standings available.</p>}
           </div>
 
@@ -1269,7 +1152,7 @@ function DrawAnimationStage({ phase, pots, matchups, revealedCount }) {
             <div className="animated-team-list">
               {(pots[pot] || []).map((team) => (
                 <span className="animated-team" key={team.id}>
-                  <TeamLogo team={team} size="sm" />
+                  <Crest team={team} size="sm" />
                   <strong>{team.short_name}</strong>
                 </span>
               ))}
@@ -1290,7 +1173,7 @@ function DrawAnimationStage({ phase, pots, matchups, revealedCount }) {
                 </div>
                 <div className="fixture-list">
                   {fixtures.slice(0, 5).map((fixture) => (
-                    <FixtureRow fixture={fixture} key={fixture.id} />
+                    <BoardFixtureRows fixture={fixture} key={fixture.id} />
                   ))}
                 </div>
               </article>
@@ -1350,21 +1233,12 @@ function SimulationPanel({
             <option value="interactive">Interactive (pick by pick)</option>
           </select>
         </label>
-        <button className="button primary" disabled={working || !selectedSeasonId} onClick={() => generateDraw()}>
+        <Button variant="primary" disabled={working || !selectedSeasonId} onClick={() => generateDraw()}>
           <Play size={16} />
           {working ? 'Running' : 'Run simulation'}
-        </button>
+        </Button>
       </div>
     </section>
-  );
-}
-
-function Metric({ label, value }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 
@@ -1379,20 +1253,20 @@ function MessageBar({ error, notice }) {
 
 function ViewTabs({ activeTab, setActiveTab }) {
   return (
-    <div className="view-tabs">
-      {[
-        ['simulate', 'Run simulation'],
-        ['matchdays', 'Fixtures'],
-        ['predict', 'Predict'],
-        ['pots', 'Pots'],
-        ['teams', 'Leagues'],
-        ['history', 'Saved runs'],
-      ].map(([key, label]) => (
-        <button key={key} className={activeTab === key ? 'active' : ''} onClick={() => setActiveTab(key)}>
-          {label}
-        </button>
-      ))}
-    </div>
+    <SegmentControl
+      className="view-tabs"
+      label="Workspace sections"
+      value={activeTab}
+      onChange={setActiveTab}
+      items={[
+        { key: 'simulate', label: 'Run simulation' },
+        { key: 'matchdays', label: 'Fixtures' },
+        { key: 'predict', label: 'Predict' },
+        { key: 'pots', label: 'Pots' },
+        { key: 'teams', label: 'Leagues' },
+        { key: 'history', label: 'Saved runs' },
+      ]}
+    />
   );
 }
 
@@ -1410,7 +1284,7 @@ function MatchdayBoard({ matchdays }) {
             </div>
             <div className="fixture-list">
               {fixtures.length ? (
-                fixtures.slice(0, 9).map((fixture) => <FixtureRow fixture={fixture} key={fixture.id} />)
+                fixtures.slice(0, 9).map((fixture) => <BoardFixtureRows fixture={fixture} key={fixture.id} />)
               ) : (
                 <span className="empty-row">Run a simulation to fill this matchday.</span>
               )}
@@ -1422,37 +1296,15 @@ function MatchdayBoard({ matchdays }) {
   );
 }
 
-function FixtureRow({ fixture }) {
+/* Draw-board fixture line: crest + short name + association code on each side. */
+function BoardFixtureRows({ fixture }) {
   return (
-    <div className="fixture-row">
-      <TeamBadge team={fixture.home_team} />
-      <span className="versus">vs</span>
-      <TeamBadge team={fixture.away_team} align="right" />
-    </div>
-  );
-}
-
-function TeamBadge({ team, align }) {
-  return (
-    <span className={`team-badge ${align === 'right' ? 'right' : ''}`}>
-      <TeamLogo team={team} size="sm" />
-      <b>{team.short_name}</b>
-      <span>{team.association.code}</span>
-    </span>
-  );
-}
-
-function TeamLogo({ team, size = 'md', className = '', noFallback = false }) {
-  const [failed, setFailed] = useState(false);
-  const showImage = team.logo_url && !failed;
-  return (
-    <span className={`team-logo ${size} ${className}`.trim()}>
-      {showImage ? (
-        <img src={team.logo_url} alt={`${team.name} badge`} loading="lazy" onError={() => setFailed(true)} />
-      ) : noFallback ? null : (
-        <span>{team.short_name.slice(0, 3)}</span>
-      )}
-    </span>
+    <FixtureRow
+      badge
+      home={fixture.home_team}
+      away={fixture.away_team}
+      center={<span className="versus">vs</span>}
+    />
   );
 }
 
@@ -1605,7 +1457,7 @@ function InteractiveDraft({ seasonId, state, setState, apiFetch, selectedTeamId,
                   onClick={() => handlePick(team)}
                 >
                   <span>{team.seeding_position}</span>
-                  <TeamLogo team={team} size="sm" />
+                  <Crest team={team} size="sm" />
                   <strong>{team.name}</strong>
                   <em>{team.association.code}</em>
                 </button>
@@ -1625,7 +1477,7 @@ function InteractiveDraft({ seasonId, state, setState, apiFetch, selectedTeamId,
               onClick={() => handlePick(team)}
               title="Click to reveal opponents"
             >
-              <TeamLogo team={team} size="sm" />
+              <Crest team={team} size="sm" />
               <b>{team.short_name}</b>
             </button>
           ))
@@ -1641,7 +1493,7 @@ function InteractiveDraft({ seasonId, state, setState, apiFetch, selectedTeamId,
         <div className="reveal-badges">
           {activeTeam && revealedOpponents.length ? (
             revealedOpponents.map((opponent, index) => (
-              <TeamLogo
+              <Crest
                 team={opponent}
                 size="md"
                 key={opponent.id}
@@ -1680,7 +1532,7 @@ function PotBoard({ pots, selectedTeamId, setSelectedTeamId, onTeamClick }) {
               }}
             >
               <span>{team.seeding_position}</span>
-              <TeamLogo team={team} size="sm" />
+              <Crest team={team} size="sm" />
               <strong>{team.name}</strong>
               <em>{team.association.code}</em>
             </button>
@@ -1709,16 +1561,16 @@ function TeamDetailPage({ teams, teamId, setTeamId, matchups, predictions = {}, 
       </button>
 
       <div className="team-detail-header">
-        <TeamLogo team={team} size="lg" />
+        <Crest team={team} size="lg" />
         <div>
           <h1>{team.name}</h1>
           <p className="team-detail-meta">
             {team.association.name} · Pot {team.pot} · Seed {team.seeding_position}
           </p>
           <p className="team-detail-coeff">UEFA Club Coefficient: {team.uefa_club_coefficient}</p>
-          {team.is_title_holder && <span className="badge badge-gold">Title Holder</span>}
+          {team.is_title_holder && <Badge tone="gold">Title Holder</Badge>}
           {team.qualified_via !== 'LEAGUE_POSITION' && (
-            <span className="badge badge-blue">{team.qualified_via.replace(/_/g, ' ').toLowerCase()}</span>
+            <Badge tone="blue">{team.qualified_via.replace(/_/g, ' ').toLowerCase()}</Badge>
           )}
         </div>
       </div>
@@ -1743,18 +1595,25 @@ function TeamDetailPage({ teams, teamId, setTeamId, matchups, predictions = {}, 
             const pred = predictions[String(m.id)];
             const hasScore = pred && (pred.home_goals != null || pred.away_goals != null);
             return (
-              <div className="team-fixture-row" key={m.id}>
-                <span className="matchday-chip">MD{m.matchday}</span>
-                <TeamBadge team={isHome ? m.home_team : m.away_team} />
-                <span className="versus">vs</span>
-                <TeamBadge team={opponent} align="right" />
-                {hasScore && (
-                  <span className="team-fixture-score">
-                    {pred.home_goals}&ndash;{pred.away_goals}
-                  </span>
-                )}
-                <span className={`venue-chip ${isHome ? 'home' : 'away'}`}>{isHome ? 'H' : 'A'}</span>
-              </div>
+              <FixtureRow
+                key={m.id}
+                layout="team"
+                badge
+                leading={<span className="matchday-chip">MD{m.matchday}</span>}
+                home={isHome ? m.home_team : m.away_team}
+                away={opponent}
+                center={<span className="versus">vs</span>}
+                trailing={
+                  <>
+                    {hasScore && (
+                      <span className="team-fixture-score">
+                        {pred.home_goals}&ndash;{pred.away_goals}
+                      </span>
+                    )}
+                    <span className={`venue-chip ${isHome ? 'home' : 'away'}`}>{isHome ? 'H' : 'A'}</span>
+                  </>
+                }
+              />
             );
           })}
         </div>
@@ -1813,7 +1672,7 @@ function TeamInspector({ team, teams, selectedTeamId, setSelectedTeamId, matchup
         </select>
       </label>
       <div className="inspector-head">
-        <TeamLogo team={team} size="lg" />
+        <Crest team={team} size="lg" />
         <span>{team.association.name}</span>
         <h2>{team.name}</h2>
         <p>Pot {team.pot} - Seed {team.seeding_position} - Coeff. {team.uefa_club_coefficient}</p>
@@ -1829,7 +1688,7 @@ function TeamInspector({ team, teams, selectedTeamId, setSelectedTeamId, matchup
               return (
                 <div className="opponent-row" key={matchup.id}>
                   <span>MD{matchup.matchday}</span>
-                  <TeamLogo team={opponent} size="sm" />
+                  <Crest team={opponent} size="sm" />
                   <strong>{opponent.name}</strong>
                   <em className="home-away">
                     {isHome ? <Home size={12} /> : <Plane size={12} />}
@@ -1847,16 +1706,6 @@ function TeamInspector({ team, teams, selectedTeamId, setSelectedTeamId, matchup
         )}
       </div>
     </aside>
-  );
-}
-
-function StateMessage({ icon: Icon, title, text }) {
-  return (
-    <div className="state-message">
-      <Icon size={22} />
-      <strong>{title}</strong>
-      <span>{text}</span>
-    </div>
   );
 }
 

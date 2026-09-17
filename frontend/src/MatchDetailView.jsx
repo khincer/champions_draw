@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import Crest from './components/Crest';
 import { apiFetch } from './lib/api';
 
 const STATUS_LABEL = { FINISHED: 'Final', IN_PLAY: 'Live', SCHEDULED: 'Kickoff' };
-
-function Crest({ team, className }) {
-  const [failed, setFailed] = useState(false);
-  if (!team.logo_url || failed) return null;
-  return <img className={className} src={team.logo_url} alt="" onError={() => setFailed(true)} />;
-}
 
 export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
   const [data, setData] = useState(null);

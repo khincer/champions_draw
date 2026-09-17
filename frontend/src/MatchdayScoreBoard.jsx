@@ -1,5 +1,7 @@
-import { groupBy } from './lib/groupBy';
+import FixtureRow from './components/FixtureRow';
+import Button from './components/Button';
 import ScoreInput from './ScoreInput';
+import { groupBy } from './lib/groupBy';
 import { predictMatch } from './matchOdds';
 
 export default function MatchdayScoreBoard({
@@ -30,13 +32,12 @@ export default function MatchdayScoreBoard({
   return (
     <div className="single-matchday-view">
       <div className="matchday-nav">
-        <button
-          className="button secondary"
+        <Button
           disabled={currentMatchday <= 1}
           onClick={() => onMatchdayChange(currentMatchday - 1)}
         >
           ← Previous
-        </button>
+        </Button>
 
         <div className="matchday-dots">
           {Array.from({ length: 8 }, (_, i) => {
@@ -62,13 +63,12 @@ export default function MatchdayScoreBoard({
           })}
         </div>
 
-        <button
-          className="button secondary"
+        <Button
           disabled={currentMatchday >= 8}
           onClick={() => onMatchdayChange(currentMatchday + 1)}
         >
           Next →
-        </button>
+        </Button>
       </div>
 
       <div className="matchday-card-wrap">
@@ -79,16 +79,16 @@ export default function MatchdayScoreBoard({
               <span className="muted">{scored}/{totalFixtures} scored</span>
             </div>
             <div className="matchday-head-actions">
-              <button className="button secondary" onClick={() => onPredict(currentMatchday)}>
+              <Button onClick={() => onPredict(currentMatchday)}>
                 Predict
-              </button>
-              <button className="button secondary" onClick={() => onRandomize(currentMatchday)}>
+              </Button>
+              <Button onClick={() => onRandomize(currentMatchday)}>
                 Randomize
-              </button>
+              </Button>
               {isComplete && (
-                <button className="button primary" disabled={isSaving} onClick={onSave}>
+                <Button variant="primary" disabled={isSaving} onClick={onSave}>
                   {isSaving ? 'Saving...' : 'Save Matchday'}
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -104,37 +104,27 @@ export default function MatchdayScoreBoard({
                 const odds = predictMatch(fixture.home_team, fixture.away_team);
                 return (
                   <div className="fixture-wrap" key={fixture.id}>
-                    <div className="fixture-row score-row">
-                      <div className="team-badge score-team">
-                        <span className="team-logo sm">
-                          {fixture.home_team.logo_url
-                            ? <img src={fixture.home_team.logo_url} alt="" />
-                            : fixture.home_team.short_name?.slice(0, 3)}
-                        </span>
-                        <b>{fixture.home_team.short_name}</b>
-                      </div>
-                      <div className="score-group">
-                        <ScoreInput
-                          value={pred.home_goals}
-                          onChange={(v) => onScoreChange(fixture.id, 'home_goals', v, fixture)}
-                          animateOnChange
-                        />
-                        <span className="score-sep">–</span>
-                        <ScoreInput
-                          value={pred.away_goals}
-                          onChange={(v) => onScoreChange(fixture.id, 'away_goals', v, fixture)}
-                          animateOnChange
-                        />
-                      </div>
-                      <div className="team-badge right score-team">
-                        <b>{fixture.away_team.short_name}</b>
-                        <span className="team-logo sm">
-                          {fixture.away_team.logo_url
-                            ? <img src={fixture.away_team.logo_url} alt="" />
-                            : fixture.away_team.short_name?.slice(0, 3)}
-                        </span>
-                      </div>
-                    </div>
+                    <FixtureRow
+                      className="score-row"
+                      home={fixture.home_team}
+                      away={fixture.away_team}
+                      nameMode="short"
+                      center={
+                        <div className="score-group">
+                          <ScoreInput
+                            value={pred.home_goals}
+                            onChange={(v) => onScoreChange(fixture.id, 'home_goals', v, fixture)}
+                            animateOnChange
+                          />
+                          <span className="score-sep">–</span>
+                          <ScoreInput
+                            value={pred.away_goals}
+                            onChange={(v) => onScoreChange(fixture.id, 'away_goals', v, fixture)}
+                            animateOnChange
+                          />
+                        </div>
+                      }
+                    />
                     <div className="match-odds">
                       <span><b>1</b> {Math.round(odds.pHome * 100)}%</span>
                       <span><b>X</b> {Math.round(odds.pDraw * 100)}%</span>
