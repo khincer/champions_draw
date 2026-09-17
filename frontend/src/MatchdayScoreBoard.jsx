@@ -1,4 +1,4 @@
-import { groupBy } from './main.jsx';
+import { groupBy } from './lib/groupBy';
 import ScoreInput from './ScoreInput';
 import { predictMatch } from './matchOdds';
 

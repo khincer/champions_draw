@@ -11,10 +11,12 @@ import {
   Home,
   LayoutGrid,
   ListOrdered,
+  Moon,
   Plane,
   Play,
   RefreshCw,
   Swords,
+  Sun,
   Trophy,
   UserRound,
   Users,
@@ -27,80 +29,35 @@ import MatchDetailView from './MatchDetailView';
 import RealDrawView from './RealDrawView';
 import { clearLocal, loadLocal } from './predictionStorage';
 import { formatAggregate, pairPlayoffTies } from './tieUtils';
+import { apiFetch } from './lib/api';
+import { inHomeRange, shortDay, shortTime } from './lib/format';
+import { groupBy } from './lib/groupBy';
+import { getTheme, setTheme } from './lib/theme';
+import { normTeamName, toMiniRow } from './lib/teams';
 
-const API_ROOT = '/api';
 const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
 
-function getCookie(name) {
-  const cookies = document.cookie ? document.cookie.split('; ') : [];
-  for (const cookie of cookies) {
-    const [key, ...parts] = cookie.split('=');
-    if (key === name) return decodeURIComponent(parts.join('='));
-  }
-  return '';
-}
-
-async function apiFetch(path, options = {}) {
-  const headers = {
-    Accept: 'application/json',
-    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-    ...(options.headers || {}),
-  };
-  const csrfToken = getCookie('csrftoken');
-  if (csrfToken && options.method && options.method !== 'GET') {
-    headers['X-CSRFToken'] = csrfToken;
-  }
-
-  const response = await fetch(`${API_ROOT}${path}`, {
-    credentials: 'same-origin',
-    ...options,
-    headers,
-  });
-  const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    throw new Error(payload?.detail || `Request failed with ${response.status}`);
-  }
-  return payload;
-}
-
-export function groupBy(items, key) {
-  return items.reduce((groups, item) => {
-    const value = item[key] ?? 'Unassigned';
-    groups[value] = groups[value] || [];
-    groups[value].push(item);
-    return groups;
-  }, {});
-}
-
-function shortTime(value) {
-  if (!value) return 'TBD';
-  return new Intl.DateTimeFormat(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
-
-function shortDay(value) {
-  if (!value) return '';
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(value));
-}
-
-// Kickoff falls within [yesterday 00:00, tomorrow 00:00) in local time.
-function inHomeRange(matchup) {
-  const kickoff = matchup.kickoff ? new Date(matchup.kickoff) : null;
-  if (!kickoff) return false;
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  return kickoff >= start && kickoff < end;
-}
-
 /* ─── Site Nav Sidebar ─── */
+
+// Theme switch: applies immediately and persists over `champions_draw_theme`.
+// Local state only — toggling never touches `view`/`activeTab`, so no view
+// remounts and no in-flight fetch is restarted.
+function ThemeToggle() {
+  const [theme, setThemeState] = useState(getTheme);
+  const isDark = theme === 'dark';
+
+  return (
+    <button
+      type="button"
+      className="site-nav-link"
+      aria-pressed={isDark}
+      onClick={() => setThemeState(setTheme(isDark ? 'light' : 'dark'))}
+    >
+      {isDark ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
+      Dark theme
+    </button>
+  );
+}
 
 function SiteNav({ view, setView, setActiveTab }) {
   return (
@@ -150,6 +107,9 @@ function SiteNav({ view, setView, setActiveTab }) {
           <LayoutGrid size={18} />
           Leagues
         </button>
+      </div>
+      <div className="site-nav-footer">
+        <ThemeToggle />
       </div>
     </nav>
   );
@@ -307,14 +267,6 @@ function Homepage({ matches, liveScores, onOpenMatch, seasonId, detailReturnFocu
 }
 
 /* ─── Teams Browser ─── */
-
-function normTeamName(s) {
-  return (s || '')
-    .toLowerCase()
-    .replace(/\b(fc|cf|afc|sc|sv|club)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 function LeagueFixtureRow({ m }) {
   const done = m.status === 'FINISHED' && m.result;
@@ -531,21 +483,6 @@ function TeamPage({ team, league, standings, matches, leagues, onBack, onRefresh
       </div>
     </div>
   );
-}
-
-function toMiniRow(m) {
-  const hasResult = m.home_goals != null && m.away_goals != null;
-  return {
-    id: m.id,
-    home_name: m.home_team?.name || '',
-    home_crest: m.home_team?.logo_url || null,
-    away_name: m.away_team?.name || '',
-    away_crest: m.away_team?.logo_url || null,
-    kickoff: m.kickoff,
-    status: m.status,
-    matchday: m.matchday,
-    result: hasResult ? { home_goals: m.home_goals, away_goals: m.away_goals } : null,
-  };
 }
 
 /* One table per group, used for season-kind league standings.  Handles both

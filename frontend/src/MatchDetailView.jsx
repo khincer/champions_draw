@@ -1,21 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-
-const API_ROOT = '/api';
-
-// GET-only twin of main.jsx's apiFetch, which is not exported (and importing
-// main.jsx would execute the whole app). Keeps this component self-contained.
-async function apiFetch(path) {
-  const response = await fetch(`${API_ROOT}${path}`, {
-    credentials: 'same-origin',
-    headers: { Accept: 'application/json' },
-  });
-  const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    throw new Error(payload?.detail || `Request failed with ${response.status}`);
-  }
-  return payload;
-}
+import { apiFetch } from './lib/api';
 
 const STATUS_LABEL = { FINISHED: 'Final', IN_PLAY: 'Live', SCHEDULED: 'Kickoff' };
 

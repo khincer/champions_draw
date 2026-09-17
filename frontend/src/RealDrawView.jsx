@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import ScoreInput from './ScoreInput';
-import { groupBy } from './main.jsx';
+import { groupBy } from './lib/groupBy';
 import {
   loadRealLocal,
   saveRealLocal,
