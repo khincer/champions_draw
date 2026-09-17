@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import Button from './components/Button';
-import FixtureRow from './components/FixtureRow';
-import StandingsTable from './components/StandingsTable';
-import ScoreInput from './ScoreInput';
-import { groupBy } from './lib/groupBy';
+import Button from '../components/Button';
+import FixtureRow from '../components/FixtureRow';
+import StandingsTable from '../components/StandingsTable';
+import ScoreInput from '../ScoreInput';
+import { groupBy } from '../lib/groupBy';
 import {
   loadRealLocal,
   saveRealLocal,
   setPlayerName as persistPlayerName,
-} from './predictionStorage';
-import { computeStandings } from './standingsCalc';
-import { buildPredictionsImage } from './sharePredictionsImage';
+} from '../predictionStorage';
+import { computeStandings } from '../standingsCalc';
+import { buildPredictionsImage } from '../sharePredictionsImage';
 
 const SYNC_DELAY_MS = 1200;
 const LIVE_POLL_MS = 30000;

@@ -204,7 +204,8 @@ select:focus,
   margin-bottom: 16px;
 }
 
-.command-band h1 {
+.command-band h1,
+.command-band-title {
   margin: 0;
   font-size: 26px;
   letter-spacing: 0;
@@ -1691,7 +1692,7 @@ select:focus,
 .se { background: #e5e5e5; }
 
 /* Site Nav Sidebar — dark navy rail on light content (Design.md §3.2, §5.1) */
-.site-nav { position: fixed; top: 0; left: 0; bottom: 0; width: 220px; background: var(--sidebar); border-right: none; display: flex; flex-direction: column; z-index: 100; padding: 20px 0; }
+.site-nav { position: fixed; top: 0; left: 0; bottom: 0; width: 240px; background: var(--sidebar); border-right: none; display: flex; flex-direction: column; z-index: 100; padding: 20px 0; }
 .site-nav-logo { padding: 0 20px 20px; border-bottom: 1px solid var(--sidebar-hover); }
 .site-nav-logo img { height: 28px; }
 .site-nav-links { flex: 1; padding: 12px 0; overflow-y: auto; }
@@ -1702,12 +1703,232 @@ select:focus,
 .site-nav-link.active::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; background: var(--green-primary); border-radius: 0 3px 3px 0; }
 .site-nav-footer { border-top: 1px solid var(--sidebar-hover); padding: 8px 0 0; }
 
-/* Main layout */
+/* Main layout — the sidebar offset must match `.site-nav`'s 240px rail. */
 .app-layout { display: flex; min-height: 100vh; }
-.app-main { flex: 1; margin-left: 220px; min-width: 0; }
+.app-main { flex: 1; margin-left: 240px; min-width: 0; }
+
+/* Skip link: the first focusable element in the shell, parked above the
+   viewport until it takes focus. */
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-90);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--green-primary);
+  color: var(--status-ink);
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
+}
+.skip-link:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+/* The shell's leading h1 for the views that carry no leading heading of
+   their own (home, teams, workspace). */
+.view-heading {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-h1);
+  font-weight: 700;
+}
+
+/* Mobile navigation (Design.md §5.2): a bottom bar plus a `<dialog>` drawer.
+   The bar is switched on by the one shell threshold below; the drawer is a
+   bottom sheet whose backdrop, Escape handling and focus trap come from
+   `showModal()`. */
+.mobile-nav {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: var(--z-70);
+  display: none;
+  background: var(--sidebar);
+  border-top: 1px solid var(--sidebar-hover);
+}
+
+.mobile-nav-bar {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mobile-nav-item {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--space-12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1);
+  border: 0;
+  background: none;
+  color: var(--sidebar-muted);
+  font-size: var(--font-label);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+}
+
+.mobile-nav-item.active {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+}
+
+/* Active is never colour-only: an edge bar plus an underlined label
+   (AS:keyboard-nav-not-color-only). */
+.mobile-nav-item.active::before {
+  content: '';
+  position: absolute;
+  background: var(--green-primary);
+}
+
+.mobile-nav-bar .mobile-nav-item.active::before {
+  top: 0;
+  left: var(--space-3);
+  right: var(--space-3);
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+}
+
+.mobile-nav-item.active .mobile-nav-label {
+  font-weight: var(--fw-semibold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.mobile-nav-menu {
+  flex: 0 0 auto;
+  min-width: var(--space-12);
+  border-left: 1px solid var(--sidebar-hover);
+}
+
+.mobile-nav-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mobile-nav-drawer {
+  position: fixed;
+  inset: auto 0 0 0;
+  width: 100%;
+  max-height: calc(100vh - var(--space-16));
+  margin: 0;
+  padding: var(--space-4);
+  border: 0;
+  border-top-left-radius: var(--radius-xl);
+  border-top-right-radius: var(--radius-xl);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--sh-3);
+  overflow-y: auto;
+}
+
+.mobile-nav-drawer::backdrop {
+  background: color-mix(in srgb, var(--sidebar) 60%, transparent);
+}
+
+/* The sheet slides in on open only; the reduced-motion block below cancels it. */
+.mobile-nav-drawer[open] {
+  animation: mobile-nav-in 0.18s ease-out;
+}
+
+@keyframes mobile-nav-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+.mobile-nav-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.mobile-nav-drawer-title {
+  margin: 0;
+  font-size: var(--font-h3);
+  font-weight: var(--fw-bold);
+}
+
+.mobile-nav-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-12);
+  min-height: var(--space-12);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.mobile-nav-drawer-views {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.mobile-nav-drawer-section {
+  margin-top: var(--space-5);
+}
+
+.mobile-nav-drawer .mobile-nav-item {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-size: var(--font-body);
+}
+
+.mobile-nav-drawer .mobile-nav-item.active {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.mobile-nav-drawer .mobile-nav-item.active::before {
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+}
+
+/* The reused segment control wraps to two columns here instead of scrolling. */
+.mobile-nav-drawer .view-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  margin-bottom: 0;
+  overflow: visible;
+}
+
+.mobile-nav-drawer .view-tabs button {
+  min-height: var(--space-12);
+}
+
+/* Home composition: greeting + metric cards + quick actions + live hub.
+   `.homepage` owns the page padding; `.homepage-matches` keeps only its grid. */
+.homepage { display: grid; gap: 26px; padding: 24px; max-width: 1100px; }
+.home-intro { display: grid; gap: var(--space-1); }
+.home-greeting { font-size: var(--font-h2); font-weight: var(--fw-bold); color: var(--ink); }
+.home-intro-sub { color: var(--muted); font-size: var(--font-small); }
+.home-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-4); }
+.home-quick-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 
 /* Homepage matches */
-.homepage-matches { display: grid; gap: 26px; padding: 24px; max-width: 1100px; }
+.homepage-matches { display: grid; gap: 26px; }
 .homepage-day-section { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .homepage-day-section .match-section-title { grid-column: 1 / -1; margin-bottom: 0; }
 .match-section-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
@@ -2934,6 +3155,15 @@ select:focus-visible {
     margin-left: 0;
   }
 
+  /* Mobile mode: the bar appears and the main column clears its height. */
+  .mobile-nav {
+    display: flex;
+  }
+
+  .app-main {
+    padding-bottom: var(--space-16);
+  }
+
   .career-intro,
   .identity-layout,
   .career-event-panel {
@@ -3106,7 +3336,7 @@ select:focus-visible {
   border-radius: var(--radius);
 }
 
-.team-detail-header h1 {
+.team-detail-header h2 {
   margin: 0 0 4px;
   font-size: 22px;
 }
@@ -3721,5 +3951,9 @@ select:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .mobile-nav-drawer[open] {
+    animation: none;
   }
 }

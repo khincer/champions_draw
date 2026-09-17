@@ -15,6 +15,15 @@ export function shortDay(value) {
   }).format(new Date(value));
 }
 
+export function shortDate(value) {
+  if (!value) return '';
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(value));
+}
+
 // Kickoff falls within [yesterday 00:00, tomorrow 00:00) in local time.
 export function inHomeRange(matchup) {
   const kickoff = matchup.kickoff ? new Date(matchup.kickoff) : null;

@@ -237,7 +237,7 @@ export default function CareerApp({
 
 function CareerIntro({ onStart }) {
   return (
-    <main className="career-intro">
+    <div className="career-intro">
       <div className="career-intro-copy">
         <span className="career-kicker">A 24-year football story</span>
         <h1>Build the career they will remember.</h1>
@@ -261,7 +261,7 @@ function CareerIntro({ onStart }) {
           <span><b>1</b> legacy</span>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -291,7 +291,7 @@ function IdentityBuilder({ defaultName, onBack, onConfirm }) {
     identity.position;
 
   return (
-    <main className="identity-builder">
+    <div className="identity-builder">
       <div className="identity-heading">
         <button className="career-text-button" onClick={onBack}>
           <ArrowLeft size={17} />
@@ -422,14 +422,14 @@ function IdentityBuilder({ defaultName, onBack, onConfirm }) {
           <ArrowRight size={19} />
         </button>
       </div>
-    </main>
+    </div>
   );
 }
 
 function CareerDashboard({ career, clubById, onChoose, onSummary, onPlayAgain }) {
   const currentClub = clubById.get(career.currentClubId);
   return (
-    <main className="career-dashboard">
+    <div className="career-dashboard">
       <PlayerCard career={career} club={currentClub} />
 
       {career.lastOutcome ? (
@@ -446,7 +446,7 @@ function CareerDashboard({ career, clubById, onChoose, onSummary, onPlayAgain })
       )}
 
       <CareerTimeline career={career} clubById={clubById} />
-    </main>
+    </div>
   );
 }
 
@@ -619,7 +619,7 @@ function CareerSummary({ career, catalog, onBack, onPlayAgain }) {
   const summary = useMemo(() => summarizeCareer(career, catalog), [career, catalog]);
   const countryName = countryNames.of(summary.identity.nationality);
   return (
-    <main className="career-summary">
+    <div className="career-summary">
       <button className="career-text-button" onClick={onBack}>
         <ArrowLeft size={17} />
         Back to final card
@@ -697,7 +697,7 @@ function CareerSummary({ career, catalog, onBack, onPlayAgain }) {
           Play again
         </button>
       </div>
-    </main>
+    </div>
   );
 }
 

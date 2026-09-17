@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import Crest from './components/Crest';
-import { apiFetch } from './lib/api';
+import Crest from '../components/Crest';
+import { apiFetch } from '../lib/api';
 
 const STATUS_LABEL = { FINISHED: 'Final', IN_PLAY: 'Live', SCHEDULED: 'Kickoff' };
 
