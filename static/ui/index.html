@@ -4,8 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Champions Draw</title>
-    <script type="module" crossorigin src="/static/ui/assets/index-61b_Nkd4.js"></script>
-    <link rel="stylesheet" crossorigin href="/static/ui/assets/index-BMNk2ksa.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Applies the persisted theme before first paint so no wrong-theme flash
+      // occurs. Light is the default. Mirrors frontend/src/lib/theme.js.
+      (function () {
+        var theme = 'light';
+        try {
+          if (window.localStorage.getItem('champions_draw_theme') === 'dark') {
+            theme = 'dark';
+          }
+        } catch (error) {
+          // Storage unavailable — keep the light default.
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+    <script type="module" crossorigin src="/static/ui/assets/index-BI2bDNLO.js"></script>
+    <link rel="stylesheet" crossorigin href="/static/ui/assets/index-BupfV9eJ.css">
   </head>
   <body>
     <div id="app"></div>
