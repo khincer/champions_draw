@@ -1512,7 +1512,7 @@ select:focus,
 }
 
 .league-table td {
-  padding: 8px 6px;
+  padding: var(--space-2) var(--space-2);
   text-align: center;
 }
 
@@ -2062,7 +2062,7 @@ select:focus,
 .standings-layout--league { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
 .standings-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .standings-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--line-strong); font-weight: 700; font-size: 11px; text-transform: uppercase; color: var(--muted); }
-.standings-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.standings-table td { padding: var(--space-2) var(--space-2); border-bottom: 1px solid var(--line); }
 .standings-table tr:hover { background: var(--surface-soft); }
 
 /* Strong numerical typography (Design.md §4 "Numerical data should use tabular
@@ -3291,7 +3291,7 @@ select:focus-visible {
   align-items: center;
   gap: var(--space-1);
   margin-top: 8px;
-  padding: 3px 10px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 700;

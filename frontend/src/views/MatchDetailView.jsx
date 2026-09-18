@@ -76,6 +76,28 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
     ? `Match details: ${header.home_team.name} versus ${header.away_team.name}`
     : 'Match details';
 
+  /* Native `showModal()` seals the page behind the overlay, but with a single
+     focusable control (the Back button) Chromium lets Tab fall out to <body>
+     and back. Wrap the ring so focus never leaves the dialog while it is open
+     (A11Y:dialog-focus-return). */
+  function trapTab(event) {
+    if (event.key !== 'Tab') return;
+    const node = dialogRef.current;
+    if (!node) return;
+    const focusables = [...node.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+      .filter((el) => !el.disabled);
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   return (
     <dialog
       ref={dialogRef}
@@ -86,6 +108,7 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
         event.preventDefault();
         onBack?.();
       }}
+      onKeyDown={trapTab}
     >
       <button
         ref={backRef}
