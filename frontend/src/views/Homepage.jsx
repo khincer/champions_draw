@@ -185,7 +185,7 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
 
       <div className="homepage-matches">
         {matchesStatus === 'loading' || matchesStatus === 'idle' ? (
-          <Skeleton rows={3} label="Loading matches" variant="fixture" />
+          <Skeleton rows={1} label="Loading matches" variant="card" />
         ) : matchesStatus === 'error' ? (
           <ErrorState
             title="Today's matches could not load"

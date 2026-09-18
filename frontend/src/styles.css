@@ -3838,6 +3838,13 @@ dialog.match-detail-view {
   height: var(--space-10);
 }
 
+/* `.home-game-card` settles at ~326px against the fixture set. No single space
+   token reaches it, so this variant composes 5 x --space-16 (320px): the
+   homepage reserves its card row instead of three flat fixture rows. */
+.skeleton--card .skeleton-row {
+  height: calc(var(--space-16) * 5);
+}
+
 .state-action {
   margin-top: var(--space-2);
 }
