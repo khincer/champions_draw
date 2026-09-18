@@ -56,6 +56,7 @@ export default function MatchdayScoreBoard({
                 className={`md-dot ${currentMatchday === day ? 'md-active' : ''} ${isDayComplete ? 'md-done' : ''}`}
                 onClick={() => onMatchdayChange(day)}
                 title={`Matchday ${day} (${dayScored}/${dayFixtures.length})`}
+                aria-label={`Matchday ${day}, ${dayScored} of ${dayFixtures.length} scored`}
               >
                 {day}
               </button>
@@ -115,12 +116,14 @@ export default function MatchdayScoreBoard({
                             value={pred.home_goals}
                             onChange={(v) => onScoreChange(fixture.id, 'home_goals', v, fixture)}
                             animateOnChange
+                            label={`Home goals, ${fixture.home_team.name} versus ${fixture.away_team.name}, Matchday ${md}`}
                           />
                           <span className="score-sep">–</span>
                           <ScoreInput
                             value={pred.away_goals}
                             onChange={(v) => onScoreChange(fixture.id, 'away_goals', v, fixture)}
                             animateOnChange
+                            label={`Away goals, ${fixture.home_team.name} versus ${fixture.away_team.name}, Matchday ${md}`}
                           />
                         </div>
                       }

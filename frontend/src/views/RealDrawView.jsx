@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import Button from '../components/Button';
 import FixtureRow from '../components/FixtureRow';
 import StandingsTable from '../components/StandingsTable';
+import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import ScoreInput from '../ScoreInput';
 import { groupBy } from '../lib/groupBy';
 import {
@@ -56,21 +57,36 @@ export default function RealDrawView({
   onOpenMatch,
 }) {
   const [data, setData] = useState(null);
+  const [fixturesStatus, setFixturesStatus] = useState('idle');
   const [error, setError] = useState('');
   const [currentMd, setCurrentMd] = useState(1);
   const [preds, setPreds] = useState(() => loadRealLocal(seasonId, playerName));
   const [live, setLive] = useState({});
+  const [syncStatus, setSyncStatus] = useState('idle');
+  const [syncError, setSyncError] = useState('');
   const predsRef = useRef(preds);
   const syncTimer = useRef(null);
+
+  /* Own three states and its own retry, which re-issues only this request
+     (US:no-silent-failure — the fixtures no longer collapse to a static label). */
+  const loadFixtures = useCallback(async () => {
+    if (!seasonId) return;
+    setFixturesStatus('loading');
+    setError('');
+    try {
+      setData(await apiFetch(`/ui/seasons/${seasonId}/real-fixtures/`));
+      setFixturesStatus('success');
+    } catch (err) {
+      setError(err.message);
+      setFixturesStatus('error');
+    }
+  }, [seasonId]);
 
   useEffect(() => {
     if (!seasonId) return;
     setData(null);
-    setError('');
     setCurrentMd(1);
-    apiFetch(`/ui/seasons/${seasonId}/real-fixtures/`)
-      .then(setData)
-      .catch((err) => setError(err.message));
+    loadFixtures();
   }, [seasonId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -109,12 +125,16 @@ export default function RealDrawView({
       });
   }, [seasonId, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function scheduleSync(predictions) {
+  /* One PUT, three states (task 4.1). A 400 is the by-design "this batch closed"
+     rejection — inputs are already disabled, so there is nothing to retry; every
+     other failure is named and retried by re-issuing only this PUT. */
+  async function syncNow(predictions) {
     const name = (playerName || '').trim();
     if (!seasonId || !name) return;
-    clearTimeout(syncTimer.current);
-    syncTimer.current = setTimeout(() => {
-      apiFetch(`/ui/seasons/${seasonId}/real-predictions/`, {
+    setSyncStatus('saving');
+    setSyncError('');
+    try {
+      await apiFetch(`/ui/seasons/${seasonId}/real-predictions/`, {
         method: 'PUT',
         body: JSON.stringify({
           player_name: name,
@@ -124,12 +144,23 @@ export default function RealDrawView({
             away_goals: v.away_goals ?? null,
           })),
         }),
-      }).catch((err) => {
-        // Closed batches (400) are expected once a matchday kicks off; inputs
-        // are already disabled on the client, so just don't retry.
-        console.log('Real prediction sync skipped:', err.message);
       });
-    }, SYNC_DELAY_MS);
+      setSyncStatus('success');
+    } catch (err) {
+      if (err.status === 400) {
+        setSyncStatus('success'); // closed batch: expected, nothing to retry
+        return;
+      }
+      setSyncError(err.message);
+      setSyncStatus('error');
+    }
+  }
+
+  function scheduleSync(predictions) {
+    const name = (playerName || '').trim();
+    if (!seasonId || !name) return;
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => { syncNow(predictions); }, SYNC_DELAY_MS);
   }
 
   function handleChange(matchupId, field, value) {
@@ -251,11 +282,25 @@ export default function RealDrawView({
           </label>
         </div>
       </div>
-      {error ? (
-        <p className="empty-row">Real fixtures unavailable</p>
+      {fixturesStatus === 'error' ? (
+        <ErrorState
+          title="Real fixtures could not load"
+          detail={error}
+          onRetry={loadFixtures}
+          retryLabel="Retry real fixtures"
+        />
       ) : !data ? (
-        <p className="empty-row">Loading real fixtures...</p>
+        <Skeleton rows={6} variant="fixture" label="Loading real fixtures" />
       ) : (
+        <>
+          {syncError ? (
+            <ErrorState
+              title="Your picks could not be saved"
+              detail={`${syncError}. Your picks are still on this device — retry to sync them.`}
+              onRetry={() => syncNow(predsRef.current)}
+              retryLabel="Retry saving picks"
+            />
+          ) : null}
         <div className="real-layout">
           <section className="matchday-card-wrap">
             {(() => {
@@ -414,12 +459,14 @@ export default function RealDrawView({
                                   value={pred.home_goals}
                                   onChange={(v) => handleChange(fixture.id, 'home_goals', v)}
                                   disabled={disabled}
+                                  label={`Home goals, ${fixture.home_team.name} versus ${fixture.away_team.name}, Matchday ${currentMd}`}
                                 />
                                 <span className="score-sep">&ndash;</span>
                                 <ScoreInput
                                   value={pred.away_goals}
                                   onChange={(v) => handleChange(fixture.id, 'away_goals', v)}
                                   disabled={disabled}
+                                  label={`Away goals, ${fixture.home_team.name} versus ${fixture.away_team.name}, Matchday ${currentMd}`}
                                 />
                               </div>
                             }
@@ -427,17 +474,28 @@ export default function RealDrawView({
                         );
                       })
                     ) : (
-                      <span className="empty-row">No fixtures this matchday.</span>
+                      <EmptyState
+                        title="No fixtures this matchday"
+                        text="Use the matchday arrows above to find a matchday with fixtures."
+                      />
                     )}
                   </div>
                 </article>
               );
             })()}
           </section>
-          <aside className="real-standings">
+          <aside className="real-standings" aria-busy={syncStatus === 'saving'}>
             <div className="real-standings-head">
               <strong>UCL standings</strong>
-              <span>Real results + your picks</span>
+              {/* One stable node: the sync's in-flight and failed states swap its
+                  text instead of mounting a new one, so the row never shifts. */}
+              <span role="status">
+                {syncStatus === 'saving'
+                  ? 'Saving your picks…'
+                  : syncStatus === 'error'
+                    ? 'Your picks could not be saved'
+                    : 'Real results + your picks'}
+              </span>
             </div>
             <div className="real-standings-scroll">
               <StandingsTable
@@ -450,6 +508,7 @@ export default function RealDrawView({
             </div>
           </aside>
         </div>
+        </>
       )}
     </section>
   );

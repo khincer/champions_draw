@@ -28,7 +28,12 @@ export async function apiFetch(path, options = {}) {
   const text = await response.text();
   const payload = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    throw new Error(payload?.detail || `Request failed with ${response.status}`);
+    const failure = new Error(payload?.detail || `Request failed with ${response.status}`);
+    /* Additive only (task 4.1): callers that must tell a by-design rejection
+       (400 on a closed batch) from a real failure read this; the message every
+       existing caller surfaces is unchanged. */
+    failure.status = response.status;
+    throw failure;
   }
   return payload;
 }

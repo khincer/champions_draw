@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import Crest from '../components/Crest';
-import MessageBar from '../components/MessageBar';
+import { ErrorState } from '../components/States';
 
 export default function InteractiveDraft({ seasonId, state, setState, apiFetch, selectedTeamId, setSelectedTeamId, onComplete, onReveal }) {
   const { teams, matchups, picks, current_pot, auto_finalized } = state;
@@ -11,7 +11,12 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
     .map((pick) => teams.find((team) => team.id === pick.season_team_id))
     .filter(Boolean);
   const [pickingId, setPickingId] = useState(null);
-  const [error, setError] = useState('');
+  /* `{ message, team }` — the team is what the retry re-issues, so a retry can
+     only ever repeat the pick that failed (US:no-silent-failure). */
+  const [error, setError] = useState(null);
+  /* One pick at a time: a second POST while the first is in flight would
+     double-advance the draw (same rule as the matchday save, task 4.3). */
+  const pickingRef = useRef(false);
   const [revealCount, setRevealCount] = useState(0);
   const [revealStart, setRevealStart] = useState(0);
   const [revealSession, setRevealSession] = useState(0);
@@ -64,28 +69,13 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
     return undefined;
   }, [pendingFinalize, revealCount, activeOpponents.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handlePick(team) {
-    setSelectedTeamId(team.id);
-    // Opponents whose matchup already exists are "known": reveal them instantly
-    // instead of replaying the one-by-one animation for them too.
-    const knownCount = (matchups || []).filter(
-      (m) => m.home_team.id === team.id || m.away_team.id === team.id,
-    ).length;
-    if (pickedIds.has(team.id)) {
-      setRevealStart(knownCount); // re-click: show the whole list at once
-      setRevealSession((session) => session + 1);
-      return;
-    }
-    if (String(team.pot) !== String(current_pot)) {
-      // Team is not on the clock: selecting only inspects it in the sidebar.
-      setRevealStart(knownCount); // inspect-only: existing matchups are all known
-      setRevealSession((session) => session + 1);
-      return;
-    }
-    setRevealStart(knownCount);
-    setRevealSession((session) => session + 1);
+  /* The pick write: pending, failed and succeeded all show here, and the retry
+     re-issues only this POST. */
+  async function commitPick(team) {
+    if (pickingRef.current) return;
+    pickingRef.current = true;
     setPickingId(team.id);
-    setError('');
+    setError(null);
     try {
       const payload = await apiFetch(`/seasons/${seasonId}/interactive/pick/`, {
         method: 'POST',
@@ -98,10 +88,30 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
         return;
       }
     } catch (err) {
-      setError(err.message);
+      setError({ message: err.message, team });
     } finally {
+      pickingRef.current = false;
       setPickingId(null);
     }
+  }
+
+  async function handlePick(team) {
+    setSelectedTeamId(team.id);
+    // Opponents whose matchup already exists are "known": reveal them instantly
+    // instead of replaying the one-by-one animation for them too.
+    const knownCount = (matchups || []).filter(
+      (m) => m.home_team.id === team.id || m.away_team.id === team.id,
+    ).length;
+    if (pickedIds.has(team.id) || String(team.pot) !== String(current_pot)) {
+      // Re-click or inspect-only: existing matchups are all known, so show the
+      // whole list at once and leave the draw untouched.
+      setRevealStart(knownCount);
+      setRevealSession((session) => session + 1);
+      return;
+    }
+    setRevealStart(knownCount);
+    setRevealSession((session) => session + 1);
+    await commitPick(team);
   }
 
   const pots = ['1', '2', '3', '4'];
@@ -123,14 +133,29 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
         <span className="draw-pulse" />
       </div>
 
-      {error && <MessageBar error={error} />}
+      {error && (
+        <ErrorState
+          title="That pick could not be locked in"
+          detail={`${error.message}. The draw is unchanged — retry to pick ${error.team.name}.`}
+          onRetry={() => commitPick(error.team)}
+          retryLabel="Retry pick"
+        />
+      )}
 
       <div className="interactive-head">
         <strong>{current_pot ? `Pot ${current_pot} on the clock` : 'All teams picked'}</strong>
-        {activeTeam && <span>{activeTeam.name} selected</span>}
+        {/* One stable node: the in-flight state swaps its text, so the row never
+            shifts and the pick is announced once. */}
+        <span role="status">
+          {pickingId
+            ? 'Locking in your pick…'
+            : activeTeam
+              ? `${activeTeam.name} selected`
+              : ''}
+        </span>
       </div>
 
-      <div className="interactive-pots">
+      <div className="interactive-pots" aria-busy={Boolean(pickingId)}>
         {pots.map((pot) => (
           <article className="pot-panel" key={pot}>
             <div className="pot-head">
@@ -147,7 +172,7 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
                     isRevealed && !isActive ? 'opponent' : ''
                   } ${isPicked ? 'picked' : ''}`}
                   key={team.id}
-                  disabled={Boolean(pickingId) && pickingId === team.id}
+                  disabled={Boolean(pickingId)}
                   onClick={() => handlePick(team)}
                 >
                   <span>{team.seeding_position}</span>

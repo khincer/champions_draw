@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { Activity, ArrowLeft, ChevronDown, Home, Plane, RefreshCw } from 'lucide-preact';
+import { ArrowLeft, ChevronDown, Home, Plane, RefreshCw } from 'lucide-preact';
+import Button from '../components/Button';
 import Crest from '../components/Crest';
 import LeagueFixtureRow from '../components/LeagueFixtureRow';
 import SegmentControl from '../components/SegmentControl';
 import StandingsTable from '../components/StandingsTable';
-import { StateMessage } from '../components/States';
+import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import { apiFetch } from '../lib/api';
 import { shortTime } from '../lib/format';
 import { toMiniRow } from '../lib/teams';
@@ -83,63 +84,70 @@ function PlayoffTieCard({ tie }) {
 export default function TeamsBrowser({
   leagues, selectedLeague, leagueStandings, setSelectedLeague, setLeagueStandings,
   leagueMatches, setLeagueMatches, viewTeam, setViewTeam,
+  leaguesStatus, leaguesError, onRetryLeagues,
 }) {
-  const [loadingStandings, setLoadingStandings] = useState(false);
-  const [loadingMatches, setLoadingMatches] = useState(false);
+  const [standingsReq, setStandingsReq] = useState({ status: 'idle', error: '' });
+  const [fixturesReq, setFixturesReq] = useState({ status: 'idle', error: '' });
   const [showNextMatches, setShowNextMatches] = useState(false);
   const [leaguePhase, setLeaguePhase] = useState('group'); // 'group' | 'playoffs' — LPV-1, not persisted
   const [seasonMatchups, setSeasonMatchups] = useState([]);
   const playoffTies = useMemo(() => pairPlayoffTies(seasonMatchups), [seasonMatchups]);
 
-  async function loadLeagueData(league) {
-    if (league.kind === 'season') {
-      setLeagueStandings([]);
-      setLoadingStandings(true);
-      setLoadingMatches(true);
-      try {
-        const [stateData, groupsData] = await Promise.all([
-          apiFetch(`/ui/seasons/${league.season_id}/state/`),
-          apiFetch(`/seasons/${league.season_id}/group-standings/`),
-        ]);
-        const matchups = stateData?.matchups || [];
-        setSeasonMatchups(stateData?.matchups || []);
-        const finished = matchups.filter((m) => m.status === 'FINISHED').map(toMiniRow);
-        const upcoming = matchups.filter((m) => m.status !== 'FINISHED' && m.kickoff).map(toMiniRow);
-        setLeagueMatches({ finished, upcoming });
+  /* Each endpoint owns its request state so the error copy names the one thing
+     that failed and its retry re-issues only that request (task 4.1). The
+     season branch's two calls stay independent for the same reason: group
+     standings and the matchups feed fail and recover separately. */
+  async function loadStandings(league) {
+    if (!league) return;
+    setStandingsReq({ status: 'loading', error: '' });
+    try {
+      if (league.kind === 'season') {
+        const groupsData = await apiFetch(`/seasons/${league.season_id}/group-standings/`);
+        const groups = groupsData?.groups || [];
         // Flatten every group's standings; each row keeps its group label so
         // the league page can split tables again (TeamPage reuses the flat
         // list unchanged).
-        const groups = groupsData?.groups || [];
         setLeagueStandings(
           groups.flatMap((g) => (g.standings || []).map((row) => ({ ...row, group: g.group }))),
         );
-      } catch {
-        setLeagueMatches({ finished: [], upcoming: [] });
-        setLeagueStandings([]);
-      } finally {
-        setLoadingStandings(false);
-        setLoadingMatches(false);
+      } else {
+        const data = await apiFetch(`/leagues/${league.id}/standings/`);
+        setLeagueStandings(Array.isArray(data) ? data : (data.standings || []));
       }
-      return;
-    }
-    setLoadingStandings(true);
-    try {
-      const data = await apiFetch(`/leagues/${league.id}/standings/`);
-      setLeagueStandings(Array.isArray(data) ? data : (data.standings || []));
-    } catch {
+      setStandingsReq({ status: 'success', error: '' });
+    } catch (err) {
       setLeagueStandings([]);
-    } finally {
-      setLoadingStandings(false);
+      setStandingsReq({ status: 'error', error: err.message });
     }
-    setLoadingMatches(true);
+  }
+
+  async function loadFixtures(league) {
+    if (!league) return;
+    setFixturesReq({ status: 'loading', error: '' });
     try {
-      const data = await apiFetch(`/leagues/${league.id}/matches/`);
-      setLeagueMatches(data || { finished: [], upcoming: [] });
-    } catch {
+      if (league.kind === 'season') {
+        const stateData = await apiFetch(`/ui/seasons/${league.season_id}/state/`);
+        const matchups = stateData?.matchups || [];
+        setSeasonMatchups(matchups);
+        setLeagueMatches({
+          finished: matchups.filter((m) => m.status === 'FINISHED').map(toMiniRow),
+          upcoming: matchups.filter((m) => m.status !== 'FINISHED' && m.kickoff).map(toMiniRow),
+        });
+      } else {
+        const data = await apiFetch(`/leagues/${league.id}/matches/`);
+        setLeagueMatches(data || { finished: [], upcoming: [] });
+      }
+      setFixturesReq({ status: 'success', error: '' });
+    } catch (err) {
       setLeagueMatches({ finished: [], upcoming: [] });
-    } finally {
-      setLoadingMatches(false);
+      setFixturesReq({ status: 'error', error: err.message });
     }
+  }
+
+  function loadLeagueData(league) {
+    if (!league) return;
+    loadStandings(league);
+    loadFixtures(league);
   }
 
   // Fetch standings + results on mount (re-entering the tab) and whenever the
@@ -155,6 +163,8 @@ export default function TeamsBrowser({
     setLeagueMatches({ finished: [], upcoming: [] });
     setLeaguePhase('group');
     setSeasonMatchups([]);
+    setStandingsReq({ status: 'idle', error: '' });
+    setFixturesReq({ status: 'idle', error: '' });
   }
 
   if (viewTeam) {
@@ -165,6 +175,10 @@ export default function TeamsBrowser({
         standings={leagueStandings}
         matches={leagueMatches}
         leagues={leagues}
+        standingsReq={standingsReq}
+        fixturesReq={fixturesReq}
+        onRetryStandings={() => loadStandings(selectedLeague)}
+        onRetryFixtures={() => loadFixtures(selectedLeague)}
         onBack={() => setViewTeam(null)}
         onRefresh={() => loadLeagueData(selectedLeague)}
       />
@@ -183,6 +197,8 @@ export default function TeamsBrowser({
               setLeagueMatches({ finished: [], upcoming: [] });
               setLeaguePhase('group');
               setSeasonMatchups([]);
+              setStandingsReq({ status: 'idle', error: '' });
+              setFixturesReq({ status: 'idle', error: '' });
             }}
           >
             <ArrowLeft size={16} />
@@ -216,8 +232,14 @@ export default function TeamsBrowser({
         <div className="standings-layout standings-layout--league">
           <div>
             <h2 style={{ marginTop: 16 }}>{selectedLeague.name}</h2>
-            {loadingStandings ? (
-              <StateMessage icon={Activity} title="Loading standings" text="Fetching league table" />
+            {standingsReq.status === 'loading' || standingsReq.status === 'idle' ? (
+              <Skeleton rows={5} label="Loading standings" />
+            ) : standingsReq.status === 'error' ? (
+              <ErrorState
+                title={selectedLeague.kind === 'season' ? 'Group standings could not load' : 'Standings could not load'}
+                detail={standingsReq.error}
+                onRetry={() => loadStandings(selectedLeague)}
+              />
             ) : selectedLeague.kind === 'season' && leagueStandings.length ? (
               <GroupStandingsTables rows={leagueStandings} onOpenTeam={(team) => setViewTeam(team)} />
             ) : leagueStandings.length ? (
@@ -230,18 +252,36 @@ export default function TeamsBrowser({
                   crest: row.team_crest || row.team?.crest || row.team?.logo_url,
                 })}
               />
-            ) : <p className="muted">No standings available.</p>}
+            ) : (
+              <EmptyState
+                title={selectedLeague.kind === 'season' ? 'No group table yet' : 'No table yet'}
+                text="Nothing is published for this competition yet. Refresh to check again."
+                action={<Button onClick={() => loadStandings(selectedLeague)}>Refresh</Button>}
+              />
+            )}
           </div>
 
           <aside>
             <h3 className="panel-title">Last Results</h3>
-            {loadingMatches ? (
-              <StateMessage icon={Activity} title="Loading" text="Fetching fixtures" />
+            {fixturesReq.status === 'loading' || fixturesReq.status === 'idle' ? (
+              <Skeleton rows={3} label="Loading fixtures" variant="fixture" />
+            ) : fixturesReq.status === 'error' ? (
+              <ErrorState
+                title="Fixtures could not load"
+                detail={fixturesReq.error}
+                onRetry={() => loadFixtures(selectedLeague)}
+              />
             ) : leagueMatches.finished && leagueMatches.finished.length ? (
               <div className="fixture-mini-list">
                 {leagueMatches.finished.map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
               </div>
-            ) : <p className="muted small">No finished matches yet.</p>}
+            ) : (
+              <EmptyState
+                title="No finished matches yet"
+                text="Results appear here once this competition has played fixtures. Refresh to check again."
+                action={<Button onClick={() => loadFixtures(selectedLeague)}>Refresh</Button>}
+              />
+            )}
             <button
               className="next-matches-toggle"
               onClick={() => setShowNextMatches((v) => !v)}
@@ -250,9 +290,9 @@ export default function TeamsBrowser({
               Next matches
             </button>
             {showNextMatches ? (
-              loadingMatches ? (
-                <StateMessage icon={Activity} title="Loading" text="Fetching fixtures" />
-              ) : leagueMatches.upcoming && leagueMatches.upcoming.length ? (
+              fixturesReq.status === 'loading' || fixturesReq.status === 'idle' ? (
+                <Skeleton rows={2} label="Loading fixtures" variant="fixture" />
+              ) : fixturesReq.status === 'error' ? null : leagueMatches.upcoming && leagueMatches.upcoming.length ? (
                 <div className="fixture-mini-list" style={{ marginTop: 8 }}>
                   {leagueMatches.upcoming.map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
                 </div>
@@ -267,15 +307,27 @@ export default function TeamsBrowser({
 
   return (
     <div style={{ padding: '24px', maxWidth: 1100 }}>
-      <div className="leagues-grid">
-        {leagues.map((league) => (
-          <button className="league-card" key={league.id} onClick={() => handleSelectLeague(league)}>
-            {league.emblem_url && <img src={league.emblem_url} alt="" />}
-            <div className="league-card-name">{league.name}</div>
-            {league.country && <div className="league-card-country">{league.country}</div>}
-          </button>
-        ))}
-      </div>
+      {leaguesStatus === 'loading' || leaguesStatus === 'idle' ? (
+        <Skeleton rows={6} label="Loading leagues" />
+      ) : leaguesStatus === 'error' ? (
+        <ErrorState title="Leagues could not load" detail={leaguesError} onRetry={onRetryLeagues} />
+      ) : leagues.length ? (
+        <div className="leagues-grid">
+          {leagues.map((league) => (
+            <button className="league-card" key={league.id} onClick={() => handleSelectLeague(league)}>
+              {league.emblem_url && <img src={league.emblem_url} alt="" />}
+              <div className="league-card-name">{league.name}</div>
+              {league.country && <div className="league-card-country">{league.country}</div>}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title="No leagues imported yet"
+          text="League tables come from the sync command. Run “python manage.py sync_leagues”, then refresh."
+          action={<Button onClick={onRetryLeagues}>Refresh</Button>}
+        />
+      )}
     </div>
   );
 }

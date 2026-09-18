@@ -3,7 +3,7 @@ import { Activity, CalendarDays, History, LayoutGrid, Swords, Trophy, UserRound 
 import Crest from '../components/Crest';
 import Button from '../components/Button';
 import Metric from '../components/Metric';
-import { StateMessage } from '../components/States';
+import { EmptyState, ErrorState, LiveRegion, Skeleton } from '../components/States';
 import { getPlayerName } from '../predictionStorage';
 import { inHomeRange, shortDay, shortTime } from '../lib/format';
 
@@ -27,7 +27,10 @@ const QUICK_ACTIONS = [
 
 const isToday = (match) => Boolean(match.kickoff) && new Date(match.kickoff).toDateString() === new Date().toDateString();
 
-function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef, focusable }) {
+/* The card itself is not a control: its opener is the real button inside the
+   footer, so the card carries no `tabIndex`. The opener names the fixture it
+   opens instead of a bare "View match details". */
+function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef }) {
   const result = match.result;
   const eligible = result || (match.kickoff && new Date(match.kickoff) <= new Date());
   const status = result ? 'finished' : match.closed ? 'live' : 'upcoming';
@@ -36,7 +39,6 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
     <article
       className="home-game-card"
       aria-label={`${match.home_team.name} versus ${match.away_team.name}`}
-      tabIndex={focusable ? 0 : undefined}
     >
       <header className="home-game-card-header">
         <div>
@@ -84,7 +86,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
           <button
             className="hub-open-match"
             type="button"
-            aria-label="View match details"
+            aria-label={`View match details: ${match.home_team.name} versus ${match.away_team.name}`}
             ref={detailReturnFocusRef}
             onClick={() => onOpenMatch(match.id, match.season_id || seasonId)}
           >
@@ -98,7 +100,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
   );
 }
 
-export default function Homepage({ matches, liveScores, onOpenMatch, onNavigate, playerName, seasonId, detailReturnFocusRef }) {
+export default function Homepage({ matches, matchesStatus, matchesError, onRetryMatches, liveScores, liveScoresError, onOpenMatch, onNavigate, playerName, seasonId, detailReturnFocusRef }) {
   const inRange = useMemo(
     () => matches.filter(inHomeRange).sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || '')),
     [matches],
@@ -151,6 +153,27 @@ export default function Homepage({ matches, liveScores, onOpenMatch, onNavigate,
         <Metric icon={History} label="Results" value={finished.length} support="Finished today or yesterday" />
       </section>
 
+      {/* The hub's live region (task 4.2). Mounted once for the life of the view:
+          a poll tick rewrites its text and nothing else, so there is no
+          per-tick announcement and no node churn. The slot reserves a line so a
+          failure appearing or clearing never shifts the page under a scrolled
+          reader, and a failure lands here instead of the page error bar. */}
+      <div className="home-live-slot">
+        <LiveRegion message={liveScoresError} tone={liveScoresError ? 'error' : 'info'} />
+      </div>
+
+      {/* A refresh failure is not the live poll (task 4.1): the cards already on
+          screen stay, and this names what failed with a retry that re-issues
+          only the matches feed. The page never enters its page-error state. */}
+      {matchesStatus === 'success' && matchesError ? (
+        <ErrorState
+          title="Matches could not refresh"
+          detail={matchesError}
+          onRetry={onRetryMatches}
+          retryLabel="Retry refresh"
+        />
+      ) : null}
+
       <section className="home-quick-actions" aria-label="Quick actions">
         {QUICK_ACTIONS.map(({ key, label, icon: Icon }) => (
           <Button key={key} variant="secondary" onClick={() => onNavigate(key)}>
@@ -161,7 +184,15 @@ export default function Homepage({ matches, liveScores, onOpenMatch, onNavigate,
       </section>
 
       <div className="homepage-matches">
-        {inRange.length ? (
+        {matchesStatus === 'loading' || matchesStatus === 'idle' ? (
+          <Skeleton rows={3} label="Loading matches" variant="fixture" />
+        ) : matchesStatus === 'error' ? (
+          <ErrorState
+            title="Today's matches could not load"
+            detail={matchesError}
+            onRetry={onRetryMatches}
+          />
+        ) : inRange.length ? (
           <>
             {latestResults.length > 0 && (
               <section role="region" aria-label="Latest results" className="homepage-results">
@@ -178,7 +209,6 @@ export default function Homepage({ matches, liveScores, onOpenMatch, onNavigate,
                       onOpenMatch={onOpenMatch}
                       seasonId={seasonId}
                       detailReturnFocusRef={detailReturnFocusRef}
-                      focusable
                     />
                   ))}
                 </div>
@@ -197,10 +227,10 @@ export default function Homepage({ matches, liveScores, onOpenMatch, onNavigate,
             )}
           </>
         ) : (
-          <StateMessage
-            icon={Trophy}
+          <EmptyState
             title="No matches today"
-            text="Today and yesterday games appear here with live results as they happen."
+            text="Today and yesterday games appear here with live results as they happen. Refresh to check again."
+            action={<Button variant="secondary" onClick={onRetryMatches}>Refresh</Button>}
           />
         )}
       </div>

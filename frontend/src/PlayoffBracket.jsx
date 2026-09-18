@@ -15,6 +15,7 @@ function LegRow({ label, homeTeam, awayTeam, homeGoals, awayGoals, homeField, aw
         <ScoreInput
           value={homeGoals}
           onChange={(v) => onScoreChange(matchupIdx, homeField, v)}
+          label={`${label}, home goals: ${homeTeam?.name} versus ${awayTeam?.name}`}
         />
       </div>
       <span className="score-sep">–</span>
@@ -25,6 +26,7 @@ function LegRow({ label, homeTeam, awayTeam, homeGoals, awayGoals, homeField, aw
         <ScoreInput
           value={awayGoals}
           onChange={(v) => onScoreChange(matchupIdx, awayField, v)}
+          label={`${label}, away goals: ${awayTeam?.name} versus ${homeTeam?.name}`}
         />
       </div>
     </div>
@@ -41,6 +43,7 @@ function TiebreakerRow({ label, homeTeam, awayTeam, homeGoals, awayGoals, homeFi
         <ScoreInput
           value={homeGoals}
           onChange={(v) => onScoreChange(matchupIdx, homeField, v)}
+          label={`${label}, home goals: ${homeTeam?.name} versus ${awayTeam?.name}`}
         />
       </div>
       <span className="score-sep">–</span>
@@ -50,6 +53,7 @@ function TiebreakerRow({ label, homeTeam, awayTeam, homeGoals, awayGoals, homeFi
         <ScoreInput
           value={awayGoals}
           onChange={(v) => onScoreChange(matchupIdx, awayField, v)}
+          label={`${label}, away goals: ${awayTeam?.name} versus ${homeTeam?.name}`}
         />
       </div>
     </div>

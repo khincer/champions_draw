@@ -1,6 +1,5 @@
 import { render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Activity } from 'lucide-preact';
 import './styles.css';
 import CareerApp, { hasSavedCareer } from './CareerApp';
 import PredictionApp from './PredictionApp';
@@ -16,9 +15,10 @@ import SimulationPanel from './views/SimulationPanel';
 import TeamDetailPage from './views/TeamDetailPage';
 import TeamInspector from './views/TeamInspector';
 import TeamsBrowser from './views/TeamsBrowser';
+import Button from './components/Button';
 import MessageBar from './components/MessageBar';
 import MobileNav from './components/MobileNav';
-import { StateMessage } from './components/States';
+import { EmptyState, ErrorState, Skeleton } from './components/States';
 import AppFooter from './components/shell/AppFooter';
 import SiteNav from './components/shell/SiteNav';
 import ViewTabs from './components/shell/ViewTabs';
@@ -35,9 +35,14 @@ const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
 function App() {
   const [view, setView] = useState('home');
   const [homeMatches, setHomeMatches] = useState([]);
+  const [homeMatchesStatus, setHomeMatchesStatus] = useState('idle');
+  const [homeMatchesError, setHomeMatchesError] = useState('');
   const homeMatchesRef = useRef([]);
   const [liveScores, setLiveScores] = useState({});
+  const [liveScoresError, setLiveScoresError] = useState('');
   const [leagues, setLeagues] = useState([]);
+  const [leaguesStatus, setLeaguesStatus] = useState('idle');
+  const [leaguesError, setLeaguesError] = useState('');
   const [selectedLeague, setSelectedLeague] = useState(null);
   const [leagueStandings, setLeagueStandings] = useState([]);
   const [leagueMatches, setLeagueMatches] = useState({ finished: [], upcoming: [] });
@@ -46,6 +51,8 @@ function App() {
   const [seasons, setSeasons] = useState([]);
   const [selectedSeasonId, setSelectedSeasonId] = useState('');
   const [seasonState, setSeasonState] = useState(null);
+  const [seasonStateStatus, setSeasonStateStatus] = useState('idle');
+  const [seasonStateError, setSeasonStateError] = useState('');
   const [activeTab, setActiveTab] = useState('home');
   const [selectedTeamId, setSelectedTeamId] = useState(null);
   const [teamDetailId, setTeamDetailId] = useState(null);
@@ -58,19 +65,30 @@ function App() {
   const [working, setWorking] = useState(false);
   const [drawAnimation, setDrawAnimation] = useState({ isActive: false, phase: 'idle', revealedCount: 0 });
   const [error, setError] = useState('');
+  const [drawError, setDrawError] = useState('');
   const [notice, setNotice] = useState('');
   const [predictionApi] = useState({});
   const [careerAvailable, setCareerAvailable] = useState(() => hasSavedCareer());
   const [matchDetail, setMatchDetail] = useState(null);
   const detailReturnFocusRef = useRef(null);
+  const detailOpenerRef = useRef(null);
 
   function openMatch(fixtureId, seasonId) {
+    /* The shared ref holds the last-rendered card button, which need not be the
+       one the user activated, so remember the real opener. */
+    const active = document.activeElement;
+    detailOpenerRef.current = active instanceof HTMLElement && active !== document.body
+      ? active
+      : detailReturnFocusRef.current;
     setMatchDetail({ fixtureId, seasonId });
   }
 
   function closeMatch() {
+    const opener = detailOpenerRef.current || detailReturnFocusRef.current;
     setMatchDetail(null);
-    detailReturnFocusRef.current?.focus();
+    /* Focus can only land once the `hidden` wrapper has re-rendered: while it is
+       still display:none focus() is a no-op and focus falls to <body>. */
+    window.requestAnimationFrame(() => opener?.focus());
   }
 
   /* Shell-owned view-switch policy: mirrors the rail, so entering the workspace
@@ -86,15 +104,6 @@ function App() {
 
   useEffect(() => {
     if (view !== 'home' || !selectedSeasonId) return undefined;
-    async function loadRealMatches() {
-      try {
-        const payload = await apiFetch('/homepage/matches/');
-        homeMatchesRef.current = payload.matchups || [];
-        setHomeMatches(payload.matchups || []);
-      } catch {
-        // Homepage is best-effort; the real draw view surfaces errors.
-      }
-    }
     loadRealMatches();
     // Keep refreshing while any today/yesterday match is not finished yet.
     const timer = window.setInterval(() => {
@@ -112,8 +121,16 @@ function App() {
       try {
         const data = await apiFetch(`/ui/seasons/${selectedSeasonId}/live-scores/`);
         setLiveScores(data.live || {});
+        setLiveScoresError('');
       } catch {
-        // Live scores are best-effort.
+        /* Best-effort background poll (task 4.2): a failure — 502 included —
+           belongs to the hub's inline live region. It must never become a
+           page-level error and never disables the rest of the page. The copy
+           names what failed and the retry, and points at the safe reference
+           (the scores already on screen). Only the region's text changes; the
+           node itself is never remounted per tick, which is what keeps a
+           scrolled reader from being re-announced. */
+        setLiveScoresError('Live scores unavailable — retrying every 30 seconds; showing the last known scores.');
       }
     };
     pollLive();
@@ -122,10 +139,8 @@ function App() {
   }, [view, selectedSeasonId, homeMatches]);
 
   useEffect(() => {
-    if (view === 'teams' && !leagues.length) {
-      apiFetch('/leagues/').then(setLeagues).catch(() => {});
-    }
-  }, [view, leagues.length]);
+    if (view === 'teams' && leaguesStatus === 'idle') loadLeagues();
+  }, [view, leaguesStatus]);
 
   useEffect(() => {
     if (selectedSeasonId) {
@@ -175,17 +190,52 @@ function App() {
     }
   }
 
+  /* Home hub feed (task 4.1). A refresh failure keeps the cards already on
+     screen and reports inline; only a first load with nothing to show becomes
+     the error state, so a blip never blanks the hub or becomes a page error. */
+  async function loadRealMatches() {
+    const hadCards = homeMatchesRef.current.length > 0;
+    if (!hadCards) setHomeMatchesStatus('loading');
+    try {
+      const payload = await apiFetch('/homepage/matches/');
+      homeMatchesRef.current = payload.matchups || [];
+      setHomeMatches(payload.matchups || []);
+      setHomeMatchesStatus('success');
+      setHomeMatchesError('');
+    } catch (err) {
+      setHomeMatchesStatus(hadCards ? 'success' : 'error');
+      setHomeMatchesError(err.message);
+    }
+  }
+
+  /* League list for the browser (task 4.1). */
+  async function loadLeagues() {
+    setLeaguesStatus('loading');
+    setLeaguesError('');
+    try {
+      setLeagues(await apiFetch('/leagues/'));
+      setLeaguesStatus('success');
+    } catch (err) {
+      setLeaguesStatus('error');
+      setLeaguesError(err.message);
+    }
+  }
+
   async function loadSeasonState(seasonId) {
     setError('');
+    setSeasonStateStatus('loading');
+    setSeasonStateError('');
     try {
       const payload = await apiFetch(`/ui/seasons/${seasonId}/state/`);
       setSeasonState(payload);
+      setSeasonStateStatus('success');
       if (!selectedTeamId && payload.teams.length) {
         setSelectedTeamId(payload.teams[0].id);
       }
       return payload;
     } catch (err) {
-      setError(err.message);
+      setSeasonStateStatus('error');
+      setSeasonStateError(err.message);
       return null;
     }
   }
@@ -195,7 +245,7 @@ function App() {
     setActiveTab('simulate');
     setDrawAnimation({ isActive: true, phase: 'pots', revealedCount: 0 });
     setWorking(true);
-    setError('');
+    setDrawError('');
     setNotice('');
     try {
       const season = seasons.find((s) => String(s.id) === String(selectedSeasonId));
@@ -234,7 +284,9 @@ function App() {
         setDrawAnimation({ isActive: true, phase: 'fixtures', revealedCount: 0 });
       }, 650);
     } catch (err) {
-      setError(err.message);
+      /* The failure stays on the simulation panel and names itself, with the
+         retry re-issuing only the draw POST (US:no-silent-failure). */
+      setDrawError(err.message);
       setDrawAnimation({ isActive: false, phase: 'idle', revealedCount: 0 });
       await loadSeasonState(selectedSeasonId);
     } finally {
@@ -286,7 +338,11 @@ function App() {
             <h1 className="view-heading">Live hub</h1>
             <Homepage
               matches={homeMatches}
+              matchesStatus={homeMatchesStatus}
+              matchesError={homeMatchesError}
+              onRetryMatches={loadRealMatches}
               liveScores={liveScores}
+              liveScoresError={liveScoresError}
               onOpenMatch={openMatch}
               onNavigate={selectView}
               playerName={playerName}
@@ -302,6 +358,9 @@ function App() {
             <h1 className="view-heading">Leagues</h1>
             <TeamsBrowser
               leagues={leagues}
+              leaguesStatus={leaguesStatus}
+              leaguesError={leaguesError}
+              onRetryLeagues={loadLeagues}
               selectedLeague={selectedLeague}
               leagueStandings={leagueStandings}
               setSelectedLeague={setSelectedLeague}
@@ -343,24 +402,55 @@ function App() {
           <section className="workspace">
             <h1 className="view-heading">Draw workspace</h1>
             {loading ? (
-              <StateMessage icon={Activity} title="Loading prediction lab" text="Fetching seasons, pots, and recent simulations." />
+              <Skeleton rows={6} label="Loading prediction lab" />
+            ) : !seasons.length ? (
+              error ? (
+                <ErrorState title="Seasons could not load" detail={error} onRetry={loadInitialData} />
+              ) : (
+                <EmptyState
+                  title="No seasons imported yet"
+                  text="Import the seed input, then refresh to load the workspace."
+                  action={<Button onClick={loadInitialData}>Refresh</Button>}
+                />
+              )
             ) : (
               <>
                 <WorkspaceHeader activeTab={activeTab} setActiveTab={setActiveTab} />
                 {(error || notice) && <MessageBar error={error} notice={notice} />}
 
-                {activeTab === 'simulate' && !drawAnimation.isActive && (
-                  <SimulationPanel
-                    playerName={playerName}
-                    setPlayerName={setPlayerName}
-                    seasons={seasons}
-                    selectedSeasonId={selectedSeasonId}
-                    setSelectedSeasonId={setSelectedSeasonId}
-                    drawMethod={drawMethod}
-                    setDrawMethod={setDrawMethod}
-                    working={working}
-                    generateDraw={generateDraw}
+                {seasonStateStatus === 'loading' || seasonStateStatus === 'idle' ? (
+                  <Skeleton rows={6} label="Loading season data" />
+                ) : seasonStateStatus === 'error' ? (
+                  <ErrorState
+                    title="Season data could not load"
+                    detail={seasonStateError}
+                    onRetry={() => loadSeasonState(selectedSeasonId)}
+                    retryLabel="Retry season data"
                   />
+                ) : (
+                  <>
+                {activeTab === 'simulate' && !drawAnimation.isActive && (
+                  <>
+                    {drawError ? (
+                      <ErrorState
+                        title="The draw could not be generated"
+                        detail={drawError}
+                        onRetry={() => generateDraw()}
+                        retryLabel="Retry draw"
+                      />
+                    ) : null}
+                    <SimulationPanel
+                      playerName={playerName}
+                      setPlayerName={setPlayerName}
+                      seasons={seasons}
+                      selectedSeasonId={selectedSeasonId}
+                      setSelectedSeasonId={setSelectedSeasonId}
+                      drawMethod={drawMethod}
+                      setDrawMethod={setDrawMethod}
+                      working={working}
+                      generateDraw={generateDraw}
+                    />
+                  </>
                 )}
 
                 {activeTab === 'predict' ? (
@@ -423,6 +513,8 @@ function App() {
                       revealedOpponentIds={revealedOpponentIds}
                     />
                   </section>
+                )}
+                  </>
                 )}
                 <AppFooter />
               </>

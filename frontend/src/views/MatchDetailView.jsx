@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import Crest from '../components/Crest';
+import { ErrorState } from '../components/States';
 import { apiFetch } from '../lib/api';
 
 const STATUS_LABEL = { FINISHED: 'Final', IN_PLAY: 'Live', SCHEDULED: 'Kickoff' };
@@ -10,7 +11,11 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
   const [error, setError] = useState('');
   const [liveScore, setLiveScore] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  /* Bumped by the error state's retry, which re-issues only the detail request
+     (US:no-silent-failure — the error card used to be a dead end). */
+  const [reloadToken, setReloadToken] = useState(0);
   const backRef = useRef(null);
+  const dialogRef = useRef(null);
 
   const detailUrl = `/ui/seasons/${seasonId}/match-details/${fixtureId}/`;
   const liveUrl = `/ui/seasons/${seasonId}/live-scores/`;
@@ -26,7 +31,14 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
       .catch((err) => { if (!cancelled) setError(err.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [detailUrl]);
+  }, [detailUrl, reloadToken]);
+
+  /* Modal so the top layer seals the page behind the overlay: Tab cannot leave
+     it and the background is inert. Escape arrives as `cancel` (handled below). */
+  useEffect(() => {
+    const node = dialogRef.current;
+    if (node && !node.open) node.showModal();
+  }, []);
 
   useEffect(() => {
     backRef.current?.focus();
@@ -60,9 +72,21 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
 
   const header = data?.header;
   const score = status === 'IN_PLAY' && liveScore ? liveScore : header?.score;
+  const dialogName = header
+    ? `Match details: ${header.home_team.name} versus ${header.away_team.name}`
+    : 'Match details';
 
   return (
-    <section className="match-detail-view" aria-busy={loading || refreshing}>
+    <dialog
+      ref={dialogRef}
+      className="match-detail-view"
+      aria-label={dialogName}
+      aria-busy={loading || refreshing}
+      onCancel={(event) => {
+        event.preventDefault();
+        onBack?.();
+      }}
+    >
       <button
         ref={backRef}
         type="button"
@@ -82,10 +106,12 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
       )}
 
       {!loading && error && (
-        <div className="match-detail-error" role="alert">
-          <strong>Couldn't load match details</strong>
-          <p>{error}</p>
-        </div>
+        <ErrorState
+          title="Couldn't load match details"
+          detail={error}
+          onRetry={() => setReloadToken((token) => token + 1)}
+          retryLabel="Retry match details"
+        />
       )}
 
       {!loading && !error && header && (
@@ -178,6 +204,6 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
           </div>
         </>
       )}
-    </section>
+    </dialog>
   );
 }

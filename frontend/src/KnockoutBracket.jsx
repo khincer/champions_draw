@@ -31,7 +31,7 @@ function Connector({ sources, targets }) {
   );
 }
 
-function ScoreRow({ team, goals, onChange, disabled, isAdvancing, className }) {
+function ScoreRow({ team, goals, onChange, disabled, isAdvancing, className, label }) {
   return (
     <div className={`ko-team-row ${isAdvancing ? 'ko-advancing' : ''} ${className || ''}`}>
       {team ? (
@@ -43,6 +43,7 @@ function ScoreRow({ team, goals, onChange, disabled, isAdvancing, className }) {
             onChange={onChange}
             disabled={disabled}
             animateOnChange
+            label={label}
           />
         </>
       ) : (
@@ -94,6 +95,7 @@ function KnockoutMatch({ match, onScoreChange, disabled, isFinal }) {
         onChange={koKey('home_goals')}
         disabled={disabled || !home_team}
         isAdvancing={winnerId === home_team?.id}
+        label={`Home goals, ${home_team?.name} versus ${away_team?.name}, ${ROUND_LABELS[round]} #${bracket_position}`}
       />
       <ScoreRow
         team={away_team}
@@ -101,6 +103,7 @@ function KnockoutMatch({ match, onScoreChange, disabled, isFinal }) {
         onChange={koKey('away_goals')}
         disabled={disabled || !away_team}
         isAdvancing={winnerId === away_team?.id}
+        label={`Away goals, ${home_team?.name} versus ${away_team?.name}, ${ROUND_LABELS[round]} #${bracket_position}`}
       />
 
       {/* Extra time row — shown when 90-min score is tied */}
@@ -114,6 +117,7 @@ function KnockoutMatch({ match, onScoreChange, disabled, isFinal }) {
             disabled={disabled}
             isAdvancing={false}
             className="ko-tb-row"
+            label={`Extra time home goals, ${home_team?.name} versus ${away_team?.name}, ${ROUND_LABELS[round]} #${bracket_position}`}
           />
           <ScoreRow
             team={away_team}
@@ -122,6 +126,7 @@ function KnockoutMatch({ match, onScoreChange, disabled, isFinal }) {
             disabled={disabled}
             isAdvancing={false}
             className="ko-tb-row"
+            label={`Extra time away goals, ${home_team?.name} versus ${away_team?.name}, ${ROUND_LABELS[round]} #${bracket_position}`}
           />
         </div>
       )}
@@ -137,6 +142,7 @@ function KnockoutMatch({ match, onScoreChange, disabled, isFinal }) {
             disabled={disabled}
             isAdvancing={false}
             className="ko-tb-row"
+            label={`Penalty shootout home goals, ${home_team?.name} versus ${away_team?.name}, ${ROUND_LABELS[round]} #${bracket_position}`}
           />
           <ScoreRow
             team={away_team}
@@ -145,6 +151,7 @@ function KnockoutMatch({ match, onScoreChange, disabled, isFinal }) {
             disabled={disabled}
             isAdvancing={false}
             className="ko-tb-row"
+            label={`Penalty shootout away goals, ${home_team?.name} versus ${away_team?.name}, ${ROUND_LABELS[round]} #${bracket_position}`}
           />
         </div>
       )}
