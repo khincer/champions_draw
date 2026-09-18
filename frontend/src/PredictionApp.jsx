@@ -6,6 +6,7 @@ import MatchdayScoreBoard from './MatchdayScoreBoard';
 import PlayoffBracket from './PlayoffBracket';
 import KnockoutBracket from './KnockoutBracket';
 import { loadLocal, saveLocal } from './predictionStorage';
+import { useReconciliation } from './lib/useReconciliation';
 import { computeStandings, defenseNorm, eliminationBoost, expectedGoals, teamStrength } from './standingsCalc';
 import { predictMatch } from './matchOdds';
 import { ErrorState, Skeleton } from './components/States';
@@ -42,6 +43,9 @@ export default function PredictionApp({
   const [savingMatchday, setSavingMatchday] = useState(false);
   const [savingPlayoffs, setSavingPlayoffs] = useState(false);
   const [savingKnockout, setSavingKnockout] = useState(false);
+  /* Bumped only after a successful bulk sync (`/sync/` or `/playoffs/sync/`).
+     Reconciliation's post-sync trigger rides on it; edits never touch it. */
+  const [syncRevision, setSyncRevision] = useState(0);
   /* `{ kind, message }` — the kind picks the retry, so a failed write can only
      ever re-issue the write that failed (US:no-silent-failure). */
   const [error, setError] = useState(null);
@@ -177,6 +181,7 @@ export default function PredictionApp({
           method: 'POST',
           body: JSON.stringify({ predictions }),
         });
+        setSyncRevision((r) => r + 1);
       }
       setError(null);
     } catch (e) {
@@ -206,6 +211,7 @@ export default function PredictionApp({
         method: 'POST',
         body: JSON.stringify({ predictions }),
       });
+      setSyncRevision((r) => r + 1);
 
       setError(null);
 
@@ -560,6 +566,14 @@ export default function PredictionApp({
     );
   }, [knockoutBracket, localData.knockoutPredictions]);
 
+  /* Observe-only confirmation (tasks 6.3/6.4): GET-only, 30s per surface, silent
+     to users. None of these returned values is rendered, so reconciliation can
+     never gate or delay the surfaces. */
+  const predictionId = remotePrediction?.id;
+  useReconciliation('standings', { predictionId, clientValue: standings, revision: syncRevision });
+  useReconciliation('playoffs', { predictionId, clientValue: playoffMatchups, revision: syncRevision });
+  useReconciliation('knockout', { predictionId, clientValue: knockoutBracket, revision: syncRevision });
+
   const handleRandomizePlayoffs = useCallback(() => {
     if (!playoffMatchups.length) return;
     const ctxByTeamId = new Map(
@@ -685,6 +699,7 @@ export default function PredictionApp({
           method: 'POST',
           body: JSON.stringify({ predictions }),
         });
+        setSyncRevision((r) => r + 1);
       }
 
       if (playoffsComplete) {
