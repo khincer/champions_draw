@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Flag,
-  Home,
   Medal,
   RotateCcw,
   Shield,
@@ -11,16 +10,38 @@ import {
   Trophy,
 } from 'lucide-preact';
 
-import clubData from './careerClubs.json';
+// Shared primitives (task 5.3): one crest renderer, one segment control, one
+// metric card. This view keeps no local copy of any of them.
+import Crest from '../components/Crest';
+import Metric from '../components/Metric';
+import SegmentControl from '../components/SegmentControl';
+import clubData from '../careerClubs.json';
 import {
   applyCareerChoice,
   createCareer,
   isCareerState,
   POSITIONS,
   summarizeCareer,
-} from './careerEngine.mjs';
+} from '../careerEngine.mjs';
 
 export const CAREER_STORAGE_KEY = 'champions_draw_career_v1';
+
+/* Cross-view draft memory (task 5.4). `App` gates career on `view === 'career'`,
+   so navigating away unmounts this view and takes its local state with it. The
+   builder flag and the half-filled draft therefore live in module scope: a trip
+   to another view and back must not reset an in-progress identity build.
+   Module memory is deliberately not persistence — no storage key is involved,
+   `champions_draw_career_v1` is still written only when a career is committed,
+   and losing the draft on a page reload is intended. */
+const builderMemory = { open: false, draft: null };
+
+const EMPTY_IDENTITY = {
+  name: '',
+  number: 10,
+  foot: 'right',
+  nationality: '',
+  position: '',
+};
 
 const COUNTRY_CODES = `
 AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN
@@ -120,17 +141,33 @@ function formatValue(value) {
   return `€${Math.round(value / 1_000)}K`;
 }
 
+/* Career club records keep the camelCase shape of `careerClubs.json`
+   (`shortName`/`logoUrl`); the shared crest reads the API's snake_case team
+   shape. Map it here so neither the engine nor the stored career shape has to
+   change (tasks 5.3 / 5.4). */
+function toCrestTeam(club) {
+  return { name: club?.name, short_name: club?.shortName, logo_url: club?.logoUrl };
+}
+
+/* Career is a shell view (task 5.1): the shared rail / mobile bar own the
+   top-level navigation and the page chrome, so this view renders its four
+   surfaces directly — intro, IdentityBuilder, Dashboard, Summary — with no
+   `.career-app-shell` frame and no bespoke topbar. */
 export default function CareerApp({
   defaultName,
   seasonTeams,
-  onHome,
   onCareerAvailabilityChange,
 }) {
   const [initialLoad] = useState(() => loadStoredCareer());
   const [career, setCareer] = useState(initialLoad.career);
   const [notice, setNotice] = useState(initialLoad.notice);
-  const [buildingIdentity, setBuildingIdentity] = useState(false);
+  const [buildingIdentity, setBuildingIdentityState] = useState(() => builderMemory.open);
   const [showSummary, setShowSummary] = useState(false);
+
+  function showBuilder(open) {
+    builderMemory.open = open;
+    setBuildingIdentityState(open);
+  }
   const catalog = useMemo(() => buildCatalog(seasonTeams), [seasonTeams]);
   const clubById = useMemo(() => new Map(catalog.map((club) => [club.id, club])), [catalog]);
 
@@ -147,7 +184,8 @@ export default function CareerApp({
   function startCareer(identity) {
     try {
       persist(createCareer(identity, makeSeed(), catalog));
-      setBuildingIdentity(false);
+      builderMemory.draft = null;
+      showBuilder(false);
       setShowSummary(false);
     } catch (error) {
       setNotice(error.message);
@@ -174,41 +212,36 @@ export default function CareerApp({
     setCareer(null);
     setNotice('');
     setShowSummary(false);
-    setBuildingIdentity(true);
+    /* "New career" starts blank: the previous draft must not come back. */
+    builderMemory.draft = null;
+    showBuilder(true);
     onCareerAvailabilityChange(false);
   }
 
   return (
-    <section className="career-shell">
-      <header className="career-topbar">
-        <button className="career-nav-button" onClick={onHome}>
-          <Home size={17} />
-          Home
-        </button>
-        <div className="career-wordmark">
-          <span>Champions Draw</span>
-          <strong>Player Career</strong>
-        </div>
-        {career ? (
-          <button className="career-nav-button" onClick={() => resetCareer({ confirm: true })}>
+    <div className="career-view">
+      {career ? (
+        <div className="career-view-actions">
+          <button className="career-text-button" onClick={() => resetCareer({ confirm: true })}>
             <RotateCcw size={17} />
             New career
           </button>
-        ) : (
-          <span className="career-nav-spacer" />
-        )}
-      </header>
+        </div>
+      ) : null}
 
       {notice ? <div className="career-notice" role="status">{notice}</div> : null}
 
       {!career && !buildingIdentity ? (
-        <CareerIntro onStart={() => setBuildingIdentity(true)} />
+        <CareerIntro onStart={() => showBuilder(true)} />
       ) : null}
 
       {!career && buildingIdentity ? (
         <IdentityBuilder
           defaultName={defaultName}
-          onBack={() => setBuildingIdentity(false)}
+          onBack={() => {
+            builderMemory.draft = null;
+            showBuilder(false);
+          }}
           onConfirm={startCareer}
         />
       ) : null}
@@ -231,7 +264,7 @@ export default function CareerApp({
           onPlayAgain={() => resetCareer()}
         />
       ) : null}
-    </section>
+    </div>
   );
 }
 
@@ -266,15 +299,22 @@ function CareerIntro({ onStart }) {
 }
 
 function IdentityBuilder({ defaultName, onBack, onConfirm }) {
-  const [identity, setIdentity] = useState({
-    name: defaultName && defaultName !== 'Guest player' ? defaultName : '',
-    number: 10,
-    foot: 'right',
-    nationality: '',
-    position: '',
-  });
+  const [identity, setIdentity] = useState(
+    () =>
+      builderMemory.draft || {
+        ...EMPTY_IDENTITY,
+        name: defaultName && defaultName !== 'Guest player' ? defaultName : '',
+      },
+  );
   const [countryQuery, setCountryQuery] = useState('');
   const [countryLimit, setCountryLimit] = useState(24);
+
+  /* Mirror every edit into module scope so it outlives this unmount. */
+  function updateIdentity(patch) {
+    const next = { ...identity, ...patch };
+    setIdentity(next);
+    builderMemory.draft = next;
+  }
   const filteredCountries = useMemo(() => {
     const query = countryQuery.trim().toLowerCase();
     if (!query) return COUNTRIES;
@@ -311,7 +351,7 @@ function IdentityBuilder({ defaultName, onBack, onConfirm }) {
               value={identity.name}
               maxLength={80}
               placeholder="e.g. Morgan"
-              onInput={(event) => setIdentity({ ...identity, name: event.currentTarget.value })}
+              onInput={(event) => updateIdentity({ name: event.currentTarget.value })}
             />
           </label>
           <label className="career-field">
@@ -322,25 +362,22 @@ function IdentityBuilder({ defaultName, onBack, onConfirm }) {
               max="99"
               value={identity.number}
               onInput={(event) =>
-                setIdentity({ ...identity, number: Number(event.currentTarget.value) })
+                updateIdentity({ number: Number(event.currentTarget.value) })
               }
             />
           </label>
           <fieldset className="career-choice-group">
             <legend>Preferred foot</legend>
-            <div className="career-segmented">
-              {['left', 'right'].map((foot) => (
-                <button
-                  type="button"
-                  className={identity.foot === foot ? 'selected' : ''}
-                  aria-pressed={identity.foot === foot}
-                  onClick={() => setIdentity({ ...identity, foot })}
-                  key={foot}
-                >
-                  {foot}
-                </button>
-              ))}
-            </div>
+            <SegmentControl
+              className="segment-control"
+              label="Preferred foot"
+              value={identity.foot}
+              onChange={(foot) => updateIdentity({ foot })}
+              items={[
+                { key: 'left', label: 'Left' },
+                { key: 'right', label: 'Right' },
+              ]}
+            />
           </fieldset>
           <fieldset className="career-choice-group">
             <legend>Position</legend>
@@ -350,7 +387,7 @@ function IdentityBuilder({ defaultName, onBack, onConfirm }) {
                   type="button"
                   className={identity.position === position ? 'selected' : ''}
                   aria-pressed={identity.position === position}
-                  onClick={() => setIdentity({ ...identity, position })}
+                  onClick={() => updateIdentity({ position })}
                   key={position}
                 >
                   {position}
@@ -390,7 +427,7 @@ function IdentityBuilder({ defaultName, onBack, onConfirm }) {
                 type="button"
                 className={identity.nationality === country.code ? 'selected' : ''}
                 aria-pressed={identity.nationality === country.code}
-                onClick={() => setIdentity({ ...identity, nationality: country.code })}
+                onClick={() => updateIdentity({ nationality: country.code })}
                 key={country.code}
               >
                 <span aria-hidden="true">{flagEmoji(country.code)}</span>
@@ -467,7 +504,11 @@ function PlayerCard({ career, club }) {
         <p>#{career.identity.number} · {career.identity.position} · {career.identity.foot}-footed</p>
       </div>
       <div className="player-club">
-        <ClubLogo club={club} size="lg" key={club?.id || 'free-agent'} />
+        {club ? (
+          <Crest team={toCrestTeam(club)} size="lg" />
+        ) : (
+          <Shield size={28} aria-hidden="true" />
+        )}
         <div>
           <span>Current club</span>
           <strong>{club?.name || 'Free agent'}</strong>
@@ -483,15 +524,6 @@ function PlayerCard({ career, club }) {
       </div>
       <TrophyShelf trophies={career.trophies} />
     </section>
-  );
-}
-
-function Metric({ label, value }) {
-  return (
-    <div className="career-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 
@@ -527,7 +559,11 @@ function EventPanel({ event, clubById, onChoose }) {
           const club = option.clubId ? clubById.get(option.clubId) : null;
           return (
             <button className="career-option" onClick={() => onChoose(option.id)} key={option.id}>
-              <ClubLogo club={club} />
+              {club ? (
+                <Crest team={toCrestTeam(club)} />
+              ) : (
+                <Shield size={20} aria-hidden="true" />
+              )}
               <span>
                 <strong>{option.label}</strong>
                 <small>{option.detail}</small>
@@ -589,7 +625,7 @@ function CareerTimeline({ career, clubById }) {
                   <td><strong>{period.age}</strong></td>
                   <td>
                     <span className="timeline-club">
-                      <ClubLogo club={club} size="sm" />
+                      <Crest team={toCrestTeam(club)} size="sm" />
                       {club?.name || 'Unknown club'}
                     </span>
                   </td>
@@ -673,7 +709,7 @@ function CareerSummary({ career, catalog, onBack, onPlayAgain }) {
         <div className="summary-club-grid">
           {summary.clubs.map((entry) => (
             <article className="summary-club-card" key={entry.club.id}>
-              <ClubLogo club={entry.club} size="lg" />
+              <Crest team={toCrestTeam(entry.club)} size="lg" />
               <div>
                 <h3>{entry.club.name}</h3>
                 <p>{entry.club.league}</p>
@@ -715,21 +751,5 @@ function SummaryCabinet({ icon: Icon, title, subtitle, items }) {
         <span className="empty-cabinet">Cabinet empty</span>
       )}
     </article>
-  );
-}
-
-function ClubLogo({ club, size = 'md' }) {
-  const [failed, setFailed] = useState(false);
-  const showImage = club?.logoUrl && !failed;
-  return (
-    <span className={`career-club-logo ${size}`} aria-hidden="true">
-      {showImage ? (
-        <img src={club.logoUrl} alt="" loading="lazy" onError={() => setFailed(true)} />
-      ) : club ? (
-        club.shortName.slice(0, 3)
-      ) : (
-        <Shield size={size === 'lg' ? 28 : 20} />
-      )}
-    </span>
   );
 }

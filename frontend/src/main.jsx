@@ -1,7 +1,7 @@
 import { render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import './styles.css';
-import CareerApp, { hasSavedCareer } from './CareerApp';
+import CareerApp, { hasSavedCareer } from './views/CareerApp';
 import PredictionApp from './PredictionApp';
 import DrawAnimationStage from './views/DrawAnimationStage';
 import Homepage from './views/Homepage';
@@ -375,11 +375,10 @@ function App() {
         )}
 
         {view === 'career' && (
-          <section className="app-shell career-app-shell" aria-label="Career mode">
+          <section className="workspace" aria-label="Career mode">
             <CareerApp
               defaultName={playerName}
               seasonTeams={seasonState?.teams || []}
-              onHome={() => setView('home')}
               onCareerAvailabilityChange={setCareerAvailable}
             />
             <AppFooter />

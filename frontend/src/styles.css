@@ -2187,65 +2187,22 @@ select:focus-visible {
   text-transform: uppercase;
 }
 
-/* Player career */
+/* Player career — a shell view like every other (task 5.1): no bespoke frame
+   and no topbar. The navy/gold palette is gone (task 5.2, hard replacement);
+   every rule below resolves shell tokens so the view reads as part of the app
+   in both themes and is distinguished only by its content. */
 
-.career-app-shell {
-  --career-ink: #07152f;
-  --career-navy: #091a3a;
-  --career-blue: #477fff;
-  --career-gold: #d7a63a;
-  --career-line: #d9e1ee;
-  background:
-    linear-gradient(180deg, #07152f 0 180px, #eef3f9 180px),
-    #eef3f9;
+.career-view-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
-.career-app-shell .app-footer {
-  padding-bottom: 22px;
-}
-
-.career-shell {
-  width: min(1240px, 100%);
-  min-height: calc(100vh - 42px);
-  margin: 0 auto;
-  padding: 18px 22px 36px;
-}
-
-.career-topbar {
-  min-height: 58px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 18px;
-  color: white;
-}
-
-.career-wordmark {
-  display: grid;
-  justify-items: center;
-  line-height: 1.1;
-}
-
-.career-wordmark span {
-  color: #91a9d9;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.career-wordmark strong {
-  margin-top: 3px;
-  font-size: 18px;
-}
-
-.career-nav-button,
 .career-text-button {
   min-height: 44px;
   width: fit-content;
   border: 0;
   background: transparent;
-  color: inherit;
+  color: var(--blue-dark);
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -2253,21 +2210,13 @@ select:focus-visible {
   font-weight: 800;
 }
 
-.career-topbar .career-nav-button:last-child {
-  justify-self: end;
-}
-
-.career-nav-spacer {
-  min-width: 1px;
-}
-
 .career-notice {
   max-width: 760px;
   margin: 12px auto;
-  border: 1px solid #f2d695;
-  border-radius: 8px;
-  background: #fff8e7;
-  color: #765210;
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-md);
+  background: var(--soft-blue);
+  color: var(--blue-dark);
   padding: 10px 14px;
   font-size: 13px;
   font-weight: 800;
@@ -2277,12 +2226,10 @@ select:focus-visible {
   min-height: 650px;
   margin-top: 22px;
   overflow: hidden;
-  border: 1px solid #233b69;
-  border-radius: 12px;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(71, 127, 255, 0.28), transparent 28%),
-    var(--career-navy);
-  color: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
 }
@@ -2290,10 +2237,6 @@ select:focus-visible {
 .career-intro-copy {
   padding: clamp(34px, 7vw, 84px);
   align-self: center;
-}
-
-.career-intro-copy .career-kicker {
-  color: #9cbaff;
 }
 
 .career-intro h1,
@@ -2313,7 +2256,7 @@ select:focus-visible {
 .career-intro-copy p {
   max-width: 590px;
   margin: 22px 0 0;
-  color: #bdc9e0;
+  color: var(--muted);
   font-size: 17px;
   line-height: 1.6;
 }
@@ -2322,7 +2265,7 @@ select:focus-visible {
 .career-secondary-action {
   min-height: 46px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0 18px;
   display: inline-flex;
   align-items: center;
@@ -2333,8 +2276,8 @@ select:focus-visible {
 
 .career-primary-action {
   margin-top: 28px;
-  background: var(--career-gold);
-  color: var(--career-ink);
+  background: var(--green-primary);
+  color: var(--status-ink);
 }
 
 .career-primary-action:disabled {
@@ -2343,17 +2286,15 @@ select:focus-visible {
 }
 
 .career-secondary-action {
-  background: #e8eef8;
-  color: var(--career-ink);
+  background: var(--surface-soft);
+  color: var(--ink);
 }
 
 .career-intro-board {
   position: relative;
   min-height: 100%;
-  border-left: 1px solid rgba(255, 255, 255, 0.14);
-  background:
-    linear-gradient(150deg, rgba(71, 127, 255, 0.24), transparent 52%),
-    rgba(255, 255, 255, 0.035);
+  border-left: 1px solid var(--line);
+  background: var(--surface-soft);
   padding: 70px 44px 44px;
   display: grid;
   align-content: center;
@@ -2365,8 +2306,8 @@ select:focus-visible {
   right: -54px;
   width: 270px;
   transform: rotate(34deg);
-  background: var(--career-gold);
-  color: var(--career-ink);
+  background: var(--blue);
+  color: var(--status-ink);
   padding: 8px;
   text-align: center;
   font-size: 10px;
@@ -2375,7 +2316,7 @@ select:focus-visible {
 }
 
 .career-board-number {
-  color: white;
+  color: var(--ink);
   font-size: clamp(120px, 19vw, 220px);
   font-weight: 950;
   line-height: 0.75;
@@ -2384,7 +2325,7 @@ select:focus-visible {
 
 .career-intro-board > strong {
   margin-top: 24px;
-  color: #9cbaff;
+  color: var(--blue);
   text-transform: uppercase;
   letter-spacing: 0.13em;
 }
@@ -2393,23 +2334,23 @@ select:focus-visible {
   margin-top: 40px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
-  border-left: 1px solid rgba(255, 255, 255, 0.18);
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
 }
 
 .career-board-grid span {
   min-height: 74px;
-  border-right: 1px solid rgba(255, 255, 255, 0.18);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   padding: 14px;
   display: grid;
-  color: #aebbd2;
+  color: var(--muted);
   font-size: 11px;
   text-transform: uppercase;
 }
 
 .career-board-grid b {
-  color: white;
+  color: var(--ink);
   font-size: 25px;
 }
 
@@ -2420,8 +2361,8 @@ select:focus-visible {
 }
 
 .identity-heading {
-  border-radius: 12px 12px 0 0;
-  background: white;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--surface);
   padding: 32px;
 }
 
@@ -2433,7 +2374,7 @@ select:focus-visible {
 .identity-heading h1 {
   max-width: 760px;
   margin: 10px 0 0;
-  color: var(--career-ink);
+  color: var(--ink);
   font-size: clamp(40px, 6vw, 68px);
   line-height: 0.98;
 }
@@ -2449,19 +2390,19 @@ select:focus-visible {
   display: grid;
   grid-template-columns: 0.82fr 1.18fr;
   gap: 1px;
-  background: var(--career-line);
-  border: 1px solid var(--career-line);
+  background: var(--line);
+  border: 1px solid var(--line);
 }
 
 .identity-panel {
   min-width: 0;
-  background: white;
+  background: var(--surface);
   padding: 28px;
 }
 
 .identity-panel h2 {
   margin: 0 0 20px;
-  color: var(--career-ink);
+  color: var(--ink);
   font-size: 24px;
 }
 
@@ -2473,7 +2414,7 @@ select:focus-visible {
 
 .career-field > span,
 .career-choice-group legend {
-  color: #576984;
+  color: var(--muted);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -2483,10 +2424,10 @@ select:focus-visible {
 .career-field input {
   width: 100%;
   min-height: 44px;
-  border: 1px solid var(--career-line);
-  border-radius: 7px;
-  background: #f8fafd;
-  color: var(--career-ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--ink);
   padding: 0 12px;
   outline: none;
 }
@@ -2502,35 +2443,28 @@ select:focus-visible {
   margin-bottom: 8px;
 }
 
-.career-segmented,
+/* The 12-cell position keypad stays a grid picker: the shared segment control
+   is a linear control and its arrow-key geometry would not match a 4-column
+   grid (task 5.3). */
 .position-grid {
   display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 7px;
 }
 
-.career-segmented {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.position-grid {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-.career-segmented button,
 .position-grid button {
   min-height: 42px;
-  border: 1px solid var(--career-line);
-  border-radius: 7px;
-  background: white;
-  color: #56677f;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
   font-weight: 900;
   text-transform: uppercase;
 }
 
-.career-segmented button.selected,
 .position-grid button.selected {
-  border-color: var(--career-blue);
-  background: #eaf0ff;
+  border-color: var(--blue);
+  background: var(--soft-blue);
   color: var(--blue-dark);
 }
 
@@ -2559,21 +2493,21 @@ select:focus-visible {
 .country-grid button {
   min-width: 0;
   min-height: 48px;
-  border: 1px solid var(--career-line);
-  border-radius: 7px;
-  background: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   padding: 7px 9px;
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px;
-  color: var(--career-ink);
+  color: var(--ink);
   text-align: left;
 }
 
 .country-grid button.selected {
-  border-color: var(--career-blue);
-  background: #eaf0ff;
+  border-color: var(--blue);
+  background: var(--soft-blue);
 }
 
 .country-grid b {
@@ -2593,17 +2527,17 @@ select:focus-visible {
   width: 100%;
   min-height: 42px;
   margin-top: 10px;
-  border: 1px dashed #a8b6ca;
-  border-radius: 7px;
-  background: #f8fafd;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
   color: var(--blue-dark);
   font-weight: 900;
 }
 
 .identity-confirm {
-  border-radius: 0 0 12px 12px;
-  background: var(--career-ink);
-  color: white;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: var(--sidebar);
+  color: var(--sidebar-text);
   padding: 18px 26px;
   display: flex;
   align-items: center;
@@ -2612,7 +2546,7 @@ select:focus-visible {
 }
 
 .identity-confirm > span {
-  color: #aebbd2;
+  color: var(--sidebar-muted);
   font-size: 13px;
 }
 
@@ -2622,19 +2556,18 @@ select:focus-visible {
 
 .player-card {
   overflow: hidden;
-  border: 1px solid #243c6b;
-  border-radius: 12px;
-  background:
-    var(--career-navy);
-  color: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
   display: grid;
   grid-template-columns: 138px minmax(260px, 1fr) minmax(220px, 0.75fr);
 }
 
 .player-rating {
   grid-row: span 2;
-  background: var(--career-gold);
-  color: var(--career-ink);
+  background: var(--green-primary);
+  color: var(--status-ink);
   padding: 22px;
   display: grid;
   align-content: center;
@@ -2663,7 +2596,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #9cbaff;
+  color: var(--blue);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.1em;
@@ -2682,12 +2615,12 @@ select:focus-visible {
 
 .player-identity p {
   margin: 7px 0 0;
-  color: #aebbd2;
+  color: var(--muted);
   text-transform: capitalize;
 }
 
 .player-club {
-  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 1px solid var(--line);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -2700,7 +2633,7 @@ select:focus-visible {
 
 .player-club span,
 .player-club small {
-  color: #91a9d9;
+  color: var(--muted);
   font-size: 11px;
 }
 
@@ -2714,44 +2647,20 @@ select:focus-visible {
 
 .player-metrics {
   grid-column: 2 / 4;
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid var(--line);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-}
-
-.career-metric {
-  min-height: 68px;
-  padding: 12px 16px;
-  display: grid;
-  align-content: center;
-}
-
-.career-metric + .career-metric {
-  border-left: 1px solid rgba(255, 255, 255, 0.14);
-}
-
-.career-metric span {
-  color: #91a9d9;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.career-metric strong {
-  margin-top: 3px;
-  font-size: 20px;
 }
 
 .career-trophy-shelf {
   grid-column: 1 / -1;
   min-height: 58px;
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid var(--line);
   padding: 10px 20px;
   display: flex;
   align-items: center;
   gap: 11px;
-  color: var(--career-gold);
+  color: var(--blue);
 }
 
 .career-trophy-shelf div {
@@ -2759,20 +2668,20 @@ select:focus-visible {
 }
 
 .career-trophy-shelf strong {
-  color: white;
+  color: var(--ink);
   font-size: 13px;
 }
 
 .career-trophy-shelf span {
-  color: #91a9d9;
+  color: var(--muted);
   font-size: 11px;
 }
 
 .career-outcome {
   margin: 10px 0;
-  border: 1px solid #bad0ff;
-  border-radius: 8px;
-  background: #eaf0ff;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--soft-blue);
   color: var(--blue-dark);
   padding: 11px 14px;
   display: flex;
@@ -2787,9 +2696,9 @@ select:focus-visible {
 .retirement-panel,
 .summary-cabinet,
 .summary-clubs {
-  border: 1px solid var(--career-line);
-  border-radius: 12px;
-  background: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
 .career-event-panel {
@@ -2802,7 +2711,7 @@ select:focus-visible {
 
 .career-event-copy h2 {
   margin: 8px 0 0;
-  color: var(--career-ink);
+  color: var(--ink);
   font-size: clamp(28px, 4vw, 42px);
   line-height: 1;
   letter-spacing: -0.04em;
@@ -2822,23 +2731,23 @@ select:focus-visible {
 .career-option {
   width: 100%;
   min-height: 72px;
-  border: 1px solid var(--career-line);
-  border-radius: 8px;
-  background: #f8fafd;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
   padding: 10px 13px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  color: var(--career-ink);
+  color: var(--ink);
   text-align: left;
   transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .career-option:hover {
   transform: translateX(3px);
-  border-color: var(--career-blue);
-  box-shadow: 0 8px 20px rgba(21, 92, 255, 0.09);
+  border-color: var(--blue);
+  box-shadow: var(--sh-2);
 }
 
 .career-option > span {
@@ -2856,37 +2765,12 @@ select:focus-visible {
   font-size: 11px;
 }
 
-.career-club-logo {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 auto;
-  border: 1px solid #cbd6e5;
-  border-radius: 50%;
-  background: white;
-  color: var(--blue-dark);
-  display: inline-grid;
-  place-items: center;
-  overflow: hidden;
-  font-size: 10px;
-  font-weight: 950;
-}
-
-.career-club-logo.sm {
-  width: 28px;
-  height: 28px;
-  font-size: 8px;
-}
-
-.career-club-logo.lg {
-  width: 58px;
-  height: 58px;
-  font-size: 12px;
-}
-
-.career-club-logo img {
-  width: 78%;
-  height: 78%;
-  object-fit: contain;
+/* The shared crest's `lg` size carries a 12px bottom margin for the draw pots;
+   in these career rows the crest is a flex/grid item, where that margin is just
+   a misalignment. Container-scoped neutralisation, no size fork (task 5.3). */
+.player-club > .team-logo,
+.summary-club-card > .team-logo {
+  margin-bottom: 0;
 }
 
 .career-timeline {
@@ -2904,7 +2788,7 @@ select:focus-visible {
 
 .career-section-heading h2 {
   margin: 5px 0 0;
-  color: var(--career-ink);
+  color: var(--ink);
   font-size: 25px;
 }
 
@@ -2926,16 +2810,16 @@ select:focus-visible {
 
 .career-timeline th,
 .career-timeline td {
-  border-top: 1px solid var(--career-line);
+  border-top: 1px solid var(--line);
   padding: 10px 12px;
-  color: #40516a;
+  color: var(--muted);
   text-align: left;
   font-size: 12px;
 }
 
 .career-timeline th {
-  background: #f3f6fa;
-  color: #6c7c93;
+  background: var(--surface-soft);
+  color: var(--muted);
   font-size: 9px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -2946,7 +2830,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--career-ink);
+  color: var(--ink);
   font-weight: 800;
 }
 
@@ -2955,7 +2839,7 @@ select:focus-visible {
 }
 
 .timeline-pending td {
-  background: #eef3ff;
+  background: var(--soft-blue);
   color: var(--blue-dark);
   font-weight: 800;
 }
@@ -2970,12 +2854,12 @@ select:focus-visible {
 
 .retirement-panel > svg {
   margin-top: 18px;
-  color: var(--career-gold);
+  color: var(--blue);
 }
 
 .retirement-panel h2 {
   margin: 12px 0 0;
-  color: var(--career-ink);
+  color: var(--ink);
   font-size: clamp(30px, 4vw, 46px);
   letter-spacing: -0.04em;
 }
@@ -2996,25 +2880,20 @@ select:focus-visible {
 
 .career-summary > .career-text-button {
   margin: 0 0 14px;
-  color: white;
+  color: var(--blue-dark);
 }
 
 .summary-hero {
   min-height: 220px;
   overflow: hidden;
-  border: 1px solid #243c6b;
-  border-radius: 12px 12px 0 0;
-  background:
-    var(--career-navy);
-  color: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--surface);
+  color: var(--ink);
   padding: 34px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-
-.summary-hero .career-kicker {
-  color: #9cbaff;
 }
 
 .summary-hero h1 {
@@ -3025,7 +2904,7 @@ select:focus-visible {
 
 .summary-hero p {
   margin: 12px 0 0;
-  color: #aebbd2;
+  color: var(--muted);
 }
 
 .summary-flag {
@@ -3034,21 +2913,9 @@ select:focus-visible {
 }
 
 .summary-metrics {
-  background: var(--career-gold);
+  background: var(--green-primary);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-}
-
-.summary-metrics .career-metric {
-  color: var(--career-ink);
-}
-
-.summary-metrics .career-metric + .career-metric {
-  border-color: rgba(7, 21, 47, 0.18);
-}
-
-.summary-metrics .career-metric span {
-  color: #654911;
 }
 
 .summary-cabinets {
@@ -3067,12 +2934,12 @@ select:focus-visible {
 }
 
 .summary-cabinet > svg {
-  color: var(--career-blue);
+  color: var(--blue);
 }
 
 .summary-cabinet h2 {
   margin: 0;
-  color: var(--career-ink);
+  color: var(--ink);
   font-size: 20px;
 }
 
@@ -3085,14 +2952,14 @@ select:focus-visible {
 .summary-cabinet ul {
   margin: 0;
   padding-left: 18px;
-  color: #40516a;
+  color: var(--muted);
   font-size: 12px;
   line-height: 1.55;
 }
 
 .empty-cabinet {
-  border: 1px dashed #b9c5d5;
-  border-radius: 7px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
   color: var(--muted);
   padding: 14px;
   text-align: center;
@@ -3114,9 +2981,9 @@ select:focus-visible {
 
 .summary-club-card {
   min-width: 0;
-  border: 1px solid var(--career-line);
-  border-radius: 9px;
-  background: #f8fafd;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
   padding: 15px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -3126,7 +2993,7 @@ select:focus-visible {
 .summary-club-card h3 {
   overflow: hidden;
   margin: 0;
-  color: var(--career-ink);
+  color: var(--ink);
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 16px;
@@ -3142,7 +3009,7 @@ select:focus-visible {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border-top: 1px solid var(--career-line);
+  border-top: 1px solid var(--line);
 }
 
 .summary-club-stats span {
@@ -3155,13 +3022,13 @@ select:focus-visible {
 }
 
 .summary-club-stats b {
-  color: var(--career-ink);
+  color: var(--ink);
   font-size: 17px;
 }
 
 .summary-club-card > small {
   grid-column: 1 / -1;
-  color: #765210;
+  color: var(--muted);
   font-weight: 800;
 }
 
@@ -3198,7 +3065,7 @@ select:focus-visible {
 
   .career-intro-board {
     min-height: 440px;
-    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    border-top: 1px solid var(--line);
     border-left: 0;
   }
 
@@ -3212,7 +3079,7 @@ select:focus-visible {
 
   .player-club {
     grid-column: 1 / -1;
-    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    border-top: 1px solid var(--line);
     border-left: 0;
   }
 
@@ -3227,24 +3094,6 @@ select:focus-visible {
 }
 
 @media (max-width: 640px) {
-  .career-shell {
-    padding: 10px 12px 26px;
-  }
-
-  .career-topbar {
-    grid-template-columns: auto 1fr auto;
-  }
-
-  .career-nav-button {
-    width: 44px;
-    font-size: 0;
-    justify-content: center;
-  }
-
-  .career-wordmark {
-    justify-items: start;
-  }
-
   .career-intro {
     min-height: 0;
   }
@@ -3297,13 +3146,9 @@ select:focus-visible {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .player-metrics .career-metric:last-child,
-  .summary-metrics .career-metric:last-child {
+  .player-metrics .metric:last-child,
+  .summary-metrics .metric:last-child {
     grid-column: span 2;
-  }
-
-  .career-metric:nth-child(odd) {
-    border-left: 0;
   }
 
   .career-event-panel {
