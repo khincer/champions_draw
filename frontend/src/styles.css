@@ -1322,7 +1322,7 @@ select:focus,
 }
 
 .fixture-row .fx-status.waiting {
-  color: var(--gold);
+  color: var(--gold-ink);
 }
 
 .fixture-row .fx-status.live {
@@ -1452,6 +1452,7 @@ select:focus,
 
 /* Prev/next matchday controls inside the card header */
 .md-nav-btn {
+  min-width: 44px;
   min-height: 44px;
   padding: 0 12px;
   font-size: 14px;
