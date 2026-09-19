@@ -828,5 +828,50 @@ class HomepageMatchesAPIView(APIView):
 					'closed': m.status == 'FINISHED',
 					'status': m.status,
 				})
+		# Real-league fixtures (the same data that powers the Leagues tab).
+		# LeagueMatch is flat, so the nested home_team/away_team objects the
+		# homepage cards expect are built here (Crest reads logo_url). Like the
+		# UCL block above, this is best-effort: a failure must not drop the UCL
+		# or CONMEBOL rows already collected.
+		try:
+			active_leagues = list(League.objects.filter(is_active=True))
+			if active_leagues:
+				league_matches = list(
+					LeagueMatch.objects.select_related('league')
+					.filter(league__in=active_leagues, kickoff__isnull=False)
+				)
+				for m in league_matches:
+					rows.append({
+						'id': f'lm-{m.match_id}',
+						# LeagueMatch has no Season FK, and non-openable rows never
+						# reach the match-detail navigation that reads season_id
+						# (Homepage gates on openable). None is the honest value.
+						'season_id': None,
+						'competition': m.league.name,
+						'openable': False,
+						'home_team': {
+							'name': m.home_name,
+							'short_name': m.home_short,
+							'logo_url': m.home_crest,
+						},
+						'away_team': {
+							'name': m.away_name,
+							'short_name': m.away_short,
+							'logo_url': m.away_crest,
+						},
+						'matchday': m.matchday,
+						'kickoff': m.kickoff.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z'),
+						'result': (
+							{'home_goals': m.home_goals, 'away_goals': m.away_goals}
+							if m.status == 'FINISHED' and m.home_goals is not None and m.away_goals is not None
+							else None
+						),
+						'closed': m.status == 'FINISHED',
+						'status': m.status,
+					})
+		except Exception:
+			# League fixture loading is best-effort; the UCL and CONMEBOL rows
+			# collected above must survive any failure here.
+			pass
 		rows.sort(key=lambda r: r['kickoff'] or '')
 		return Response({'matchups': rows})

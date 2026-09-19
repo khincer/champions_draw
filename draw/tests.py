@@ -1808,3 +1808,67 @@ class LeagueFixtureListAPITests(APITestCase):
         resp = self.client.get(f'/api/leagues/{self.league.id}/matches/')
         upcoming = resp.json()['upcoming']
         self.assertIsNone(upcoming[0]['result'])
+
+
+class HomepageMatchesLeagueTests(APITestCase):
+	def setUp(self):
+		self.league = League.objects.create(name='Premier League', code='PL', country='England')
+
+	def _fixture(self, match_id, home, away, kickoff, status, home_goals=None, away_goals=None):
+		return LeagueMatch.objects.create(
+			league=self.league,
+			match_id=match_id,
+			home_name=home,
+			away_name=away,
+			home_short=home[:3],
+			away_short=away[:3],
+			home_crest='https://crests.example/arsenal.png',
+			away_crest='https://crests.example/chelsea.png',
+			kickoff=kickoff,
+			status=status,
+			home_goals=home_goals,
+			away_goals=away_goals,
+		)
+
+	def _league_rows(self):
+		resp = self.client.get('/api/homepage/matches/')
+		self.assertEqual(resp.status_code, 200)
+		return [r for r in resp.json()['matchups'] if r['id'].startswith('lm-')]
+
+	def test_league_match_row_shape_and_derivations(self):
+		now = datetime.now(timezone.utc)
+		finished = self._fixture(9001, 'Arsenal', 'Chelsea', now - timedelta(days=1), 'FINISHED', 2, 1)
+		scheduled = self._fixture(9002, 'Man City', 'Liverpool', now + timedelta(hours=2), 'TIMED', None, None)
+
+		rows = {r['id']: r for r in self._league_rows()}
+		row = rows[f'lm-{finished.match_id}']
+		self.assertIsNone(row['season_id'])
+		self.assertEqual(row['competition'], 'Premier League')
+		self.assertFalse(row['openable'])
+		self.assertEqual(row['home_team'], {
+			'name': 'Arsenal',
+			'short_name': 'Ars',
+			'logo_url': 'https://crests.example/arsenal.png',
+		})
+		self.assertEqual(row['away_team'], {
+			'name': 'Chelsea',
+			'short_name': 'Che',
+			'logo_url': 'https://crests.example/chelsea.png',
+		})
+		self.assertTrue(row['kickoff'].endswith('Z'))
+		self.assertEqual(row['result'], {'home_goals': 2, 'away_goals': 1})
+		self.assertTrue(row['closed'])
+		self.assertEqual(row['status'], 'FINISHED')
+
+		upcoming = rows[f'lm-{scheduled.match_id}']
+		self.assertIsNone(upcoming['result'])
+		self.assertFalse(upcoming['closed'])
+		self.assertEqual(upcoming['status'], 'TIMED')
+
+	def test_rows_without_kickoff_are_skipped(self):
+		now = datetime.now(timezone.utc)
+		self._fixture(9003, 'No', 'Kickoff', None, 'SCHEDULED')
+		self._fixture(9004, 'Has', 'Kickoff', now, 'SCHEDULED')
+		ids = {r['id'] for r in self._league_rows()}
+		self.assertNotIn('lm-9003', ids)
+		self.assertIn('lm-9004', ids)
