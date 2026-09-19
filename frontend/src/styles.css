@@ -652,6 +652,13 @@ select:focus,
   color: var(--muted);
 }
 
+/* The crest initials are a span nested inside `.team-logo`, so the rule above
+   captured them and pinned them to --muted — 3.03:1 on the --navy crest of a
+   selected row. Let them inherit the crest's own colour instead. */
+.team-badge .team-logo span {
+  color: inherit;
+}
+
 .team-logo {
   flex: 0 0 auto;
   display: inline-grid;
@@ -1173,25 +1180,25 @@ select:focus,
 
 .md-dot:hover {
   border-color: var(--blue);
-  color: var(--blue);
+  color: var(--blue-dark);
 }
 
 .md-dot.md-active {
   border-color: var(--blue);
   background: var(--blue);
-  color: white;
+  color: var(--status-ink);
 }
 
 .md-dot.md-done {
   border-color: var(--green);
   background: var(--qualify-fill);
-  color: var(--green);
+  color: var(--green-ink);
 }
 
 .md-dot.md-done.md-active {
   background: var(--blue);
   border-color: var(--blue);
-  color: white;
+  color: var(--status-ink);
 }
 
 .matchday-card-wrap {
@@ -1600,7 +1607,7 @@ select:focus,
 .playoff-match:hover { border-color: var(--line-strong); }
 .playoff-match.playoff-decided { border-color: var(--decided-line); }
 .playoff-head { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.playoff-num { width: 24px; height: 24px; border-radius: var(--radius-sm); background: var(--blue); color: white; font-size: 11px; font-weight: 900; display: grid; place-items: center; flex: 0 0 auto; }
+.playoff-num { width: 24px; height: 24px; border-radius: var(--radius-sm); background: var(--blue); color: var(--status-ink); font-size: 11px; font-weight: 900; display: grid; place-items: center; flex: 0 0 auto; }
 .playoff-winner { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; color: var(--green); min-width: 0; }
 .playoff-won-badge { font-size: 9px; font-weight: 900; color: var(--green); background: var(--qualify-line); padding: var(--space-1) var(--space-2); border-radius: var(--radius-xs); flex: 0 0 auto; }
 .playoff-pending { color: var(--muted); font-weight: 400; font-style: italic; }

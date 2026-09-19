@@ -1,7 +1,7 @@
 {
   "schema": "champions-draw/app-evidence/v1",
-  "candidate": "8477cb24feb699f98d7bbf369580815d5c4c8bc5",
-  "startedAt": "2026-09-19T19:14:11.094Z",
+  "candidate": "dd05eb2609aa6b7928bc10331db8691a64ea3930",
+  "startedAt": "2026-09-19T20:05:55.651Z",
   "scenarios": {
     "AS.crossing-threshold-preserves-state": {
       "status": "pass",
@@ -32,22 +32,27 @@
         ],
         "restored": "Draw workspace"
       },
-      "ms": 4393
+      "ms": 4323
     },
     "AS.poll-cadence-unchanged": {
       "status": "pass",
       "detail": {
         "elapsedS": 126,
-        "liveRequests": 6,
+        "liveRequests": 7,
         "liveGaps": [
           30,
           30,
           0,
           30,
-          30
+          30,
+          0
         ],
         "steadyGaps": 4,
         "bursts": [
+          {
+            "gap": 0,
+            "nearHub": true
+          },
           {
             "gap": 0,
             "nearHub": true
@@ -64,7 +69,7 @@
         },
         "viewAfterResizes": "Live hub"
       },
-      "ms": 128014
+      "ms": 128049
     },
     "AS.keyboard-only-navigation": {
       "status": "pass",
@@ -79,7 +84,7 @@
           "height": "36px"
         }
       },
-      "ms": 2200
+      "ms": 2201
     },
     "AS.navigation-during-active-reveal": {
       "status": "pass",
@@ -119,7 +124,7 @@
         },
         "methodNow": "interactive"
       },
-      "ms": 8212
+      "ms": 8184
     },
     "US.sync-fails-after-typing": {
       "status": "pass",
@@ -141,7 +146,7 @@
           "error": null
         }
       },
-      "ms": 5201
+      "ms": 5157
     },
     "US.live-poll-during-scroll": {
       "status": "pass",
@@ -156,7 +161,7 @@
           "focus": "hub-open-match"
         }
       },
-      "ms": 4094
+      "ms": 4203
     },
     "US.homepage-skeleton": {
       "status": "pass",
@@ -174,7 +179,7 @@
         },
         "note": "skeleton occupies 344px; settled card 316px"
       },
-      "ms": 2581
+      "ms": 2570
     },
     "US.state-matrix": {
       "status": "pass",
@@ -713,7 +718,7 @@
         "groupStandingsFourStates": true,
         "retryIsolation": true
       },
-      "ms": 77082
+      "ms": 77104
     },
     "A11Y.card-behaves-as-control": {
       "status": "pass",
@@ -726,7 +731,7 @@
         },
         "openedDialog": "match-detail-view"
       },
-      "ms": 2170
+      "ms": 2169
     },
     "A11Y.dialog-focus-return": {
       "status": "pass",
@@ -768,7 +773,7 @@
           "dialogGone": true
         }
       },
-      "ms": 2797
+      "ms": 2820
     },
     "A11Y.reduced-motion": {
       "status": "pass",
@@ -788,7 +793,7 @@
           "ariaCurrent": "page"
         }
       },
-      "ms": 3260
+      "ms": 3273
     },
     "A11Y.full-keyboard-pass": {
       "status": "pass",
@@ -806,7 +811,7 @@
           "noRing": []
         }
       },
-      "ms": 3604
+      "ms": 3582
     },
     "A11Y.score-input-name": {
       "status": "pass",
@@ -818,7 +823,7 @@
           "Away goals, Liverpool versus Inter Milan, Matchday 1"
         ]
       },
-      "ms": 2794
+      "ms": 2803
     },
     "A11Y.status-dot": {
       "status": "pass",
@@ -828,7 +833,7 @@
         "srText": "Completed",
         "rowText": "CompletedAdaprediction-1 · sat - COMPLETED - 4 fixtures - 19 sept 2026"
       },
-      "ms": 3302
+      "ms": 3319
     },
     "CS.cross-view-navigation": {
       "status": "pass",
@@ -844,7 +849,7 @@
           "career": null
         }
       },
-      "ms": 4432
+      "ms": 4410
     },
     "CS.all-four-surfaces": {
       "status": "pass",
@@ -872,12 +877,12 @@
           "ownChrome": false
         }
       },
-      "ms": 4346
+      "ms": 4365
     },
     "CS.legacy-career-loads": {
       "status": "pass",
       "detail": {
-        "writtenLength": 1044,
+        "writtenLength": 1061,
         "restored": {
           "dashboard": true,
           "name": "Morgan",
@@ -888,7 +893,7 @@
           "same": true
         }
       },
-      "ms": 4793
+      "ms": 4745
     },
     "CS.no-writes-outside-key": {
       "status": "pass",
@@ -896,9 +901,9 @@
         "changed": [
           "champions_draw_career_v1"
         ],
-        "careerKeyBytes": 1233
+        "careerKeyBytes": 1223
       },
-      "ms": 3930
+      "ms": 3942
     },
     "PR.mismatch-does-not-change-pixels": {
       "status": "pass",
@@ -911,12 +916,12 @@
         },
         "warnCount": 6
       },
-      "ms": 5859
+      "ms": 5855
     },
     "PR.slow-confirmation-never-blocks": {
       "status": "pass",
       "detail": {
-        "fillMs": 11,
+        "fillMs": 9,
         "info": {
           "rows": 4,
           "disabledInputs": 0,
@@ -925,7 +930,7 @@
         },
         "note": "standings GET held open; client table still rendered"
       },
-      "ms": 4135
+      "ms": 4114
     },
     "PR.typing-does-not-trigger-checks": {
       "status": "pass",
@@ -934,14 +939,14 @@
         "after": 3,
         "note": "mount-time checks per surface only; 20 edits added none"
       },
-      "ms": 5263
+      "ms": 5236
     },
     "PR.local-only-prediction": {
       "status": "pass",
       "detail": {
         "confirmGets": 0
       },
-      "ms": 4327
+      "ms": 4330
     },
     "PR.log-content": {
       "status": "pass",
@@ -953,7 +958,7 @@
           "champions_draw_player_name"
         ]
       },
-      "ms": 4392
+      "ms": 4421
     },
     "PR.502-during-confirmation": {
       "status": "pass",
@@ -964,7 +969,7 @@
         "standingsWarnCount": 1,
         "totalReconWarns": 6
       },
-      "ms": 5419
+      "ms": 5428
     },
     "PR.offline-then-reconnected": {
       "status": "pass",
@@ -973,7 +978,7 @@
         "offlineRendered": true,
         "confirmGets": 6
       },
-      "ms": 39260
+      "ms": 39294
     },
     "PR.storage-untouched": {
       "status": "pass",
@@ -986,7 +991,7 @@
         "unchanged": true,
         "newKeys": []
       },
-      "ms": 4577
+      "ms": 4613
     },
     "DT.theme-switch-keyboard": {
       "status": "pass",
@@ -1002,7 +1007,7 @@
           "key": "dark"
         }
       },
-      "ms": 1581
+      "ms": 1558
     },
     "DT.complete-scales": {
       "status": "pass",
@@ -1031,20 +1036,20 @@
           20,
           999
         ],
-        "scannedRules": 669,
-        "targetRules": 163,
+        "scannedRules": 670,
+        "targetRules": 164,
         "categoryHits": {
           "table cell": 25,
           "button": 32,
           "card": 32,
-          "badge": 33,
+          "badge": 34,
           "named": 41
         },
         "requiredMissing": [],
         "offenderCount": 0,
         "offenders": []
       },
-      "ms": 766
+      "ms": 798
     },
     "UC.qualification-bands": {
       "status": "pass",
@@ -1068,7 +1073,7 @@
           "sr": "Eliminated"
         }
       },
-      "ms": 775
+      "ms": 742
     },
     "UC.button-state-coverage": {
       "status": "pass",
@@ -1189,7 +1194,7 @@
           "cursor": "not-allowed"
         }
       },
-      "ms": 1659
+      "ms": 1679
     },
     "UC.primitive-stays-presentational": {
       "status": "pass",
@@ -1201,7 +1206,7 @@
           "buttons": 10
         }
       },
-      "ms": 1916
+      "ms": 1926
     },
     "UC.skeleton-layout-note": {
       "status": "pass",
@@ -1210,11 +1215,11 @@
         "settledHeight": 132,
         "delta": 28
       },
-      "ms": 1066
+      "ms": 1072
     }
   },
-  "candidateWorktreeTree": "2ef4ef03f75fd38edee1a42f158a4882bf5b1446",
-  "finishedAt": "2026-09-19T19:20:02.011Z",
+  "candidateWorktreeTree": "ddd0c3c62bd7ac75764e92f680db3628164445f2",
+  "finishedAt": "2026-09-19T20:11:46.954Z",
   "summary": {
     "total": 32,
     "pass": 32,
