@@ -1,0 +1,1276 @@
+{
+  "schema": "champions-draw/app-evidence/v1",
+  "candidate": "a03db79bf11aad2c04766608675e505ea21a4f53",
+  "startedAt": "2026-09-18T20:34:20.342Z",
+  "scenarios": {
+    "AS.crossing-threshold-preserves-state": {
+      "status": "pass",
+      "detail": {
+        "before": {
+          "h1": "Draw workspace",
+          "activeTab": [
+            "Pots",
+            "Pots"
+          ]
+        },
+        "after": {
+          "h1": "Draw workspace",
+          "activeTab": [
+            "Pots",
+            "Pots"
+          ],
+          "mobileBar": 5,
+          "menu": true
+        },
+        "drawerTabs": [
+          "Run simulation",
+          "Fixtures",
+          "Predict",
+          "Pots",
+          "Leagues",
+          "Saved runs"
+        ],
+        "restored": "Draw workspace"
+      },
+      "ms": 4328
+    },
+    "AS.poll-cadence-unchanged": {
+      "status": "pass",
+      "detail": {
+        "elapsedS": 126,
+        "liveRequests": 7,
+        "liveGaps": [
+          30,
+          30,
+          0,
+          30,
+          30,
+          0
+        ],
+        "steadyGaps": 4,
+        "bursts": [
+          {
+            "gap": 0,
+            "nearHub": true
+          },
+          {
+            "gap": 0,
+            "nearHub": true
+          }
+        ],
+        "hubRequests": 3,
+        "hubGaps": [
+          60,
+          60
+        ],
+        "maxActive": {
+          "30000": 1,
+          "60000": 1
+        },
+        "viewAfterResizes": "Live hub"
+      },
+      "ms": 128002
+    },
+    "AS.keyboard-only-navigation": {
+      "status": "pass",
+      "detail": {
+        "focusText": "Real Draw",
+        "h1": "Official UCL real draw",
+        "activeText": "Real Draw",
+        "ariaCurrent": "page",
+        "nonColorCue": {
+          "content": "\"\"",
+          "width": "3px",
+          "height": "36px"
+        }
+      },
+      "ms": 2258
+    },
+    "AS.navigation-during-active-reveal": {
+      "status": "pass",
+      "detail": {
+        "teamRows": 4,
+        "beforeCount": 0,
+        "midCount": 2,
+        "afterCount": 2,
+        "drawerOpen": true,
+        "drawPosts": 1,
+        "pickPosts": 1,
+        "diag": {
+          "view": "Draw workspace",
+          "hasCommandBand": true,
+          "selects": [
+            [
+              "1"
+            ],
+            [
+              "sat",
+              "sequential",
+              "interactive"
+            ],
+            [
+              "1",
+              "2",
+              "3",
+              "4"
+            ]
+          ],
+          "runBtns": [
+            "Run simulation",
+            "Run simulation",
+            "Run simulation"
+          ],
+          "skeleton": false
+        },
+        "methodNow": "interactive"
+      },
+      "ms": 8221
+    },
+    "US.sync-fails-after-typing": {
+      "status": "pass",
+      "detail": {
+        "inputs": 4,
+        "afterFail": {
+          "values": [
+            "2",
+            "2",
+            "2",
+            "2"
+          ],
+          "error": "Predictions could not be savedSave failed: stub 500. Your scores are still here — use Save Matchday to retry.Save Matchday",
+          "retry": [
+            "Save Matchday"
+          ]
+        },
+        "afterRetry": {
+          "error": null
+        }
+      },
+      "ms": 5351
+    },
+    "US.live-poll-during-scroll": {
+      "status": "pass",
+      "detail": {
+        "before": {
+          "scrollY": 623,
+          "focus": "hub-open-match"
+        },
+        "after": {
+          "liveText": "2:0",
+          "scrollY": 623,
+          "focus": "hub-open-match"
+        }
+      },
+      "ms": 4137
+    },
+    "US.homepage-skeleton": {
+      "status": "pass",
+      "detail": {
+        "pending": {
+          "skeleton": true,
+          "busy": "true",
+          "emptyCopy": false,
+          "height": 344
+        },
+        "settled": {
+          "skeletonGone": true,
+          "cards": 9,
+          "cardHeight": 326
+        },
+        "note": "skeleton occupies 344px; settled card 326px"
+      },
+      "ms": 2563
+    },
+    "US.state-matrix": {
+      "status": "pass",
+      "detail": {
+        "results": {
+          "seasons.loading": {
+            "loading": true,
+            "busy": true,
+            "error": null,
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 6,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "seasons.error": {
+            "loading": false,
+            "busy": false,
+            "error": "Seasons could not loadstub 500Retry",
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 6,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "seasons.empty": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": "No seasons imported yetImport the seed input, then refresh to load the workspace.Refresh",
+            "h1": "Draw workspace",
+            "tabs": 6,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "seasons.success": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 12,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "home.loading": {
+            "loading": true,
+            "busy": true,
+            "error": null,
+            "empty": null,
+            "h1": "Live hub",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "home.error": {
+            "loading": false,
+            "busy": false,
+            "error": "Today's matches could not loadstub 500Retry",
+            "empty": null,
+            "h1": "Live hub",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "home.empty": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": "No matches todayToday and yesterday games appear here with live results as they happen. Refresh to check again.Refresh",
+            "h1": "Live hub",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "home.success": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": null,
+            "h1": "Live hub",
+            "tabs": 0,
+            "cards": 9,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "leagues.loading": {
+            "loading": true,
+            "busy": true,
+            "error": null,
+            "empty": null,
+            "h1": "Leagues",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "leagues.error": {
+            "loading": false,
+            "busy": false,
+            "error": "Leagues could not loadstub 500Retry",
+            "empty": null,
+            "h1": "Leagues",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "leagues.empty": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": "No leagues imported yetLeague tables come from the sync command. Run “python manage.py sync_leagues”, then refresh.Refresh",
+            "h1": "Leagues",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "leagues.success": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": null,
+            "h1": "Leagues",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "seasonState.loading": {
+            "loading": true,
+            "busy": true,
+            "error": null,
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 12,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "seasonState.error": {
+            "loading": false,
+            "busy": false,
+            "error": "Season data could not loadstub 500Retry season data",
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 12,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "seasonState.success": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 12,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "realFixtures.loading": {
+            "loading": true,
+            "busy": true,
+            "error": null,
+            "empty": null,
+            "h1": "Official UCL real draw",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "realFixtures.error": {
+            "loading": false,
+            "busy": false,
+            "error": "Real fixtures could not loadstub 500Retry real fixtures",
+            "empty": null,
+            "h1": "Official UCL real draw",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "realFixtures.success": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": null,
+            "h1": "Official UCL real draw",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 2,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "prediction.loading": {
+            "loading": true,
+            "busy": true,
+            "error": null,
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 12,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "prediction.error": {
+            "loading": false,
+            "busy": false,
+            "error": "Your prediction sheet could not startstub 500Retry predictions",
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 12,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "prediction.success": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 16,
+            "cards": 0,
+            "rows": 2,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "matchDetail.loading": {
+            "loading": true,
+            "busy": true,
+            "error": null,
+            "empty": null,
+            "h1": "Live hub",
+            "tabs": 0,
+            "cards": 9,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "matchDetail.error": {
+            "loading": false,
+            "busy": false,
+            "error": "Couldn't load match detailsstub 500Retry match details",
+            "empty": null,
+            "h1": "Live hub",
+            "tabs": 0,
+            "cards": 9,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "matchDetail.success": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": null,
+            "h1": "Live hub",
+            "tabs": 0,
+            "cards": 9,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "interactivePick.error": {
+            "loading": false,
+            "busy": false,
+            "error": "That pick could not be locked instub 500. The draw is unchanged — retry to pick Real Madrid.Retry pick",
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 12,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "interactivePick.loading": {
+            "loading": false,
+            "busy": true,
+            "error": null,
+            "empty": null,
+            "h1": "Draw workspace",
+            "tabs": 12,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "groupStandings.loading": {
+            "loading": true,
+            "busy": true,
+            "error": null,
+            "empty": "No finished matches yetResults appear here once this competition has played fixtures. Refresh to check again.Refresh",
+            "h1": "Leagues",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": true,
+            "gsSkeletonLabel": "Loading standings",
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "groupStandings.error": {
+            "loading": false,
+            "busy": false,
+            "error": "Group standings could not loadstub 500Retry",
+            "empty": "No finished matches yetResults appear here once this competition has played fixtures. Refresh to check again.Refresh",
+            "h1": "Leagues",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": "Group standings could not load",
+            "gsRetry": "Retry",
+            "gsEmpty": null,
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "groupStandings.empty": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": "No group table yetNothing is published for this competition yet. Refresh to check again.Refresh",
+            "h1": "Leagues",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": "No group table yet",
+            "gsBlocks": 0,
+            "gsRows": 0
+          },
+          "groupStandings.success": {
+            "loading": false,
+            "busy": false,
+            "error": null,
+            "empty": "No finished matches yetResults appear here once this competition has played fixtures. Refresh to check again.Refresh",
+            "h1": "Leagues",
+            "tabs": 0,
+            "cards": 0,
+            "rows": 0,
+            "gsSkeleton": false,
+            "gsSkeletonLabel": null,
+            "gsError": null,
+            "gsRetry": null,
+            "gsEmpty": null,
+            "gsBlocks": 2,
+            "gsRows": 8
+          },
+          "groupStandings.retryIsolation": {
+            "before": {
+              "group": 1,
+              "state": 2
+            },
+            "after": {
+              "group": 2,
+              "state": 2
+            },
+            "errorShown": {
+              "title": "Group standings could not load",
+              "retry": "Retry"
+            },
+            "settled": {
+              "error": false,
+              "blocks": 2
+            }
+          }
+        },
+        "surfacesMissingAState": [],
+        "groupStandingsFourStates": true,
+        "retryIsolation": true
+      },
+      "ms": 78395
+    },
+    "A11Y.card-behaves-as-control": {
+      "status": "pass",
+      "detail": {
+        "control": {
+          "tag": "button",
+          "role": "button",
+          "ariaLabel": "View match details: Real Madrid versus Bayern Munich",
+          "tabIndex": 0
+        },
+        "openedDialog": "match-detail-view"
+      },
+      "ms": 2160
+    },
+    "A11Y.dialog-focus-return": {
+      "status": "pass",
+      "detail": {
+        "open": {
+          "className": "match-detail-view",
+          "ariaLabel": "Match details: Real Madrid versus Bayern Munich",
+          "bgHidden": true
+        },
+        "tabs": [
+          {
+            "cls": "back-button match-detail-back",
+            "inside": true
+          },
+          {
+            "cls": "back-button match-detail-back",
+            "inside": true
+          },
+          {
+            "cls": "back-button match-detail-back",
+            "inside": true
+          },
+          {
+            "cls": "back-button match-detail-back",
+            "inside": true
+          },
+          {
+            "cls": "back-button match-detail-back",
+            "inside": true
+          },
+          {
+            "cls": "back-button match-detail-back",
+            "inside": true
+          }
+        ],
+        "leaked": false,
+        "returned": {
+          "cls": "hub-open-match",
+          "dialogGone": true
+        }
+      },
+      "ms": 2820
+    },
+    "A11Y.reduced-motion": {
+      "status": "pass",
+      "detail": {
+        "normal": {
+          "animationName": "mobile-nav-in",
+          "transitionDuration": "0s",
+          "open": true,
+          "ariaExpanded": "true",
+          "ariaCurrent": "page"
+        },
+        "reduced": {
+          "animationName": "none",
+          "transitionDuration": "0s",
+          "open": true,
+          "ariaExpanded": "true",
+          "ariaCurrent": "page"
+        }
+      },
+      "ms": 3269
+    },
+    "A11Y.full-keyboard-pass": {
+      "status": "pass",
+      "detail": {
+        "home": {
+          "stops": 19,
+          "noRing": []
+        },
+        "real": {
+          "stops": 12,
+          "noRing": []
+        },
+        "predict": {
+          "stops": 23,
+          "noRing": []
+        }
+      },
+      "ms": 3660
+    },
+    "A11Y.score-input-name": {
+      "status": "pass",
+      "detail": {
+        "labels": [
+          "Home goals, Real Madrid versus Bayern Munich, Matchday 1",
+          "Away goals, Real Madrid versus Bayern Munich, Matchday 1",
+          "Home goals, Liverpool versus Inter Milan, Matchday 1",
+          "Away goals, Liverpool versus Inter Milan, Matchday 1"
+        ]
+      },
+      "ms": 2818
+    },
+    "A11Y.status-dot": {
+      "status": "pass",
+      "detail": {
+        "ariaHidden": "true",
+        "iconSvg": true,
+        "srText": "Completed",
+        "rowText": "CompletedAdaprediction-1 · sat - COMPLETED - 4 fixtures - 18 sept 2026"
+      },
+      "ms": 3317
+    },
+    "CS.cross-view-navigation": {
+      "status": "pass",
+      "detail": {
+        "before": {
+          "name": "Morgan",
+          "position": "LW",
+          "career": null
+        },
+        "after": {
+          "name": "Morgan",
+          "position": "LW",
+          "career": null
+        }
+      },
+      "ms": 4418
+    },
+    "CS.all-four-surfaces": {
+      "status": "pass",
+      "detail": {
+        "finished": true,
+        "intro": {
+          "intro": true,
+          "shellNav": 1,
+          "ownChrome": false
+        },
+        "builder": {
+          "builder": true,
+          "shellNav": 1,
+          "ownChrome": false
+        },
+        "dashboard": {
+          "dashboard": true,
+          "retirement": true,
+          "shellNav": 1,
+          "ownChrome": false
+        },
+        "summary": {
+          "summary": true,
+          "shellNav": 1,
+          "ownChrome": false
+        }
+      },
+      "ms": 4370
+    },
+    "CS.legacy-career-loads": {
+      "status": "pass",
+      "detail": {
+        "writtenLength": 1066,
+        "restored": {
+          "dashboard": true,
+          "name": "Morgan",
+          "notice": null,
+          "storedSame": false
+        },
+        "check": {
+          "same": true
+        }
+      },
+      "ms": 4775
+    },
+    "CS.no-writes-outside-key": {
+      "status": "pass",
+      "detail": {
+        "changed": [
+          "champions_draw_career_v1"
+        ],
+        "careerKeyBytes": 1228
+      },
+      "ms": 3936
+    },
+    "PR.mismatch-does-not-change-pixels": {
+      "status": "pass",
+      "detail": {
+        "tableUnchanged": true,
+        "indicators": {
+          "alerts": 0,
+          "live": 0,
+          "badges": 0
+        },
+        "warnCount": 6
+      },
+      "ms": 5825
+    },
+    "PR.slow-confirmation-never-blocks": {
+      "status": "pass",
+      "detail": {
+        "fillMs": 12,
+        "info": {
+          "rows": 4,
+          "disabledInputs": 0,
+          "disabledControls": 1,
+          "skeleton": false
+        },
+        "note": "standings GET held open; client table still rendered"
+      },
+      "ms": 4137
+    },
+    "PR.typing-does-not-trigger-checks": {
+      "status": "pass",
+      "detail": {
+        "baseline": 3,
+        "after": 3,
+        "note": "mount-time checks per surface only; 20 edits added none"
+      },
+      "ms": 5301
+    },
+    "PR.local-only-prediction": {
+      "status": "pass",
+      "detail": {
+        "confirmGets": 0
+      },
+      "ms": 4322
+    },
+    "PR.log-content": {
+      "status": "pass",
+      "detail": {
+        "warnCount": 6,
+        "sample": "[reconciliation] standings {surface: standings, endpoint: /api/predictions/42/standings/, key: null, clientValue: null, serverValue: null}",
+        "storageKeys": [
+          "champions_draw_prediction_1_Ada",
+          "champions_draw_player_name"
+        ]
+      },
+      "ms": 4406
+    },
+    "PR.502-during-confirmation": {
+      "status": "pass",
+      "detail": {
+        "rows": 4,
+        "userError": null,
+        "pageError": null,
+        "standingsWarnCount": 1,
+        "totalReconWarns": 6
+      },
+      "ms": 5419
+    },
+    "PR.offline-then-reconnected": {
+      "status": "pass",
+      "detail": {
+        "offlineWarns": 3,
+        "offlineRendered": true,
+        "confirmGets": 6
+      },
+      "ms": 39241
+    },
+    "PR.storage-untouched": {
+      "status": "pass",
+      "detail": {
+        "protectedKeys": [
+          "champions_draw_prediction_1_Ada",
+          "champions_draw_real_prediction_1_Ada",
+          "champions_draw_career_v1"
+        ],
+        "unchanged": true,
+        "newKeys": []
+      },
+      "ms": 4607
+    },
+    "DT.theme-switch-keyboard": {
+      "status": "pass",
+      "detail": {
+        "before": {
+          "theme": "light",
+          "pressed": "false"
+        },
+        "after": {
+          "theme": "dark",
+          "pressed": "true",
+          "focused": true,
+          "key": "dark"
+        }
+      },
+      "ms": 1651
+    },
+    "DT.complete-scales": {
+      "status": "pass",
+      "detail": {
+        "declared": [
+          2,
+          3,
+          4,
+          6,
+          8,
+          10,
+          12,
+          16,
+          20,
+          24,
+          32,
+          40,
+          48,
+          64,
+          999
+        ],
+        "samples": [
+          {
+            "sel": ".button",
+            "pads": [
+              0,
+              16,
+              0,
+              16
+            ],
+            "padsOk": true,
+            "radius": 8,
+            "radiusOk": true,
+            "elevation": "none"
+          },
+          {
+            "sel": ".metric",
+            "pads": [
+              16,
+              16,
+              16,
+              16
+            ],
+            "padsOk": true,
+            "radius": 12,
+            "radiusOk": true,
+            "elevation": "none"
+          },
+          {
+            "sel": ".badge",
+            "pads": [
+              4,
+              8,
+              4,
+              8
+            ],
+            "padsOk": true,
+            "radius": 999,
+            "radiusOk": true,
+            "elevation": "none"
+          },
+          {
+            "sel": "#league-new .league-table td",
+            "pads": [
+              8,
+              8,
+              8,
+              4
+            ],
+            "padsOk": true,
+            "radius": 0,
+            "radiusOk": true,
+            "elevation": "none"
+          },
+          {
+            "sel": "#teampage-new .standings-table td",
+            "pads": [
+              8,
+              8,
+              8,
+              8
+            ],
+            "padsOk": true,
+            "radius": 0,
+            "radiusOk": true,
+            "elevation": "none"
+          }
+        ]
+      },
+      "ms": 846
+    },
+    "UC.qualification-bands": {
+      "status": "pass",
+      "detail": {
+        "row1": {
+          "cls": "table-row row-qualified",
+          "pos": "1",
+          "mark": "▲",
+          "sr": "Qualified"
+        },
+        "row9": {
+          "cls": "table-row row-playoffs",
+          "pos": "9",
+          "mark": "◆",
+          "sr": "Playoffs"
+        },
+        "row30": {
+          "cls": "table-row row-eliminated",
+          "pos": "30",
+          "mark": "▼",
+          "sr": "Eliminated"
+        }
+      },
+      "ms": 777
+    },
+    "UC.button-state-coverage": {
+      "status": "pass",
+      "detail": {
+        "variants": {
+          "primary": {
+            "base": {
+              "bg": "rgb(32, 178, 107)",
+              "shadow": "none",
+              "border": "rgba(0, 0, 0, 0)",
+              "transform": "none",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "hover": {
+              "bg": "rgb(23, 150, 90)",
+              "shadow": "none",
+              "border": "rgba(0, 0, 0, 0)",
+              "transform": "none",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "active": {
+              "bg": "rgb(23, 150, 90)",
+              "shadow": "none",
+              "border": "rgba(0, 0, 0, 0)",
+              "transform": "matrix(1, 0, 0, 1, 0, 1)",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "responds": true
+          },
+          "secondary": {
+            "base": {
+              "bg": "rgb(234, 240, 255)",
+              "shadow": "none",
+              "border": "rgba(0, 0, 0, 0)",
+              "transform": "none",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "hover": {
+              "bg": "rgb(234, 240, 255)",
+              "shadow": "none",
+              "border": "rgb(77, 124, 255)",
+              "transform": "none",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "active": {
+              "bg": "rgb(234, 240, 255)",
+              "shadow": "none",
+              "border": "rgb(77, 124, 255)",
+              "transform": "matrix(1, 0, 0, 1, 0, 1)",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "responds": true
+          },
+          "ghost": {
+            "base": {
+              "bg": "rgba(0, 0, 0, 0)",
+              "shadow": "none",
+              "border": "rgba(0, 0, 0, 0)",
+              "transform": "none",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "hover": {
+              "bg": "rgb(238, 242, 247)",
+              "shadow": "none",
+              "border": "rgba(0, 0, 0, 0)",
+              "transform": "none",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "active": {
+              "bg": "rgb(238, 242, 247)",
+              "shadow": "none",
+              "border": "rgba(0, 0, 0, 0)",
+              "transform": "matrix(1, 0, 0, 1, 0, 1)",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "responds": true
+          },
+          "danger": {
+            "base": {
+              "bg": "rgb(255, 236, 239)",
+              "shadow": "none",
+              "border": "rgb(232, 93, 117)",
+              "transform": "none",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "hover": {
+              "bg": "rgb(232, 93, 117)",
+              "shadow": "none",
+              "border": "rgb(232, 93, 117)",
+              "transform": "none",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "active": {
+              "bg": "rgb(232, 93, 117)",
+              "shadow": "none",
+              "border": "rgb(232, 93, 117)",
+              "transform": "matrix(1, 0, 0, 1, 0, 1)",
+              "outline": "none",
+              "cursor": "pointer"
+            },
+            "responds": true
+          }
+        },
+        "disabledProps": {
+          "disabled": true,
+          "outline": "dashed",
+          "cursor": "not-allowed"
+        }
+      },
+      "ms": 1740
+    },
+    "UC.primitive-stays-presentational": {
+      "status": "pass",
+      "detail": {
+        "apiCalls": [],
+        "rendered": {
+          "tables": 13,
+          "crests": 333,
+          "buttons": 10
+        }
+      },
+      "ms": 1979
+    },
+    "UC.skeleton-layout-note": {
+      "status": "pass",
+      "detail": {
+        "skeletonHeight": 160,
+        "settledHeight": 124,
+        "delta": 36
+      },
+      "ms": 1080
+    }
+  },
+  "candidateWorktreeTree": "32396c5357bb67637f105881d21a2465d28ece49",
+  "finishedAt": "2026-09-18T20:40:13.095Z",
+  "summary": {
+    "total": 32,
+    "pass": 32,
+    "fail": 0
+  }
+}
