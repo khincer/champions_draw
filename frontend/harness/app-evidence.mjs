@@ -1107,14 +1107,28 @@ await scenario('DT.complete-scales', async () => {
        is resolved through a live probe so var() chains and shorthand follow the
        browser's own parsing. Fluid clamp()/viewport/% values are not scale
        members and are skipped by design. */
+    /* Real button/badge selectors whose class names carry NO category keyword.
+       A keyword-only filter cannot reach them, which is exactly how an earlier
+       run reported 0 offenders while live buttons carried off-space padding.
+       Naming them forces the scan to cover them and makes a regression loud. */
+    const NAMED = [
+      '.site-nav-link', '.team-row',
+      '.career-primary-action', '.career-secondary-action', '.career-option',
+      '.back-button', '.fx-verdict', '.animated-team', '.team-fixture-score',
+      '.match-detail-header',
+    ];
     const CATEGORIES = [
       { name: 'table cell', test: (s) => /(^|[\s,>+~])(th|td)\b/.test(s) },
       { name: 'button', test: (s) => /(^|[\s,>+~])button\b/.test(s) || /(^|[\s,>+~])\.button\b/.test(s) || /-toggle\b/.test(s) },
       { name: 'card', test: (s) => /(^|[\s,>+~])[.#][\w-]*card\b/.test(s) || /\.playoff-(match|tie-card)\b/.test(s) },
       { name: 'badge', test: (s) => /(^|[\s,>+~])[.#][\w-]*(badge|chip|pill)\b/.test(s) || /\.(playoff-agg|tie-agg|hub-status|playoff-tie-desc|ko-tie-desc)\b/.test(s) },
+      /* Class-token match, never a substring: `.animated-team` must not match
+         `.animated-team-list`, which is a list container rather than a chip. */
+      { name: 'named', test: (s) => NAMED.some((n) => new RegExp('(^|[\\s,>+~.])' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w-])').test(s)) },
     ];
     /* Named representatives the requirement lists. Each must appear among the
-       scanned rules: a selector filter that reaches nothing must not pass. */
+       scanned rules: a selector filter that reaches nothing must not pass. The
+       NAMED set is included so a keyword filter can never silently skip it. */
     const REQUIRED = [
       '.league-table th', '.league-table td', '.sidebar-table th', '.sidebar-table td',
       '.real-league-table th', '.real-league-table td', '.standings-table th', '.standings-table td',
@@ -1122,6 +1136,7 @@ await scenario('DT.complete-scales', async () => {
       '.ucl-card', '.league-card', '.panel-card', '.playoff-match', '.playoff-tie-card',
       '.playoff-won-badge', '.playoff-agg', '.tie-agg', '.hub-status', '.league-badge',
       '.playoff-tie-desc', '.ko-tie-desc',
+      ...NAMED,
     ];
 
     const rules = [];
@@ -1156,7 +1171,7 @@ await scenario('DT.complete-scales', async () => {
       return out;
     };
 
-    const categoryHits = { 'table cell': 0, button: 0, card: 0, badge: 0 };
+    const categoryHits = { 'table cell': 0, button: 0, card: 0, badge: 0, named: 0 };
     const offenders = [];
     let targetRules = 0;
     for (const rule of rules) {

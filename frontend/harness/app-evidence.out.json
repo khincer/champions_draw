@@ -1,7 +1,7 @@
 {
   "schema": "champions-draw/app-evidence/v1",
-  "candidate": "a03db79bf11aad2c04766608675e505ea21a4f53",
-  "startedAt": "2026-09-18T20:34:20.342Z",
+  "candidate": "8477cb24feb699f98d7bbf369580815d5c4c8bc5",
+  "startedAt": "2026-09-19T19:14:11.094Z",
   "scenarios": {
     "AS.crossing-threshold-preserves-state": {
       "status": "pass",
@@ -32,27 +32,22 @@
         ],
         "restored": "Draw workspace"
       },
-      "ms": 4328
+      "ms": 4393
     },
     "AS.poll-cadence-unchanged": {
       "status": "pass",
       "detail": {
         "elapsedS": 126,
-        "liveRequests": 7,
+        "liveRequests": 6,
         "liveGaps": [
           30,
           30,
           0,
           30,
-          30,
-          0
+          30
         ],
         "steadyGaps": 4,
         "bursts": [
-          {
-            "gap": 0,
-            "nearHub": true
-          },
           {
             "gap": 0,
             "nearHub": true
@@ -69,7 +64,7 @@
         },
         "viewAfterResizes": "Live hub"
       },
-      "ms": 128002
+      "ms": 128014
     },
     "AS.keyboard-only-navigation": {
       "status": "pass",
@@ -84,7 +79,7 @@
           "height": "36px"
         }
       },
-      "ms": 2258
+      "ms": 2200
     },
     "AS.navigation-during-active-reveal": {
       "status": "pass",
@@ -124,7 +119,7 @@
         },
         "methodNow": "interactive"
       },
-      "ms": 8221
+      "ms": 8212
     },
     "US.sync-fails-after-typing": {
       "status": "pass",
@@ -146,22 +141,22 @@
           "error": null
         }
       },
-      "ms": 5351
+      "ms": 5201
     },
     "US.live-poll-during-scroll": {
       "status": "pass",
       "detail": {
         "before": {
-          "scrollY": 623,
+          "scrollY": 615,
           "focus": "hub-open-match"
         },
         "after": {
           "liveText": "2:0",
-          "scrollY": 623,
+          "scrollY": 615,
           "focus": "hub-open-match"
         }
       },
-      "ms": 4137
+      "ms": 4094
     },
     "US.homepage-skeleton": {
       "status": "pass",
@@ -175,11 +170,11 @@
         "settled": {
           "skeletonGone": true,
           "cards": 9,
-          "cardHeight": 326
+          "cardHeight": 316
         },
-        "note": "skeleton occupies 344px; settled card 326px"
+        "note": "skeleton occupies 344px; settled card 316px"
       },
-      "ms": 2563
+      "ms": 2581
     },
     "US.state-matrix": {
       "status": "pass",
@@ -718,7 +713,7 @@
         "groupStandingsFourStates": true,
         "retryIsolation": true
       },
-      "ms": 78395
+      "ms": 77082
     },
     "A11Y.card-behaves-as-control": {
       "status": "pass",
@@ -731,7 +726,7 @@
         },
         "openedDialog": "match-detail-view"
       },
-      "ms": 2160
+      "ms": 2170
     },
     "A11Y.dialog-focus-return": {
       "status": "pass",
@@ -773,7 +768,7 @@
           "dialogGone": true
         }
       },
-      "ms": 2820
+      "ms": 2797
     },
     "A11Y.reduced-motion": {
       "status": "pass",
@@ -793,7 +788,7 @@
           "ariaCurrent": "page"
         }
       },
-      "ms": 3269
+      "ms": 3260
     },
     "A11Y.full-keyboard-pass": {
       "status": "pass",
@@ -803,7 +798,7 @@
           "noRing": []
         },
         "real": {
-          "stops": 12,
+          "stops": 13,
           "noRing": []
         },
         "predict": {
@@ -811,7 +806,7 @@
           "noRing": []
         }
       },
-      "ms": 3660
+      "ms": 3604
     },
     "A11Y.score-input-name": {
       "status": "pass",
@@ -823,7 +818,7 @@
           "Away goals, Liverpool versus Inter Milan, Matchday 1"
         ]
       },
-      "ms": 2818
+      "ms": 2794
     },
     "A11Y.status-dot": {
       "status": "pass",
@@ -831,9 +826,9 @@
         "ariaHidden": "true",
         "iconSvg": true,
         "srText": "Completed",
-        "rowText": "CompletedAdaprediction-1 · sat - COMPLETED - 4 fixtures - 18 sept 2026"
+        "rowText": "CompletedAdaprediction-1 · sat - COMPLETED - 4 fixtures - 19 sept 2026"
       },
-      "ms": 3317
+      "ms": 3302
     },
     "CS.cross-view-navigation": {
       "status": "pass",
@@ -849,7 +844,7 @@
           "career": null
         }
       },
-      "ms": 4418
+      "ms": 4432
     },
     "CS.all-four-surfaces": {
       "status": "pass",
@@ -877,12 +872,12 @@
           "ownChrome": false
         }
       },
-      "ms": 4370
+      "ms": 4346
     },
     "CS.legacy-career-loads": {
       "status": "pass",
       "detail": {
-        "writtenLength": 1066,
+        "writtenLength": 1044,
         "restored": {
           "dashboard": true,
           "name": "Morgan",
@@ -893,7 +888,7 @@
           "same": true
         }
       },
-      "ms": 4775
+      "ms": 4793
     },
     "CS.no-writes-outside-key": {
       "status": "pass",
@@ -901,9 +896,9 @@
         "changed": [
           "champions_draw_career_v1"
         ],
-        "careerKeyBytes": 1228
+        "careerKeyBytes": 1233
       },
-      "ms": 3936
+      "ms": 3930
     },
     "PR.mismatch-does-not-change-pixels": {
       "status": "pass",
@@ -916,12 +911,12 @@
         },
         "warnCount": 6
       },
-      "ms": 5825
+      "ms": 5859
     },
     "PR.slow-confirmation-never-blocks": {
       "status": "pass",
       "detail": {
-        "fillMs": 12,
+        "fillMs": 11,
         "info": {
           "rows": 4,
           "disabledInputs": 0,
@@ -930,7 +925,7 @@
         },
         "note": "standings GET held open; client table still rendered"
       },
-      "ms": 4137
+      "ms": 4135
     },
     "PR.typing-does-not-trigger-checks": {
       "status": "pass",
@@ -939,14 +934,14 @@
         "after": 3,
         "note": "mount-time checks per surface only; 20 edits added none"
       },
-      "ms": 5301
+      "ms": 5263
     },
     "PR.local-only-prediction": {
       "status": "pass",
       "detail": {
         "confirmGets": 0
       },
-      "ms": 4322
+      "ms": 4327
     },
     "PR.log-content": {
       "status": "pass",
@@ -958,7 +953,7 @@
           "champions_draw_player_name"
         ]
       },
-      "ms": 4406
+      "ms": 4392
     },
     "PR.502-during-confirmation": {
       "status": "pass",
@@ -978,7 +973,7 @@
         "offlineRendered": true,
         "confirmGets": 6
       },
-      "ms": 39241
+      "ms": 39260
     },
     "PR.storage-untouched": {
       "status": "pass",
@@ -991,7 +986,7 @@
         "unchanged": true,
         "newKeys": []
       },
-      "ms": 4607
+      "ms": 4577
     },
     "DT.theme-switch-keyboard": {
       "status": "pass",
@@ -1007,12 +1002,24 @@
           "key": "dark"
         }
       },
-      "ms": 1651
+      "ms": 1581
     },
     "DT.complete-scales": {
       "status": "pass",
       "detail": {
-        "declared": [
+        "space": [
+          4,
+          8,
+          12,
+          16,
+          20,
+          24,
+          32,
+          40,
+          48,
+          64
+        ],
+        "radius": [
           2,
           3,
           4,
@@ -1022,82 +1029,22 @@
           12,
           16,
           20,
-          24,
-          32,
-          40,
-          48,
-          64,
           999
         ],
-        "samples": [
-          {
-            "sel": ".button",
-            "pads": [
-              0,
-              16,
-              0,
-              16
-            ],
-            "padsOk": true,
-            "radius": 8,
-            "radiusOk": true,
-            "elevation": "none"
-          },
-          {
-            "sel": ".metric",
-            "pads": [
-              16,
-              16,
-              16,
-              16
-            ],
-            "padsOk": true,
-            "radius": 12,
-            "radiusOk": true,
-            "elevation": "none"
-          },
-          {
-            "sel": ".badge",
-            "pads": [
-              4,
-              8,
-              4,
-              8
-            ],
-            "padsOk": true,
-            "radius": 999,
-            "radiusOk": true,
-            "elevation": "none"
-          },
-          {
-            "sel": "#league-new .league-table td",
-            "pads": [
-              8,
-              8,
-              8,
-              4
-            ],
-            "padsOk": true,
-            "radius": 0,
-            "radiusOk": true,
-            "elevation": "none"
-          },
-          {
-            "sel": "#teampage-new .standings-table td",
-            "pads": [
-              8,
-              8,
-              8,
-              8
-            ],
-            "padsOk": true,
-            "radius": 0,
-            "radiusOk": true,
-            "elevation": "none"
-          }
-        ]
+        "scannedRules": 669,
+        "targetRules": 163,
+        "categoryHits": {
+          "table cell": 25,
+          "button": 32,
+          "card": 32,
+          "badge": 33,
+          "named": 41
+        },
+        "requiredMissing": [],
+        "offenderCount": 0,
+        "offenders": []
       },
-      "ms": 846
+      "ms": 766
     },
     "UC.qualification-bands": {
       "status": "pass",
@@ -1121,7 +1068,7 @@
           "sr": "Eliminated"
         }
       },
-      "ms": 777
+      "ms": 775
     },
     "UC.button-state-coverage": {
       "status": "pass",
@@ -1242,7 +1189,7 @@
           "cursor": "not-allowed"
         }
       },
-      "ms": 1740
+      "ms": 1659
     },
     "UC.primitive-stays-presentational": {
       "status": "pass",
@@ -1254,20 +1201,20 @@
           "buttons": 10
         }
       },
-      "ms": 1979
+      "ms": 1916
     },
     "UC.skeleton-layout-note": {
       "status": "pass",
       "detail": {
         "skeletonHeight": 160,
-        "settledHeight": 124,
-        "delta": 36
+        "settledHeight": 132,
+        "delta": 28
       },
-      "ms": 1080
+      "ms": 1066
     }
   },
-  "candidateWorktreeTree": "32396c5357bb67637f105881d21a2465d28ece49",
-  "finishedAt": "2026-09-18T20:40:13.095Z",
+  "candidateWorktreeTree": "2ef4ef03f75fd38edee1a42f158a4882bf5b1446",
+  "finishedAt": "2026-09-19T19:20:02.011Z",
   "summary": {
     "total": 32,
     "pass": 32,
