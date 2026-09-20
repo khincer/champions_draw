@@ -1,10 +1,6 @@
 import { Home, Plane } from 'lucide-preact';
 import ScoreInput from './ScoreInput';
-
-function computeAgg(l1h, l1a, l2h, l2a) {
-  if ([l1h, l1a, l2h, l2a].some(v => v == null)) return null;
-  return { home: l1h + l2h, away: l1a + l2a };
-}
+import { computeAgg } from './tieUtils';
 
 function LegRow({ label, homeTeam, awayTeam, homeGoals, awayGoals, homeField, awayField, matchupIdx, onScoreChange }) {
   return (

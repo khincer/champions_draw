@@ -26,6 +26,7 @@ import PredictionApp from './PredictionApp';
 import MatchDetailView from './MatchDetailView';
 import RealDrawView from './RealDrawView';
 import { clearLocal, loadLocal } from './predictionStorage';
+import { formatAggregate, pairPlayoffTies } from './tieUtils';
 
 const API_ROOT = '/api';
 const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
@@ -156,16 +157,20 @@ function SiteNav({ view, setView, setActiveTab }) {
 
 /* ─── Homepage (live hub, la-cancha style) ─── */
 
-function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef }) {
+function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef, focusable }) {
   const result = match.result;
   const eligible = result || (match.kickoff && new Date(match.kickoff) <= new Date());
   const status = result ? 'finished' : match.closed ? 'live' : 'upcoming';
   const statusLabel = result ? 'Final' : match.closed ? 'Live' : 'Kickoff';
   return (
-    <article className="home-game-card" aria-label={`${match.home_team.name} versus ${match.away_team.name}`}>
+    <article
+      className="home-game-card"
+      aria-label={`${match.home_team.name} versus ${match.away_team.name}`}
+      tabIndex={focusable ? 0 : undefined}
+    >
       <header className="home-game-card-header">
         <div>
-          <p className="hub-eyebrow">Champions League</p>
+          <p className="hub-eyebrow">{match.competition || 'Champions League'}</p>
           <p className="hub-date">{shortDay(match.kickoff)}</p>
         </div>
         <span className={`hub-status ${status === 'finished' ? 'hub-final' : status === 'live' ? 'hub-live' : 'hub-upcoming'}`}>
@@ -205,13 +210,13 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
       </div>
       <footer className="home-game-card-footer">
         <span>Matchday {match.matchday}</span>
-        {eligible ? (
+        {match.openable && eligible ? (
           <button
             className="hub-open-match"
             type="button"
             aria-label="View match details"
             ref={detailReturnFocusRef}
-            onClick={() => onOpenMatch(match.id, seasonId)}
+            onClick={() => onOpenMatch(match.id, match.season_id || seasonId)}
           >
             <span aria-hidden="true">↗</span>
           </button>
@@ -241,6 +246,16 @@ function Homepage({ matches, liveScores, onOpenMatch, seasonId, detailReturnFocu
     );
   }, [inRange]);
 
+  const latestResults = useMemo(
+    () =>
+      matches
+        .filter((m) => m.result)
+        .sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || ''))
+        // ponytail: hardcoded cap of 6 cards; raise when the homepage routinely shows more fresh results
+        .slice(0, 6),
+    [matches],
+  );
+
   if (!inRange.length) {
     return (
       <div className="homepage-matches">
@@ -255,6 +270,27 @@ function Homepage({ matches, liveScores, onOpenMatch, seasonId, detailReturnFocu
 
   return (
     <div className="homepage-matches">
+      {latestResults.length > 0 && (
+        <section role="region" aria-label="Latest results" className="homepage-results">
+          <div className="match-section-title">
+            <History size={16} />
+            Latest results
+          </div>
+          <div className="homepage-carousel">
+            {latestResults.map((m) => (
+              <HomeMatchCard
+                key={m.id}
+                match={m}
+                liveScore={liveScores[m.id]}
+                onOpenMatch={onOpenMatch}
+                seasonId={seasonId}
+                detailReturnFocusRef={detailReturnFocusRef}
+                focusable
+              />
+            ))}
+          </div>
+        </section>
+      )}
       {Object.entries(groups).map(([label, dayMatches]) =>
         dayMatches.length ? (
           <div key={label} className="homepage-day-section">
@@ -334,7 +370,7 @@ function TeamPage({ team, league, standings, matches, leagues, onBack, onRefresh
 
   const norm = normTeamName;
   const standing = (standings || []).find(
-    (r) => norm(r.team_name || r.team?.name) === norm(team.name),
+    (r) => norm(r.team_name || r.team?.name || r.name) === norm(team.name),
   );
   const teamMatches = (list) => (list || []).filter(
     (m) => norm(m.home_name) === norm(team.name) || norm(m.away_name) === norm(team.name),
@@ -342,7 +378,7 @@ function TeamPage({ team, league, standings, matches, leagues, onBack, onRefresh
   const finished = teamMatches(matches && matches.finished);
   const upcoming = teamMatches(matches && matches.upcoming);
   const uclStanding = ucl
-    ? ucl.standings.find((r) => norm(r.team_name || r.team?.name) === norm(team.name))
+    ? ucl.standings.find((r) => norm(r.team_name || r.team?.name || r.name) === norm(team.name))
     : null;
   const uclFinished = ucl ? teamMatches(ucl.matches.finished) : [];
   const uclUpcoming = ucl ? teamMatches(ucl.matches.upcoming) : [];
@@ -386,19 +422,21 @@ function TeamPage({ team, league, standings, matches, leagues, onBack, onRefresh
                 {(standings || []).map((row, i) => (
                   <tr
                     key={row.team?.id || i}
-                    className={norm(row.team_name || row.team?.name) === norm(team.name) ? 'team-row-highlight' : ''}
+                    className={norm(row.team_name || row.team?.name || row.name) === norm(team.name) ? 'team-row-highlight' : ''}
                   >
                     <td className="standings-pos">{row.position || i + 1}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {row.team_crest ? (
+                        {row.logo_url ? (
+                          <img src={row.logo_url} alt="" style={{ width: 20, height: 20 }} />
+                        ) : row.team_crest ? (
                           <img src={row.team_crest} alt="" style={{ width: 20, height: 20 }} />
                         ) : row.team?.crest ? (
                           <img src={row.team.crest} alt="" style={{ width: 20, height: 20 }} />
                         ) : row.team?.logo_url ? (
                           <img src={row.team.logo_url} alt="" style={{ width: 20, height: 20 }} />
                         ) : null}
-                        {row.team?.name || row.team_name}
+                        {row.name || row.team?.name || row.team_name}
                       </div>
                     </td>
                     <td>{row.playedGames ?? row.played}</td>
@@ -495,6 +533,123 @@ function TeamPage({ team, league, standings, matches, leagues, onBack, onRefresh
   );
 }
 
+function toMiniRow(m) {
+  const hasResult = m.home_goals != null && m.away_goals != null;
+  return {
+    id: m.id,
+    home_name: m.home_team?.name || '',
+    home_crest: m.home_team?.logo_url || null,
+    away_name: m.away_team?.name || '',
+    away_crest: m.away_team?.logo_url || null,
+    kickoff: m.kickoff,
+    status: m.status,
+    matchday: m.matchday,
+    result: hasResult ? { home_goals: m.home_goals, away_goals: m.away_goals } : null,
+  };
+}
+
+/* One table per group, used for season-kind league standings.  Handles both
+   flat rows ({name, logo_url, played, wins, ...}) and football-data rows
+   ({team?.name, team_crest, playedGames, won, ...}). */
+function GroupStandingsTables({ rows, onOpenTeam }) {
+  const groupOrder = useMemo(() => {
+    const seen = [];
+    for (const row of rows) {
+      if (!seen.includes(row.group)) seen.push(row.group);
+    }
+    return seen;
+  }, [rows]);
+
+  return (
+    <div className="group-standings">
+      {groupOrder.map((group) => (
+        <section key={group} className="group-standing-block">
+          <h3 className="group-title">Group {group}</h3>
+          <table className="standings-table">
+            <thead>
+              <tr>
+                <th className="standings-pos">#</th>
+                <th>Team</th>
+                <th>P</th>
+                <th>W</th>
+                <th>D</th>
+                <th>L</th>
+                <th className="standings-pts">Pts</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.filter((r) => r.group === group).map((row, i) => (
+                <tr key={row.team_id || row.team?.id || i}>
+                  <td className="standings-pos">{row.position || i + 1}</td>
+                  <td>
+                    <button
+                      className="team-link"
+                      onClick={() => onOpenTeam({
+                        name: row.name || row.team?.name || row.team_name,
+                        crest: row.logo_url || row.team_crest || row.team?.crest || row.team?.logo_url,
+                      })}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {row.logo_url ? (
+                          <img src={row.logo_url} alt="" style={{ width: 20, height: 20 }} />
+                        ) : row.team_crest ? (
+                          <img src={row.team_crest} alt="" style={{ width: 20, height: 20 }} />
+                        ) : row.team?.crest ? (
+                          <img src={row.team.crest} alt="" style={{ width: 20, height: 20 }} />
+                        ) : row.team?.logo_url ? (
+                          <img src={row.team.logo_url} alt="" style={{ width: 20, height: 20 }} />
+                        ) : null}
+                        <span>{row.name || row.team?.name || row.team_name}</span>
+                      </div>
+                    </button>
+                  </td>
+                  <td>{row.played ?? row.playedGames}</td>
+                  <td>{row.wins ?? row.won}</td>
+                  <td>{row.draws ?? row.draw}</td>
+                  <td>{row.losses ?? row.lost}</td>
+                  <td className="standings-pts">{row.points}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/* Read-only playoff tie in the league Playoffs view: the aggregate line plus
+   its legs, paired client-side by pairPlayoffTies (LPV-4). No score editing. */
+function PlayoffTieCard({ tie }) {
+  const { legs, aggregate } = tie;
+  return (
+    <section className="playoff-tie-card" aria-label="Playoff tie">
+      <span className="tie-agg">{formatAggregate(aggregate)}</span>
+      <div className="tie-legs">
+        {legs.map((m, i) => (
+          <div className="playoff-leg-row" key={m.id}>
+            <span className="playoff-leg-label">Leg {i + 1}</span>
+            <div className="playoff-side">
+              <Home size={12} className="playoff-venue-icon" />
+              <TeamLogo team={m.home_team} size="sm" />
+              <span className="playoff-name">{m.home_team?.short_name || m.home_team?.name}</span>
+            </div>
+            <span className="score-sep">
+              {m.home_goals != null && m.away_goals != null ? `${m.home_goals}–${m.away_goals}` : '–'}
+            </span>
+            <div className="playoff-side">
+              <span className="playoff-name">{m.away_team?.short_name || m.away_team?.name}</span>
+              <TeamLogo team={m.away_team} size="sm" />
+              <Plane size={12} className="playoff-venue-icon" />
+            </div>
+            <span className="tie-kickoff">{shortTime(m.kickoff)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function TeamsBrowser({
   leagues, selectedLeague, leagueStandings, setSelectedLeague, setLeagueStandings,
   leagueMatches, setLeagueMatches, viewTeam, setViewTeam,
@@ -502,8 +657,41 @@ function TeamsBrowser({
   const [loadingStandings, setLoadingStandings] = useState(false);
   const [loadingMatches, setLoadingMatches] = useState(false);
   const [showNextMatches, setShowNextMatches] = useState(false);
+  const [leaguePhase, setLeaguePhase] = useState('group'); // 'group' | 'playoffs' — LPV-1, not persisted
+  const [seasonMatchups, setSeasonMatchups] = useState([]);
+  const playoffTies = useMemo(() => pairPlayoffTies(seasonMatchups), [seasonMatchups]);
 
   async function loadLeagueData(league) {
+    if (league.kind === 'season') {
+      setLeagueStandings([]);
+      setLoadingStandings(true);
+      setLoadingMatches(true);
+      try {
+        const [stateData, groupsData] = await Promise.all([
+          apiFetch(`/ui/seasons/${league.season_id}/state/`),
+          apiFetch(`/seasons/${league.season_id}/group-standings/`),
+        ]);
+        const matchups = stateData?.matchups || [];
+        setSeasonMatchups(stateData?.matchups || []);
+        const finished = matchups.filter((m) => m.status === 'FINISHED').map(toMiniRow);
+        const upcoming = matchups.filter((m) => m.status !== 'FINISHED' && m.kickoff).map(toMiniRow);
+        setLeagueMatches({ finished, upcoming });
+        // Flatten every group's standings; each row keeps its group label so
+        // the league page can split tables again (TeamPage reuses the flat
+        // list unchanged).
+        const groups = groupsData?.groups || [];
+        setLeagueStandings(
+          groups.flatMap((g) => (g.standings || []).map((row) => ({ ...row, group: g.group }))),
+        );
+      } catch {
+        setLeagueMatches({ finished: [], upcoming: [] });
+        setLeagueStandings([]);
+      } finally {
+        setLoadingStandings(false);
+        setLoadingMatches(false);
+      }
+      return;
+    }
     setLoadingStandings(true);
     try {
       const data = await apiFetch(`/leagues/${league.id}/standings/`);
@@ -535,6 +723,8 @@ function TeamsBrowser({
     setViewTeam(null);
     setLeagueStandings([]);
     setLeagueMatches({ finished: [], upcoming: [] });
+    setLeaguePhase('group');
+    setSeasonMatchups([]);
   }
 
   if (viewTeam) {
@@ -561,6 +751,8 @@ function TeamsBrowser({
               setSelectedLeague(null);
               setLeagueStandings([]);
               setLeagueMatches({ finished: [], upcoming: [] });
+              setLeaguePhase('group');
+              setSeasonMatchups([]);
             }}
           >
             <ArrowLeft size={16} />
@@ -570,11 +762,42 @@ function TeamsBrowser({
             <RefreshCw size={14} /> Refresh
           </button>
         </div>
+        {selectedLeague.kind === 'season' && (
+          <div className="segment-control" role="group" aria-label="League phase">
+            <button
+              type="button"
+              className={leaguePhase === 'group' ? 'active' : ''}
+              aria-pressed={leaguePhase === 'group'}
+              onClick={() => setLeaguePhase('group')}
+            >
+              Group Stage
+            </button>
+            <button
+              type="button"
+              className={leaguePhase === 'playoffs' ? 'active' : ''}
+              aria-pressed={leaguePhase === 'playoffs'}
+              onClick={() => setLeaguePhase('playoffs')}
+            >
+              Playoffs
+            </button>
+          </div>
+        )}
+        {selectedLeague.kind === 'season' && leaguePhase === 'playoffs' ? (
+          playoffTies.length ? (
+            <div className="playoff-tie-list">
+              {playoffTies.map((tie) => <PlayoffTieCard key={tie.legs[0].id} tie={tie} />)}
+            </div>
+          ) : (
+            <p className="muted">No playoff matchups yet.</p>
+          )
+        ) : (
         <div className="standings-layout standings-layout--league">
           <div>
             <h2 style={{ marginTop: 16 }}>{selectedLeague.name}</h2>
             {loadingStandings ? (
               <StateMessage icon={Activity} title="Loading standings" text="Fetching league table" />
+            ) : selectedLeague.kind === 'season' && leagueStandings.length ? (
+              <GroupStandingsTables rows={leagueStandings} onOpenTeam={(team) => setViewTeam(team)} />
             ) : leagueStandings.length ? (
               <table className="standings-table">
                 <thead>
@@ -651,6 +874,7 @@ function TeamsBrowser({
             ) : null}
           </aside>
         </div>
+        )}
       </div>
     );
   }
@@ -722,9 +946,9 @@ function App() {
     if (view !== 'home' || !selectedSeasonId) return undefined;
     async function loadRealMatches() {
       try {
-        const payload = await apiFetch(`/ui/seasons/${selectedSeasonId}/real-fixtures/`);
-        homeMatchesRef.current = payload.matchups;
-        setHomeMatches(payload.matchups);
+        const payload = await apiFetch('/homepage/matches/');
+        homeMatchesRef.current = payload.matchups || [];
+        setHomeMatches(payload.matchups || []);
       } catch {
         // Homepage is best-effort; the real draw view surfaces errors.
       }

@@ -45,7 +45,7 @@ services:
       counter=0;
       while true; do
         echo '[cron] syncing real fixture results...';
-        python manage.py sync_real_fixture_results 2>&1;
+        python manage.py sync_real_fixture_results --source promiedos 2>&1;
         counter=$((counter + 1));
         if [ $((counter % 288)) -eq 0 ]; then
           echo '[cron] syncing leagues...';

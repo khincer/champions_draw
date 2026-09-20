@@ -83,6 +83,8 @@ export const LEAGUE_TIER = {
   GRE: 0.376, AUT: 0.371, SUI: 0.365, SCO: 0.353, CRO: 0.326,
   POL: 0.322, DEN: 0.319, NOR: 0.302, CYP: 0.264, UKR: 0.240,
   ISR: 0.220, SLO: 0.215, SWE: 0.208, AZE: 0.206, SVK: 0.192,
+  BRA: 0.82, ARG: 0.78, URU: 0.48, COL: 0.42, ECU: 0.35,
+  CHI: 0.33, PAR: 0.30, PER: 0.25, BOL: 0.20, VEN: 0.15,
 };
 
 export function clamp(v, lo, hi) {
