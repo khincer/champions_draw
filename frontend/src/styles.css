@@ -2016,7 +2016,7 @@ select:focus,
 
 /* Home composition: greeting + metric cards + quick actions + live hub.
    `.homepage` owns the page padding; `.homepage-matches` keeps only its grid. */
-.homepage { display: grid; gap: 26px; padding: 24px; max-width: 1100px; }
+.homepage { display: grid; gap: 26px; padding: 24px; max-width: 100%; }
 .home-intro { display: grid; gap: var(--space-1); }
 .home-greeting { font-size: var(--font-h2); font-weight: var(--fw-bold); color: var(--ink); }
 .home-intro-sub { color: var(--muted); font-size: var(--font-small); }

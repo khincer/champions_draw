@@ -5,7 +5,7 @@ import { apiFetch } from '../lib/api';
 
 const STATUS_LABEL = { FINISHED: 'Final', IN_PLAY: 'Live', SCHEDULED: 'Kickoff' };
 
-export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
+export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -17,8 +17,14 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
   const backRef = useRef(null);
   const dialogRef = useRef(null);
 
-  const detailUrl = `/ui/seasons/${seasonId}/match-details/${fixtureId}/`;
-  const liveUrl = `/ui/seasons/${seasonId}/live-scores/`;
+  /* League rows (`lm-{fixture_id}`) have no season, so they resolve through the
+     league-scoped route; UCL rows keep the season-scoped one. */
+  const isLeague = leagueId != null;
+  const detailUrl = isLeague
+    ? `/leagues/${leagueId}/matches/${String(fixtureId).replace(/^lm-/, '')}/details/`
+    : `/ui/seasons/${seasonId}/match-details/${fixtureId}/`;
+  /* No live-scores feed for leagues, so the in-play overlay is UCL-only. */
+  const liveUrl = isLeague ? null : `/ui/seasons/${seasonId}/live-scores/`;
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +57,7 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
   // live score. The interval is torn down on unmount or when a refetch lands
   // as FINISHED (status change re-runs this effect, clearing the timer).
   useEffect(() => {
-    if (status !== 'IN_PLAY') return undefined;
+    if (status !== 'IN_PLAY' || !liveUrl) return undefined;
     let cancelled = false;
     const tick = async () => {
       setRefreshing(true);
@@ -181,10 +187,27 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
             {data.detail ? (
               <section className="match-detail-info" aria-labelledby="match-detail-info-title">
                 <h2 id="match-detail-info-title">Match Information</h2>
-                <dl className="match-detail-facts">
-                  <dt>Venue</dt>
-                  <dd>{data.detail.venue || 'Not available'}</dd>
-                </dl>
+                {/* Key presence drives the block: UCL always carries `venue`
+                    (possibly null) and `odds`, leagues carry neither. So the
+                    league view shows no empty Venue/Odds rows. */}
+                {('venue' in data.detail || data.detail.half_time) && (
+                  <dl className="match-detail-facts">
+                    {'venue' in data.detail && (
+                      <>
+                        <dt>Venue</dt>
+                        <dd>{data.detail.venue || 'Not available'}</dd>
+                      </>
+                    )}
+                    {data.detail.half_time && (
+                      <>
+                        <dt>Half-time</dt>
+                        <dd>
+                          {data.detail.half_time.home_goals} : {data.detail.half_time.away_goals}
+                        </dd>
+                      </>
+                    )}
+                  </dl>
+                )}
                 <h3>Referees</h3>
                 {data.detail.referees?.length ? (
                   <ul className="match-detail-referees">
@@ -198,23 +221,27 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
                 ) : (
                   <p className="muted">No referee information available.</p>
                 )}
-                <h3>Odds</h3>
-                <table className="match-detail-odds">
-                  <thead>
-                    <tr>
-                      <th scope="col">Home</th>
-                      <th scope="col">Draw</th>
-                      <th scope="col">Away</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>{data.detail.odds?.homeWin ?? '–'}</td>
-                      <td>{data.detail.odds?.draw ?? '–'}</td>
-                      <td>{data.detail.odds?.awayWin ?? '–'}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                {'odds' in data.detail && (
+                  <>
+                    <h3>Odds</h3>
+                    <table className="match-detail-odds">
+                      <thead>
+                        <tr>
+                          <th scope="col">Home</th>
+                          <th scope="col">Draw</th>
+                          <th scope="col">Away</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>{data.detail.odds?.homeWin ?? '–'}</td>
+                          <td>{data.detail.odds?.draw ?? '–'}</td>
+                          <td>{data.detail.odds?.awayWin ?? '–'}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </>
+                )}
               </section>
             ) : (
               <p className="match-detail-note">

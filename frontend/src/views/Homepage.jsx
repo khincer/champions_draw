@@ -86,7 +86,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
             type="button"
             aria-label={`View match details: ${match.home_team.name} versus ${match.away_team.name}`}
             ref={detailReturnFocusRef}
-            onClick={() => onOpenMatch(match.id, match.season_id || seasonId)}
+            onClick={() => onOpenMatch(match.id, match.season_id || seasonId, match.league_id)}
           >
             <span aria-hidden="true">↗</span>
           </button>

@@ -1593,6 +1593,108 @@ class MatchDetailsApiTests(APITestCase):
 				self.assertEqual(mock_fetch.call_count, 2)
 
 
+class LeagueMatchDetailsApiTests(APITestCase):
+	"""Tests for GET /api/leagues/<league_id>/matches/<match_id>/details/"""
+
+	def setUp(self):
+		from draw.services.match_details import clear_listing_cache
+		clear_listing_cache()
+
+		self.league = League.objects.create(name='Premier League', code='PL', country='England')
+		self.other_league = League.objects.create(name='Bundesliga', code='BL1', country='Germany')
+		kickoff = datetime(2026, 3, 15, 14, 0, tzinfo=timezone.utc)
+		self.match = LeagueMatch.objects.create(
+			league=self.league,
+			match_id=500001,
+			home_name='Arsenal',
+			away_name='Chelsea',
+			home_short='ARS',
+			away_short='CHE',
+			home_crest='https://crests.example/arsenal.png',
+			away_crest='https://crests.example/chelsea.png',
+			kickoff=kickoff,
+			status='FINISHED',
+			matchday=29,
+			home_goals=2,
+			away_goals=1,
+		)
+		# Same fixture id would 404 through the league filter; this one exists
+		# under a different league and must not resolve.
+		LeagueMatch.objects.create(
+			league=self.other_league,
+			match_id=500002,
+			home_name='Bayern',
+			away_name='Dortmund',
+			kickoff=kickoff,
+			status='FINISHED',
+			home_goals=1,
+			away_goals=1,
+		)
+
+		# Fake football-data league listing (matched by fixture id).
+		self._fake_listing = {
+			'matches': [
+				{
+					'id': 500001,
+					'matchday': 29,
+					'status': 'FINISHED',
+					'homeTeam': {'name': 'Arsenal'},
+					'awayTeam': {'name': 'Chelsea'},
+					'score': {
+						'fullTime': {'home': 2, 'away': 1},
+						'halfTime': {'home': 1, 'away': 0},
+					},
+					'referees': [{'name': 'M. Oliver', 'type': 'REFEREE'}],
+					'utcDate': '2026-03-15T14:00:00Z',
+				},
+			],
+		}
+
+	def _url(self, match_id):
+		return reverse('draw:league-match-details', args=[self.league.pk, match_id])
+
+	def test_finished_match_returns_referees_and_half_time(self):
+		with mock.patch.dict('os.environ', {'API_FOOTBALL_DATA_KEY': 'test-key'}):
+			with mock.patch(
+				'draw.services.match_details.fetch_competition_matches',
+				return_value=self._fake_listing,
+			):
+				response = self.client.get(self._url(500001))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['header']['status'], 'FINISHED')
+		self.assertEqual(response.data['header']['score'], {'home_goals': 2, 'away_goals': 1})
+		self.assertEqual(response.data['header']['matchday'], 29)
+		self.assertEqual(response.data['header']['home_team']['name'], 'Arsenal')
+		self.assertIsNone(response.data['detail_error'])
+		self.assertEqual(response.data['detail']['referees'][0]['name'], 'M. Oliver')
+		self.assertEqual(
+			response.data['detail']['half_time'],
+			{'home_goals': 1, 'away_goals': 0},
+		)
+		# This API plan carries no venue/odds for leagues: the envelope omits
+		# both keys so the UI cannot render empty rows.
+		self.assertNotIn('venue', response.data['detail'])
+		self.assertNotIn('odds', response.data['detail'])
+		self.assertIsNone(response.data['timeline'])
+		self.assertIsNone(response.data['lineups'])
+
+	def test_foreign_or_unknown_match_id_returns_404(self):
+		self.assertEqual(self.client.get(self._url(500002)).status_code, 404)
+		self.assertEqual(self.client.get(self._url(999999)).status_code, 404)
+
+	def test_missing_api_key_returns_detail_error_not_500(self):
+		# Empty key makes load_football_data_league raise before any network
+		# call, which the view must degrade to detail_error.
+		with mock.patch.dict('os.environ', {'API_FOOTBALL_DATA_KEY': ''}):
+			response = self.client.get(self._url(500001))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertIsNone(response.data['detail'])
+		self.assertIn('Upstream listing unavailable', response.data['detail_error'])
+		self.assertIsNotNone(response.data['header'])
+
+
 class SyncRealFixtureResultsTests(TestCase):
 	def test_parse_schedule_keeps_played_league_phase_rows_only(self):
 		from draw.management.commands.sync_real_fixture_results import parse_schedule
@@ -1850,7 +1952,8 @@ class HomepageMatchesLeagueTests(APITestCase):
 		self.assertIsNone(row['season_id'])
 		self.assertEqual(row['competition'], 'Premier League')
 		self.assertEqual(row['competition_emblem'], 'https://crests.football-data.org/PL.png')
-		self.assertFalse(row['openable'])
+		self.assertTrue(row['openable'])
+		self.assertEqual(row['league_id'], self.league.pk)
 		self.assertEqual(row['home_team'], {
 			'name': 'Arsenal',
 			'short_name': 'Ars',

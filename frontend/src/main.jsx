@@ -73,14 +73,14 @@ function App() {
   const detailReturnFocusRef = useRef(null);
   const detailOpenerRef = useRef(null);
 
-  function openMatch(fixtureId, seasonId) {
+  function openMatch(fixtureId, seasonId, leagueId) {
     /* The shared ref holds the last-rendered card button, which need not be the
        one the user activated, so remember the real opener. */
     const active = document.activeElement;
     detailOpenerRef.current = active instanceof HTMLElement && active !== document.body
       ? active
       : detailReturnFocusRef.current;
-    setMatchDetail({ fixtureId, seasonId });
+    setMatchDetail({ fixtureId, seasonId, leagueId });
   }
 
   function closeMatch() {
@@ -525,6 +525,7 @@ function App() {
           <MatchDetailView
             fixtureId={matchDetail.fixtureId}
             seasonId={matchDetail.seasonId}
+            leagueId={matchDetail.leagueId}
             onBack={closeMatch}
             detailReturnFocusRef={detailReturnFocusRef}
           />

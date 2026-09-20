@@ -44,7 +44,17 @@ from .serializers import (
 )
 from .services.draw import DrawError, generate_season_draw
 from .services.interactive_draw import current_pot, pick_team, start_or_resume
-from .services.match_details import build_header, find_listing_match, load_football_data_listing, map_detail
+from .services.match_details import (
+	build_header,
+	build_league_header,
+	find_league_listing_match,
+	find_listing_match,
+	load_football_data_league,
+	load_football_data_listing,
+	map_detail,
+	map_league_detail,
+	season_year_for,
+)
 from .services.seeding import SeedingError, seed_season_entries
 from .services.standings import compute_standings
 
@@ -545,6 +555,62 @@ class MatchDetailsAPIView(APIView):
 		}, status=status.HTTP_200_OK)
 
 
+class LeagueMatchDetailsAPIView(APIView):
+	"""Match detail for a real-league fixture.
+
+	Header comes from LeagueMatch; detail comes from the league's football-data
+	listing (matched by fixture id). A league-scoped route because LeagueMatch
+	has no Season FK: the league id is the natural scope and it leaves the
+	season-scoped UCL route above untouched.
+	"""
+
+	def get(self, request, league_id, match_id):
+		league = get_object_or_404(League, pk=league_id)
+		match = LeagueMatch.objects.filter(league=league, match_id=match_id).first()
+		if match is None:
+			raise NotFound(f'Fixture not found: {match_id}')
+
+		# Eligibility mirrors the UCL route: a finished match, or one whose
+		# kickoff has passed. Football-data marks a league match finished with
+		# status == 'FINISHED'.
+		now = datetime.now(timezone.utc)
+		if match.status != 'FINISHED' and (match.kickoff is None or now < match.kickoff):
+			raise NotFound('Fixture not yet eligible for details')
+
+		header = build_league_header(match)
+
+		detail = None
+		detail_error = None
+		try:
+			listing = load_football_data_league(league.code, season_year_for(match.kickoff))
+			fd_match = find_league_listing_match(listing, match.match_id)
+			detail = map_league_detail(fd_match)
+			if detail is None:
+				detail_error = (
+					f'No football-data mapping found for '
+					f'{match.home_name} vs {match.away_name}'
+				)
+		except (RuntimeError, KeyError) as exc:
+			detail = None
+			detail_error = f'Upstream listing unavailable: {exc}'
+
+		return Response({
+			'fixture': {
+				'id': f'lm-{match.match_id}',
+				'home_name': match.home_name,
+				'away_name': match.away_name,
+				'kickoff': match.kickoff.isoformat().replace('+00:00', 'Z') if match.kickoff else None,
+				'status': match.status,
+				'matchday': match.matchday,
+			},
+			'header': header,
+			'detail': detail,
+			'detail_error': detail_error,
+			'timeline': None,
+			'lineups': None,
+		}, status=status.HTTP_200_OK)
+
+
 def get_season_matchups(season: Season):
 	return (
 		SeasonMatchup.objects.select_related(
@@ -775,9 +841,9 @@ class HomepageMatchesAPIView(APIView):
 	plus every CONMEBOL (Libertadores/Sudamericana) season's matchups.
 
 	The frontend filters by inHomeRange client-side, so all rows are served and
-	the kickoff-bearing subset renders. Rows carry a per-match season_id and
-	competition label; only UCL rows are openable (match details resolve for
-	them; CONMEBOL matchups have no detail endpoint)."""
+	the kickoff-bearing subset renders. Rows carry a per-match season_id,
+	competition label, and (for league rows) league_id. UCL and league rows are
+	openable; CONMEBOL matchups have no detail endpoint."""
 
 	def get(self, request):
 		rows = []
@@ -860,13 +926,13 @@ class HomepageMatchesAPIView(APIView):
 				for m in league_matches:
 					rows.append({
 						'id': f'lm-{m.match_id}',
-						# LeagueMatch has no Season FK, and non-openable rows never
-						# reach the match-detail navigation that reads season_id
-						# (Homepage gates on openable). None is the honest value.
+						# LeagueMatch has no Season FK; the league id addresses the
+						# league-scoped match-detail route. season_id stays None.
 						'season_id': None,
+						'league_id': m.league_id,
 						'competition': m.league.name,
 						'competition_emblem': m.league.emblem_url or None,
-						'openable': False,
+						'openable': True,
 						'home_team': {
 							'name': m.home_name,
 							'short_name': m.home_short,
