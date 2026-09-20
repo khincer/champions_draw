@@ -2191,6 +2191,27 @@ class LeagueMatchPredictionApiTests(APITestCase):
         self.assertTrue(all(m['prediction'] is None for m in resp.data['upcoming']))
         self.assertTrue(all(m['prediction'] is None for m in resp.data['finished']))
 
+    def test_in_play_fixture_is_only_in_in_play_bucket(self):
+        live = self._fixture(7005, 'Brighton', 'Fulham', datetime.now(timezone.utc) - timedelta(minutes=20), 'IN_PLAY')
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+
+        in_play = {m['id']: m for m in resp.data['inPlay']}
+        self.assertIn(live.match_id, in_play)
+        self.assertIsNone(in_play[live.match_id]['result'])
+        self.assertTrue(in_play[live.match_id]['closed'])
+        self.assertNotIn(live.match_id, {m['id'] for m in resp.data['finished']})
+        self.assertNotIn(live.match_id, {m['id'] for m in resp.data['upcoming']})
+
+    def test_finished_fixture_stays_out_of_in_play_bucket(self):
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+
+        in_play_ids = {m['id'] for m in resp.data['inPlay']}
+        finished_ids = {m['id'] for m in resp.data['finished']}
+        self.assertIn(self.finished_match.match_id, finished_ids)
+        self.assertNotIn(self.finished_match.match_id, in_play_ids)
+
     def test_put_requires_player_name(self):
         resp = self.client.put(
             self._url(),

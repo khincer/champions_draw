@@ -899,7 +899,9 @@ class LeagueMatchPredictionAPIView(APIView):
 
 	The read mirrors the sibling `/matches/` contract (last 30 finished + next
 	30 upcoming) so the page never pulls a whole season; each fixture carries
-	the player's pick, the real result, and whether it is still open.
+	the player's pick, the real result, and whether it is still open. Matches
+	that have kicked off but not finished come back in `inPlay` so a just-made
+	pick never vanishes at kickoff.
 	"""
 
 	def get(self, request, league_id):
@@ -908,6 +910,8 @@ class LeagueMatchPredictionAPIView(APIView):
 		now = django.utils.timezone.now()
 		qs = LeagueMatch.objects.filter(league=league)
 		finished = qs.filter(status='FINISHED', kickoff__lte=now).order_by('-kickoff')[:30]
+		# Kicked off but not final (IN_PLAY, PAUSED, …): visible, read-only picks.
+		in_play = qs.filter(kickoff__lte=now).exclude(status='FINISHED').order_by('-kickoff')[:30]
 		upcoming = qs.filter(kickoff__gt=now).order_by('kickoff')[:30]
 
 		by_match_id = {}
@@ -924,6 +928,7 @@ class LeagueMatchPredictionAPIView(APIView):
 			'league': {'id': league.id, 'code': league.code, 'name': league.name, 'emblem_url': league.emblem_url},
 			'player_name': player_name,
 			'finished': [_serialize_league_match(m, by_match_id.get(m.match_id), now) for m in finished],
+			'inPlay': [_serialize_league_match(m, by_match_id.get(m.match_id), now) for m in in_play],
 			'upcoming': [_serialize_league_match(m, by_match_id.get(m.match_id), now) for m in upcoming],
 		})
 

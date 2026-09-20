@@ -140,7 +140,7 @@ export default function LeaguePredictionsView({
       .then((remote) => {
         if (cancelled || !remote) return;
         const remoteById = {};
-        for (const match of [...(remote.upcoming || []), ...(remote.finished || [])]) {
+        for (const match of [...(remote.upcoming || []), ...(remote.inPlay || []), ...(remote.finished || [])]) {
           if (match.prediction) remoteById[match.id] = match.prediction;
         }
         setPreds((prev) => {
@@ -163,7 +163,9 @@ export default function LeaguePredictionsView({
   }, [leagueId, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Only open fixtures go in a PUT: a batch that includes any closed fixture is
-     rejected whole, and the merged remote picks include finished matches. */
+     rejected whole, and the merged remote picks include finished matches.
+     `inPlay` is deliberately not scanned — those fixtures have kicked off, are
+     always `closed`, and must never enter a submit. */
   function openEntries(predictions) {
     const fixtures = dataRef.current;
     const open = new Set(
@@ -232,6 +234,7 @@ export default function LeaguePredictionsView({
   );
 
   const upcoming = data?.upcoming || [];
+  const inPlay = data?.inPlay || [];
   const finished = data?.finished || [];
   const selectedLeague = leagueOptions.find((league) => String(league.id) === leagueId);
 
@@ -288,6 +291,33 @@ export default function LeaguePredictionsView({
                 {verdict ? `${VERDICT_LABEL[verdict]} \u00b7 your pick ${pick}` : `Your pick ${pick}`}
               </span>
             ) : null}
+          </div>
+        }
+      />
+    );
+  }
+
+  /* Kicked off but not final: the pick must stay visible, but the row is
+     read-only — the backend rejects any batch containing a fixture that has
+     kicked off, so these are never editable or submitted. */
+  function renderInPlayRow(match) {
+    const pred = preds[match.id];
+    const pick = pickSummary(pred);
+    const score = match.result ? `${match.result.home_goals}\u2013${match.result.away_goals}` : 'Awaiting result';
+    return (
+      <FixtureRow
+        key={match.id}
+        className="score-row"
+        status="In play"
+        statusTone="live"
+        statusTitle={formatKickoff(match.kickoff)}
+        home={sideTeam(match, 'home')}
+        away={sideTeam(match, 'away')}
+        nameMode="full"
+        center={
+          <div className="score-group real-result">
+            <span className="real-score">{score}</span>
+            {pick ? <span className="fx-verdict live">{`Your pick ${pick}`}</span> : null}
           </div>
         }
       />
@@ -395,6 +425,20 @@ export default function LeaguePredictionsView({
                     </div>
                   </article>
                 </section>
+
+                {inPlay.length ? (
+                  <section className="matchday-card-wrap" aria-labelledby="picks-inplay-heading">
+                    <article className="matchday">
+                      <div className="matchday-head">
+                        <strong id="picks-inplay-heading">In play</strong>
+                        <span>Read-only &middot; awaiting result</span>
+                      </div>
+                      <div className="fixture-list">
+                        {inPlay.map(renderInPlayRow)}
+                      </div>
+                    </article>
+                  </section>
+                ) : null}
 
                 <section className="matchday-card-wrap" aria-labelledby="picks-finished-heading">
                   <article className="matchday">
