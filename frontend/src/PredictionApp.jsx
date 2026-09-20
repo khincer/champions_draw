@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import Button from './components/Button';
+import SegmentControl from './components/SegmentControl';
+import StandingsTable from './components/StandingsTable';
 import MatchdayScoreBoard from './MatchdayScoreBoard';
-import LeagueTable from './LeagueTable';
 import PlayoffBracket from './PlayoffBracket';
 import KnockoutBracket from './KnockoutBracket';
 import { loadLocal, saveLocal } from './predictionStorage';
+import { useReconciliation } from './lib/useReconciliation';
 import { computeStandings, defenseNorm, eliminationBoost, expectedGoals, teamStrength } from './standingsCalc';
 import { predictMatch } from './matchOdds';
+import { ErrorState, Skeleton } from './components/States';
 
 const SUB_TABS = [
   ['scores', 'Score Matches'],
@@ -13,6 +17,13 @@ const SUB_TABS = [
   ['playoffs', 'Playoffs'],
   ['bracket', 'Bracket'],
 ];
+
+/* The manual save and the 30s auto-sync post the same data to the same endpoint,
+   so both failures read the same and name the same retry — Save Matchday
+   (task 4.3's copy, kept verbatim; task 4.1 removed the auto-sync's silence). */
+function saveFailureCopy(err) {
+  return `Save failed: ${err.message}. Your scores are still here — use Save Matchday to retry.`;
+}
 
 const STORAGE_STATE_KEY = 'champions_draw_prediction_state';
 
@@ -32,8 +43,20 @@ export default function PredictionApp({
   const [savingMatchday, setSavingMatchday] = useState(false);
   const [savingPlayoffs, setSavingPlayoffs] = useState(false);
   const [savingKnockout, setSavingKnockout] = useState(false);
-  const [error, setError] = useState('');
+  /* Bumped only after a successful bulk sync (`/sync/` or `/playoffs/sync/`).
+     Reconciliation's post-sync trigger rides on it; edits never touch it. */
+  const [syncRevision, setSyncRevision] = useState(0);
+  /* `{ kind, message }` — the kind picks the retry, so a failed write can only
+     ever re-issue the write that failed (US:no-silent-failure). */
+  const [error, setError] = useState(null);
+  const [createStatus, setCreateStatus] = useState('idle');
+  const [createError, setCreateError] = useState('');
   const syncTimer = useRef(null);
+  /* One writer at a time (task 4.3): the manual save and the 30s auto-sync post
+     the same sync endpoint, so whichever is in flight blocks the other. A ref,
+     not state, because the interval callback's closure is rebuilt on each render
+     and must not read a stale in-flight flag. */
+  const writeInFlight = useRef(false);
 
   // Restore matchday from localStorage
   const [currentMatchday, setCurrentMatchday] = useState(() => {
@@ -84,44 +107,52 @@ export default function PredictionApp({
     persistMatchday(md);
   }, [persistMatchday]);
 
-  // Create/get remote prediction on mount
-  useEffect(() => {
+  // Create/get remote prediction on mount. Its own three states: the sheet
+  // cannot save anything without this record, so pending and failed are shown
+  // instead of an inert grid (US:four-state-contract).
+  const createPrediction = useCallback(async () => {
     if (!seasonId || !playerName) return;
-    (async () => {
-      try {
-        const pred = await apiFetch('/predictions/', {
-          method: 'POST',
-          body: JSON.stringify({ season: Number(seasonId), player_name: playerName }),
-        });
-        setRemotePrediction(pred);
+    setCreateStatus('loading');
+    setCreateError('');
+    try {
+      const pred = await apiFetch('/predictions/', {
+        method: 'POST',
+        body: JSON.stringify({ season: Number(seasonId), player_name: playerName }),
+      });
+      setRemotePrediction(pred);
 
-        // Merge remote data into localData
-        if (pred && pred.match_predictions) {
-          setLocalData((prev) => {
-            const remote = {};
-            for (const mp of pred.match_predictions) {
-              if (mp.home_goals != null || mp.away_goals != null) {
-                remote[mp.matchup.id] = {
-                  home_goals: mp.home_goals,
-                  away_goals: mp.away_goals,
-                  home_team_id: mp.matchup.home_team.id,
-                  away_team_id: mp.matchup.away_team.id,
-                };
-              }
+      // Merge remote data into localData
+      if (pred && pred.match_predictions) {
+        setLocalData((prev) => {
+          const remote = {};
+          for (const mp of pred.match_predictions) {
+            if (mp.home_goals != null || mp.away_goals != null) {
+              remote[mp.matchup.id] = {
+                home_goals: mp.home_goals,
+                away_goals: mp.away_goals,
+                home_team_id: mp.matchup.home_team.id,
+                away_team_id: mp.matchup.away_team.id,
+              };
             }
-            const merged = {
-              ...prev,
-              matchPredictions: { ...remote, ...prev.matchPredictions },
-            };
-            saveLocal(seasonId, playerName, merged, latestDrawSeed);
-            return merged;
-          });
-        }
-      } catch (e) {
-        // silent
+          }
+          const merged = {
+            ...prev,
+            matchPredictions: { ...remote, ...prev.matchPredictions },
+          };
+          saveLocal(seasonId, playerName, merged, latestDrawSeed);
+          return merged;
+        });
       }
-    })();
-  }, [seasonId, playerName]);
+      setCreateStatus('success');
+    } catch (e) {
+      setCreateStatus('error');
+      setCreateError(e.message);
+    }
+  }, [seasonId, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    createPrediction();
+  }, [createPrediction]);
 
   // Periodic sync to backend
   useEffect(() => {
@@ -133,7 +164,8 @@ export default function PredictionApp({
   }, [remotePrediction, localData]);
 
   const syncToBackend = useCallback(async () => {
-    if (!remotePrediction || syncing) return;
+    if (!remotePrediction || writeInFlight.current) return;
+    writeInFlight.current = true;
     setSyncing(true);
     try {
       const predictions = Object.entries(validPredictions)
@@ -149,16 +181,22 @@ export default function PredictionApp({
           method: 'POST',
           body: JSON.stringify({ predictions }),
         });
+        setSyncRevision((r) => r + 1);
       }
-    } catch {
-      // silent
+      setError(null);
+    } catch (e) {
+      /* Not silent (task 4.1): the auto-sync writes the same scores as the
+         manual save, so it reports the same failure and the same retry. */
+      setError({ kind: 'matchday', message: saveFailureCopy(e) });
     } finally {
+      writeInFlight.current = false;
       setSyncing(false);
     }
-  }, [remotePrediction, validPredictions, syncing]);
+  }, [remotePrediction, validPredictions]);
 
   const handleSaveMatchday = useCallback(async () => {
-    if (!remotePrediction) return;
+    if (!remotePrediction || writeInFlight.current) return;
+    writeInFlight.current = true;
     setSavingMatchday(true);
     try {
       const predictions = Object.entries(validPredictions)
@@ -173,6 +211,9 @@ export default function PredictionApp({
         method: 'POST',
         body: JSON.stringify({ predictions }),
       });
+      setSyncRevision((r) => r + 1);
+
+      setError(null);
 
       // Move to next matchday if not on the last one
       if (currentMatchday < 8) {
@@ -181,8 +222,12 @@ export default function PredictionApp({
         persistMatchday(next);
       }
     } catch (e) {
-      setError('Failed to save: ' + e.message);
+      /* Nothing was cleared: the scores are still in the inputs and the Save
+         control is still there, so the copy says both — what failed, what is
+         safe, and how to retry (Design.md §10–§11). */
+      setError({ kind: 'matchday', message: saveFailureCopy(e) });
     } finally {
+      writeInFlight.current = false;
       setSavingMatchday(false);
     }
   }, [remotePrediction, validPredictions, currentMatchday, persistMatchday]);
@@ -521,6 +566,14 @@ export default function PredictionApp({
     );
   }, [knockoutBracket, localData.knockoutPredictions]);
 
+  /* Observe-only confirmation (tasks 6.3/6.4): GET-only, 30s per surface, silent
+     to users. None of these returned values is rendered, so reconciliation can
+     never gate or delay the surfaces. */
+  const predictionId = remotePrediction?.id;
+  useReconciliation('standings', { predictionId, clientValue: standings, revision: syncRevision });
+  useReconciliation('playoffs', { predictionId, clientValue: playoffMatchups, revision: syncRevision });
+  useReconciliation('knockout', { predictionId, clientValue: knockoutBracket, revision: syncRevision });
+
   const handleRandomizePlayoffs = useCallback(() => {
     if (!playoffMatchups.length) return;
     const ctxByTeamId = new Map(
@@ -646,6 +699,7 @@ export default function PredictionApp({
           method: 'POST',
           body: JSON.stringify({ predictions }),
         });
+        setSyncRevision((r) => r + 1);
       }
 
       if (playoffsComplete) {
@@ -654,8 +708,12 @@ export default function PredictionApp({
           body: JSON.stringify({ is_playoffs_complete: true }),
         });
       }
+      setError(null);
     } catch (e) {
-      setError('Failed to save playoffs: ' + e.message);
+      setError({
+        kind: 'playoffs',
+        message: `Failed to save playoffs: ${e.message}. Your picks are still here — use Save Playoffs to retry.`,
+      });
     } finally {
       setSavingPlayoffs(false);
     }
@@ -670,29 +728,72 @@ export default function PredictionApp({
         method: 'PATCH',
         body: JSON.stringify({ is_knockout_complete: true }),
       });
+      setError(null);
     } catch (e) {
-      setError('Failed to save knockout: ' + e.message);
+      setError({
+        kind: 'knockout',
+        message: `Failed to save knockout: ${e.message}. Your picks are still here — use Save Knockout to retry.`,
+      });
     } finally {
       setSavingKnockout(false);
     }
   }, [remotePrediction, knockoutComplete]);
 
+  /* Pending and failed create own the whole tab; retry re-issues only the POST
+     that failed. The skeleton keeps the sheet's settled dimensions. */
+  if (createStatus === 'loading') {
+    return (
+      <div className="prediction-app">
+        <Skeleton rows={6} label="Starting your prediction sheet" />
+      </div>
+    );
+  }
+
+  if (createStatus === 'error') {
+    return (
+      <div className="prediction-app">
+        <ErrorState
+          title="Your prediction sheet could not start"
+          detail={createError}
+          onRetry={createPrediction}
+          retryLabel="Retry predictions"
+        />
+      </div>
+    );
+  }
+
+  /* A failed write is retried by its own writer — never by re-issuing the others. */
+  const writeError = error && {
+    matchday: { title: 'Predictions could not be saved', retry: handleSaveMatchday, retryLabel: 'Save Matchday' },
+    playoffs: { title: 'Playoff predictions could not be saved', retry: handleSavePlayoffs, retryLabel: 'Save Playoffs' },
+    knockout: { title: 'Knockout predictions could not be saved', retry: handleSaveKnockout, retryLabel: 'Save Knockout' },
+  }[error.kind];
+
   return (
     <div className="prediction-app">
-      <div className="view-tabs prediction-tabs">
-        {SUB_TABS.map(([key, label]) => (
-          <button
-            key={key}
-            className={subTab === key ? 'active' : ''}
-            onClick={() => setSubTab(key)}
-            disabled={key === 'playoffs' && matchups.length > 0 && Object.keys(validPredictions).length < matchups.length * 0.5}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SegmentControl
+        className="view-tabs prediction-tabs"
+        label="Prediction sections"
+        value={subTab}
+        onChange={setSubTab}
+        items={SUB_TABS.map(([key, label]) => ({
+          key,
+          label,
+          disabled:
+            key === 'playoffs'
+            && matchups.length > 0
+            && Object.keys(validPredictions).length < matchups.length * 0.5,
+        }))}
+      />
 
-      {error && <div className="message-bar error">{error}</div>}
+      {writeError && (
+        <ErrorState
+          title={writeError.title}
+          detail={error.message}
+          onRetry={writeError.retry}
+          retryLabel={writeError.retryLabel}
+        />
+      )}
 
       <section className="content-grid">
         <div className="primary-column">
@@ -707,9 +808,9 @@ export default function PredictionApp({
                   {Object.values(validPredictions).filter(v => v.home_goals != null).length}/{matchups.length} scored
                 </span>
                 {leagueComplete && (
-                  <button className="button secondary" onClick={() => setSubTab('playoffs')}>
+                  <Button onClick={() => setSubTab('playoffs')}>
                     Continue to Playoffs →
-                  </button>
+                  </Button>
                 )}
               </div>
               <MatchdayScoreBoard
@@ -719,7 +820,7 @@ export default function PredictionApp({
                 currentMatchday={currentMatchday}
                 onMatchdayChange={handleMatchdayChange}
                 onSave={handleSaveMatchday}
-                isSaving={savingMatchday}
+                isSaving={savingMatchday || syncing}
                 onRandomize={handleRandomizeMatchday}
                 onPredict={handlePredictMatchday}
               />
@@ -727,7 +828,17 @@ export default function PredictionApp({
           )}
 
           {subTab === 'standings' && (
-            <LeagueTable teams={seasonState?.teams} matchPredictions={validPredictions} />
+            <div className="league-table-wrap">
+              <h3 className="section-title">League Phase Standings</h3>
+              <StandingsTable
+                rows={standings}
+                variant="league"
+                nameMode="short"
+                playedHeader="Pld"
+                legend="league"
+                scrollClassName="league-table-scroll"
+              />
+            </div>
           )}
 
           {subTab === 'playoffs' && (
@@ -737,21 +848,21 @@ export default function PredictionApp({
                   <h2>Playoff predictions</h2>
                   <p>Score both legs of each two-legged tie. The lower seed hosts leg 1.</p>
                 </div>
-                <button
-                  className="button primary"
+                <Button
+                  variant="primary"
                   onClick={handleSavePlayoffs}
                   disabled={savingPlayoffs || !playoffMatchups.length}
                 >
                   {savingPlayoffs ? 'Saving...' : 'Save Playoffs'}
-                </button>
+                </Button>
                 {playoffsComplete && (
-                  <button className="button secondary" onClick={() => setSubTab('bracket')}>
+                  <Button onClick={() => setSubTab('bracket')}>
                     Continue to Knockout →
-                  </button>
+                  </Button>
                 )}
-                <button className="button secondary" onClick={handleRandomizePlayoffs} disabled={!playoffMatchups.length}>
+                <Button onClick={handleRandomizePlayoffs} disabled={!playoffMatchups.length}>
                   Randomize
-                </button>
+                </Button>
               </div>
               <PlayoffBracket
                 matchups={playoffMatchups}
@@ -767,20 +878,19 @@ export default function PredictionApp({
                   <h2>Knockout predictions</h2>
                   <p>Score each single-leg knockout match. Winners advance automatically.</p>
                 </div>
-                <button
-                  className="button primary"
+                <Button
+                  variant="primary"
                   onClick={handleSaveKnockout}
                   disabled={savingKnockout || !knockoutComplete}
                 >
                   {savingKnockout ? 'Saving...' : 'Save Knockout'}
-                </button>
-                <button
-                  className="button secondary"
+                </Button>
+                <Button
                   onClick={handleRandomizeKnockout}
                   disabled={!Object.values(knockoutBracket).some((round) => round.some((m) => m.home_team && m.away_team))}
                 >
                   Randomize
-                </button>
+                </Button>
                 {knockoutComplete && (
                   <span className="muted">Knockout complete — champion crowned</span>
                 )}
@@ -801,44 +911,13 @@ export default function PredictionApp({
                 {Object.values(validPredictions).filter(v => v.home_goals != null).length}/{matchups.length} played
               </span>
             </div>
-            <div className="sidebar-standings-scroll">
-              <table className="sidebar-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Team</th>
-                    <th>Pts</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {standings.slice(0, 36).map((row) => {
-                    let cls = '';
-                    if (row.position <= 8) cls = 'r-qual';
-                    else if (row.position <= 24) cls = 'r-play';
-                    else cls = 'r-elim';
-                    return (
-                      <tr className={cls} key={row.team_id}>
-                        <td className="sp">{row.position}</td>
-                        <td className="st">
-                          <span className="team-logo xs">
-                            {row.team?.logo_url
-                              ? <img src={row.team.logo_url} alt="" />
-                              : row.team?.short_name?.slice(0, 3)}
-                          </span>
-                          {row.team?.short_name || row.short_name}
-                        </td>
-                        <td className="spts">{row.points}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="sidebar-legend">
-              <span><span className="sq" /> 1-8</span>
-              <span><span className="sp" /> 9-24</span>
-              <span><span className="se" /> 25-36</span>
-            </div>
+            <StandingsTable
+              rows={standings.slice(0, 36)}
+              variant="sidebar"
+              nameMode="short"
+              legend="sidebar"
+              scrollClassName="sidebar-standings-scroll"
+            />
           </div>
         </aside>
       </section>

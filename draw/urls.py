@@ -13,10 +13,12 @@ from .predictions_views import (
 from .views import (
 	HomepageMatchesAPIView,
 	InteractivePickAPIView,
+	LeagueMatchDetailsAPIView,
 	MatchDetailsAPIView,
 	LeagueListAPIView,
     LeagueStandingListAPIView,
     LeagueFixtureListAPIView,
+    LeagueMatchPredictionAPIView,
 	LiveScoresAPIView,
 	RealPredictionSyncAPIView,
 	RealSeasonFixturesAPIView,
@@ -54,6 +56,8 @@ urlpatterns = [
     path('leagues/', LeagueListAPIView.as_view(), name='league-list'),
     path('leagues/<int:league_id>/standings/', LeagueStandingListAPIView.as_view(), name='league-standings'),
     path('leagues/<int:league_id>/matches/', LeagueFixtureListAPIView.as_view(), name='league-matches'),
+    path('leagues/<int:league_id>/predictions/', LeagueMatchPredictionAPIView.as_view(), name='league-predictions'),
+    path('leagues/<int:league_id>/matches/<int:match_id>/details/', LeagueMatchDetailsAPIView.as_view(), name='league-match-details'),
     # Homepage
     path('homepage/matches/', HomepageMatchesAPIView.as_view(), name='homepage-matches'),
     # Prediction endpoints

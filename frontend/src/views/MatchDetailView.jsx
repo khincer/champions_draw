@@ -1,40 +1,30 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-
-const API_ROOT = '/api';
-
-// GET-only twin of main.jsx's apiFetch, which is not exported (and importing
-// main.jsx would execute the whole app). Keeps this component self-contained.
-async function apiFetch(path) {
-  const response = await fetch(`${API_ROOT}${path}`, {
-    credentials: 'same-origin',
-    headers: { Accept: 'application/json' },
-  });
-  const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    throw new Error(payload?.detail || `Request failed with ${response.status}`);
-  }
-  return payload;
-}
+import Crest from '../components/Crest';
+import { ErrorState } from '../components/States';
+import { apiFetch } from '../lib/api';
 
 const STATUS_LABEL = { FINISHED: 'Final', IN_PLAY: 'Live', SCHEDULED: 'Kickoff' };
 
-function Crest({ team, className }) {
-  const [failed, setFailed] = useState(false);
-  if (!team.logo_url || failed) return null;
-  return <img className={className} src={team.logo_url} alt="" onError={() => setFailed(true)} />;
-}
-
-export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
+export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [liveScore, setLiveScore] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  /* Bumped by the error state's retry, which re-issues only the detail request
+     (US:no-silent-failure — the error card used to be a dead end). */
+  const [reloadToken, setReloadToken] = useState(0);
   const backRef = useRef(null);
+  const dialogRef = useRef(null);
 
-  const detailUrl = `/ui/seasons/${seasonId}/match-details/${fixtureId}/`;
-  const liveUrl = `/ui/seasons/${seasonId}/live-scores/`;
+  /* League rows (`lm-{fixture_id}`) have no season, so they resolve through the
+     league-scoped route; UCL rows keep the season-scoped one. */
+  const isLeague = leagueId != null;
+  const detailUrl = isLeague
+    ? `/leagues/${leagueId}/matches/${String(fixtureId).replace(/^lm-/, '')}/details/`
+    : `/ui/seasons/${seasonId}/match-details/${fixtureId}/`;
+  /* No live-scores feed for leagues, so the in-play overlay is UCL-only. */
+  const liveUrl = isLeague ? null : `/ui/seasons/${seasonId}/live-scores/`;
 
   useEffect(() => {
     let cancelled = false;
@@ -47,7 +37,14 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
       .catch((err) => { if (!cancelled) setError(err.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [detailUrl]);
+  }, [detailUrl, reloadToken]);
+
+  /* Modal so the top layer seals the page behind the overlay: Tab cannot leave
+     it and the background is inert. Escape arrives as `cancel` (handled below). */
+  useEffect(() => {
+    const node = dialogRef.current;
+    if (node && !node.open) node.showModal();
+  }, []);
 
   useEffect(() => {
     backRef.current?.focus();
@@ -60,7 +57,7 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
   // live score. The interval is torn down on unmount or when a refetch lands
   // as FINISHED (status change re-runs this effect, clearing the timer).
   useEffect(() => {
-    if (status !== 'IN_PLAY') return undefined;
+    if (status !== 'IN_PLAY' || !liveUrl) return undefined;
     let cancelled = false;
     const tick = async () => {
       setRefreshing(true);
@@ -81,9 +78,44 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
 
   const header = data?.header;
   const score = status === 'IN_PLAY' && liveScore ? liveScore : header?.score;
+  const dialogName = header
+    ? `Match details: ${header.home_team.name} versus ${header.away_team.name}`
+    : 'Match details';
+
+  /* Native `showModal()` seals the page behind the overlay, but with a single
+     focusable control (the Back button) Chromium lets Tab fall out to <body>
+     and back. Wrap the ring so focus never leaves the dialog while it is open
+     (A11Y:dialog-focus-return). */
+  function trapTab(event) {
+    if (event.key !== 'Tab') return;
+    const node = dialogRef.current;
+    if (!node) return;
+    const focusables = [...node.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+      .filter((el) => !el.disabled);
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 
   return (
-    <section className="match-detail-view" aria-busy={loading || refreshing}>
+    <dialog
+      ref={dialogRef}
+      className="match-detail-view"
+      aria-label={dialogName}
+      aria-busy={loading || refreshing}
+      onCancel={(event) => {
+        event.preventDefault();
+        onBack?.();
+      }}
+      onKeyDown={trapTab}
+    >
       <button
         ref={backRef}
         type="button"
@@ -103,10 +135,12 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
       )}
 
       {!loading && error && (
-        <div className="match-detail-error" role="alert">
-          <strong>Couldn't load match details</strong>
-          <p>{error}</p>
-        </div>
+        <ErrorState
+          title="Couldn't load match details"
+          detail={error}
+          onRetry={() => setReloadToken((token) => token + 1)}
+          retryLabel="Retry match details"
+        />
       )}
 
       {!loading && !error && header && (
@@ -153,10 +187,27 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
             {data.detail ? (
               <section className="match-detail-info" aria-labelledby="match-detail-info-title">
                 <h2 id="match-detail-info-title">Match Information</h2>
-                <dl className="match-detail-facts">
-                  <dt>Venue</dt>
-                  <dd>{data.detail.venue || 'Not available'}</dd>
-                </dl>
+                {/* Key presence drives the block: UCL always carries `venue`
+                    (possibly null) and `odds`, leagues carry neither. So the
+                    league view shows no empty Venue/Odds rows. */}
+                {('venue' in data.detail || data.detail.half_time) && (
+                  <dl className="match-detail-facts">
+                    {'venue' in data.detail && (
+                      <>
+                        <dt>Venue</dt>
+                        <dd>{data.detail.venue || 'Not available'}</dd>
+                      </>
+                    )}
+                    {data.detail.half_time && (
+                      <>
+                        <dt>Half-time</dt>
+                        <dd>
+                          {data.detail.half_time.home_goals} : {data.detail.half_time.away_goals}
+                        </dd>
+                      </>
+                    )}
+                  </dl>
+                )}
                 <h3>Referees</h3>
                 {data.detail.referees?.length ? (
                   <ul className="match-detail-referees">
@@ -170,23 +221,27 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
                 ) : (
                   <p className="muted">No referee information available.</p>
                 )}
-                <h3>Odds</h3>
-                <table className="match-detail-odds">
-                  <thead>
-                    <tr>
-                      <th scope="col">Home</th>
-                      <th scope="col">Draw</th>
-                      <th scope="col">Away</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>{data.detail.odds?.homeWin ?? '–'}</td>
-                      <td>{data.detail.odds?.draw ?? '–'}</td>
-                      <td>{data.detail.odds?.awayWin ?? '–'}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                {'odds' in data.detail && (
+                  <>
+                    <h3>Odds</h3>
+                    <table className="match-detail-odds">
+                      <thead>
+                        <tr>
+                          <th scope="col">Home</th>
+                          <th scope="col">Draw</th>
+                          <th scope="col">Away</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>{data.detail.odds?.homeWin ?? '–'}</td>
+                          <td>{data.detail.odds?.draw ?? '–'}</td>
+                          <td>{data.detail.odds?.awayWin ?? '–'}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </>
+                )}
               </section>
             ) : (
               <p className="match-detail-note">
@@ -199,6 +254,6 @@ export default function MatchDetailView({ fixtureId, seasonId, onBack }) {
           </div>
         </>
       )}
-    </section>
+    </dialog>
   );
 }

@@ -13,7 +13,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueMatch, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, RealFixturePrediction, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
+from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueMatch, LeagueMatchPrediction, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, RealFixturePrediction, RealFixtureResult, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
 from .serializers import CompactSeasonTeamSerializer
 from .services.draw import DrawError, compute_forbidden_directions, generate_season_draw, previous_season_names
 from .services.import_seed_input import import_seed_input_payload
@@ -1390,6 +1390,27 @@ class RealPredictionSyncApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data, {'player_name': 'Nobody', 'predictions': []})
 
+	def test_fixtures_endpoint_merges_db_result_over_static_json(self):
+		RealFixtureResult.objects.create(fixture_id='real-1-1', home_goals=4, away_goals=0)
+
+		response = self.client.get(reverse('draw:ui-season-real-fixtures', args=[self.season.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(len(response.data['matchups']), 144)
+		by_id = {m['id']: m for m in response.data['matchups']}
+		# The shipped JSON carries a static 1-0 for real-1-1; the DB must win.
+		self.assertEqual(by_id['real-1-1']['result'], {'home_goals': 4, 'away_goals': 0})
+
+	def test_fixtures_endpoint_falls_back_to_static_json_result(self):
+		response = self.client.get(reverse('draw:ui-season-real-fixtures', args=[self.season.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		by_id = {m['id']: m for m in response.data['matchups']}
+		# No DB row: the checked-in static result (AEK Athens 1-0 LASK) is served.
+		self.assertEqual(by_id['real-1-1']['result'], {'home_goals': 1, 'away_goals': 0})
+		# A fixture with no result anywhere stays null.
+		self.assertIsNone(by_id['real-8-1']['result'])
+
 	def test_live_scores_maps_in_play_matches_to_fixture_ids(self):
 		url = reverse('draw:ui-season-live-scores', args=[self.season.pk])
 		with mock.patch('draw.views._fetch_promiedos_live_html', return_value='cached'):
@@ -1593,6 +1614,108 @@ class MatchDetailsApiTests(APITestCase):
 				self.assertEqual(mock_fetch.call_count, 2)
 
 
+class LeagueMatchDetailsApiTests(APITestCase):
+	"""Tests for GET /api/leagues/<league_id>/matches/<match_id>/details/"""
+
+	def setUp(self):
+		from draw.services.match_details import clear_listing_cache
+		clear_listing_cache()
+
+		self.league = League.objects.create(name='Premier League', code='PL', country='England')
+		self.other_league = League.objects.create(name='Bundesliga', code='BL1', country='Germany')
+		kickoff = datetime(2026, 3, 15, 14, 0, tzinfo=timezone.utc)
+		self.match = LeagueMatch.objects.create(
+			league=self.league,
+			match_id=500001,
+			home_name='Arsenal',
+			away_name='Chelsea',
+			home_short='ARS',
+			away_short='CHE',
+			home_crest='https://crests.example/arsenal.png',
+			away_crest='https://crests.example/chelsea.png',
+			kickoff=kickoff,
+			status='FINISHED',
+			matchday=29,
+			home_goals=2,
+			away_goals=1,
+		)
+		# Same fixture id would 404 through the league filter; this one exists
+		# under a different league and must not resolve.
+		LeagueMatch.objects.create(
+			league=self.other_league,
+			match_id=500002,
+			home_name='Bayern',
+			away_name='Dortmund',
+			kickoff=kickoff,
+			status='FINISHED',
+			home_goals=1,
+			away_goals=1,
+		)
+
+		# Fake football-data league listing (matched by fixture id).
+		self._fake_listing = {
+			'matches': [
+				{
+					'id': 500001,
+					'matchday': 29,
+					'status': 'FINISHED',
+					'homeTeam': {'name': 'Arsenal'},
+					'awayTeam': {'name': 'Chelsea'},
+					'score': {
+						'fullTime': {'home': 2, 'away': 1},
+						'halfTime': {'home': 1, 'away': 0},
+					},
+					'referees': [{'name': 'M. Oliver', 'type': 'REFEREE'}],
+					'utcDate': '2026-03-15T14:00:00Z',
+				},
+			],
+		}
+
+	def _url(self, match_id):
+		return reverse('draw:league-match-details', args=[self.league.pk, match_id])
+
+	def test_finished_match_returns_referees_and_half_time(self):
+		with mock.patch.dict('os.environ', {'API_FOOTBALL_DATA_KEY': 'test-key'}):
+			with mock.patch(
+				'draw.services.match_details.fetch_competition_matches',
+				return_value=self._fake_listing,
+			):
+				response = self.client.get(self._url(500001))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['header']['status'], 'FINISHED')
+		self.assertEqual(response.data['header']['score'], {'home_goals': 2, 'away_goals': 1})
+		self.assertEqual(response.data['header']['matchday'], 29)
+		self.assertEqual(response.data['header']['home_team']['name'], 'Arsenal')
+		self.assertIsNone(response.data['detail_error'])
+		self.assertEqual(response.data['detail']['referees'][0]['name'], 'M. Oliver')
+		self.assertEqual(
+			response.data['detail']['half_time'],
+			{'home_goals': 1, 'away_goals': 0},
+		)
+		# This API plan carries no venue/odds for leagues: the envelope omits
+		# both keys so the UI cannot render empty rows.
+		self.assertNotIn('venue', response.data['detail'])
+		self.assertNotIn('odds', response.data['detail'])
+		self.assertIsNone(response.data['timeline'])
+		self.assertIsNone(response.data['lineups'])
+
+	def test_foreign_or_unknown_match_id_returns_404(self):
+		self.assertEqual(self.client.get(self._url(500002)).status_code, 404)
+		self.assertEqual(self.client.get(self._url(999999)).status_code, 404)
+
+	def test_missing_api_key_returns_detail_error_not_500(self):
+		# Empty key makes load_football_data_league raise before any network
+		# call, which the view must degrade to detail_error.
+		with mock.patch.dict('os.environ', {'API_FOOTBALL_DATA_KEY': ''}):
+			response = self.client.get(self._url(500001))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertIsNone(response.data['detail'])
+		self.assertIn('Upstream listing unavailable', response.data['detail_error'])
+		self.assertIsNotNone(response.data['header'])
+
+
 class SyncRealFixtureResultsTests(TestCase):
 	def test_parse_schedule_keeps_played_league_phase_rows_only(self):
 		from draw.management.commands.sync_real_fixture_results import parse_schedule
@@ -1768,6 +1891,51 @@ class SyncRealFixtureResultsTests(TestCase):
 		self.assertEqual(resolve('lens'), 'rc lens')
 		self.assertEqual(resolve('psg'), 'paris saint germain')
 
+	def test_sync_persists_results_and_never_writes_fixtures_json(self):
+		import json
+
+		fixtures_path = (
+			Path(__file__).resolve().parent / 'data' / 'ucl_league_phase_real_fixtures_2026_27.json'
+		)
+		payload = {
+			'props': {'pageProps': {'data': {'games': {'filters': [
+				{'name': 'Partidos actuales', 'games': [
+					{'id': 'a', 'game_time_status_to_display': 'Final',
+					 'teams': [{'name': 'AEK Atenas', 'url_name': 'aek-athens'},
+					           {'name': 'LASK Linz', 'url_name': 'lask-linz'}],
+					 'scores': [3, 1]},
+				]},
+			]}}},
+		}}
+		html_text = (
+			'<div id="root"></div>'
+			'<script id="__NEXT_DATA__" type="application/json">'
+			f'{json.dumps(payload)}'
+			'</script>'
+		)
+
+		with TemporaryDirectory() as tmp:
+			copied = Path(tmp) / 'fixtures.json'
+			copied.write_bytes(fixtures_path.read_bytes())
+			before = copied.read_bytes()
+
+			with mock.patch(
+				'draw.management.commands.sync_real_fixture_results.fetch',
+				return_value=html_text,
+			):
+				call_command(
+					'sync_real_fixture_results',
+					'--source', 'promiedos',
+					'--fixtures-json', str(copied),
+				)
+
+			# The calendar is static: a sync must never rewrite it.
+			self.assertEqual(copied.read_bytes(), before)
+
+		# The result landed in Postgres under the fixture id the API serves.
+		result = RealFixtureResult.objects.get(fixture_id='real-1-1')
+		self.assertEqual((result.home_goals, result.away_goals), (3, 1))
+
 
 class LeagueFixtureListAPITests(APITestCase):
     def setUp(self):
@@ -1808,3 +1976,314 @@ class LeagueFixtureListAPITests(APITestCase):
         resp = self.client.get(f'/api/leagues/{self.league.id}/matches/')
         upcoming = resp.json()['upcoming']
         self.assertIsNone(upcoming[0]['result'])
+
+
+class HomepageMatchesLeagueTests(APITestCase):
+	def setUp(self):
+		self.league = League.objects.create(
+			name='Premier League',
+			code='PL',
+			country='England',
+			emblem_url='https://crests.football-data.org/PL.png',
+		)
+
+	def _fixture(self, match_id, home, away, kickoff, status, home_goals=None, away_goals=None):
+		return LeagueMatch.objects.create(
+			league=self.league,
+			match_id=match_id,
+			home_name=home,
+			away_name=away,
+			home_short=home[:3],
+			away_short=away[:3],
+			home_crest='https://crests.example/arsenal.png',
+			away_crest='https://crests.example/chelsea.png',
+			kickoff=kickoff,
+			status=status,
+			home_goals=home_goals,
+			away_goals=away_goals,
+		)
+
+	def _league_rows(self):
+		resp = self.client.get('/api/homepage/matches/')
+		self.assertEqual(resp.status_code, 200)
+		return [r for r in resp.json()['matchups'] if r['id'].startswith('lm-')]
+
+	def test_league_match_row_shape_and_derivations(self):
+		now = datetime.now(timezone.utc)
+		finished = self._fixture(9001, 'Arsenal', 'Chelsea', now - timedelta(days=1), 'FINISHED', 2, 1)
+		scheduled = self._fixture(9002, 'Man City', 'Liverpool', now + timedelta(hours=2), 'TIMED', None, None)
+
+		rows = {r['id']: r for r in self._league_rows()}
+		row = rows[f'lm-{finished.match_id}']
+		self.assertIsNone(row['season_id'])
+		self.assertEqual(row['competition'], 'Premier League')
+		self.assertEqual(row['competition_emblem'], 'https://crests.football-data.org/PL.png')
+		self.assertTrue(row['openable'])
+		self.assertEqual(row['league_id'], self.league.pk)
+		self.assertEqual(row['home_team'], {
+			'name': 'Arsenal',
+			'short_name': 'Ars',
+			'logo_url': 'https://crests.example/arsenal.png',
+		})
+		self.assertEqual(row['away_team'], {
+			'name': 'Chelsea',
+			'short_name': 'Che',
+			'logo_url': 'https://crests.example/chelsea.png',
+		})
+		self.assertTrue(row['kickoff'].endswith('Z'))
+		self.assertEqual(row['result'], {'home_goals': 2, 'away_goals': 1})
+		self.assertTrue(row['closed'])
+		self.assertEqual(row['status'], 'FINISHED')
+
+		upcoming = rows[f'lm-{scheduled.match_id}']
+		self.assertIsNone(upcoming['result'])
+		self.assertFalse(upcoming['closed'])
+		self.assertEqual(upcoming['status'], 'TIMED')
+
+	def test_rows_without_kickoff_are_skipped(self):
+		now = datetime.now(timezone.utc)
+		self._fixture(9003, 'No', 'Kickoff', None, 'SCHEDULED')
+		self._fixture(9004, 'Has', 'Kickoff', now, 'SCHEDULED')
+		ids = {r['id'] for r in self._league_rows()}
+		self.assertNotIn('lm-9003', ids)
+		self.assertIn('lm-9004', ids)
+
+	def test_league_row_without_emblem_sends_null(self):
+		self.league.emblem_url = ''
+		self.league.save(update_fields=['emblem_url'])
+		self._fixture(9005, 'A', 'B', datetime.now(timezone.utc), 'SCHEDULED')
+		rows = {r['id']: r for r in self._league_rows()}
+		self.assertIsNone(rows['lm-9005']['competition_emblem'])
+
+	def test_conmebol_row_carries_api_sports_emblem(self):
+		association = Association.objects.create(name='Uruguay', code='URU')
+		season = Season.objects.create(name='Libertadores 2026', competition='LIB')
+		home = SeasonTeam.objects.create(
+			season=season,
+			team=Team.objects.create(name='Penarol', short_name='PEN', association=association),
+			uefa_club_coefficient=Decimal('0.000'),
+		)
+		away = SeasonTeam.objects.create(
+			season=season,
+			team=Team.objects.create(name='Nacional', short_name='NAC', association=association),
+			uefa_club_coefficient=Decimal('0.000'),
+		)
+		SeasonMatchup.objects.create(
+			season=season,
+			home_team=home,
+			away_team=away,
+			kickoff=datetime.now(timezone.utc),
+			status='SCHEDULED',
+		)
+
+		resp = self.client.get('/api/homepage/matches/')
+		row = next(r for r in resp.json()['matchups'] if r['id'].startswith('sm-'))
+		self.assertEqual(row['competition'], 'Libertadores')
+		self.assertEqual(row['competition_emblem'], 'https://media.api-sports.io/football/leagues/13.png')
+
+	def test_ucl_row_carries_football_data_emblem(self):
+		Season.objects.create(name='2026-27', competition='UCL')
+		fake_fixtures = [{
+			'id': 'real-1-1',
+			'home_team': {'name': 'Arsenal', 'short_name': 'ARS', 'logo_url': ''},
+			'away_team': {'name': 'Chelsea', 'short_name': 'CHE', 'logo_url': ''},
+			'matchday': 1,
+			'kickoff': '2026-09-19T19:00:00Z',
+			'result': None,
+			'closed': False,
+			'status': 'SCHEDULED',
+		}]
+		with mock.patch('draw.views._load_real_fixtures', return_value=fake_fixtures):
+			resp = self.client.get('/api/homepage/matches/')
+		row = next(r for r in resp.json()['matchups'] if r['id'] == 'real-1-1')
+		self.assertEqual(row['competition'], 'Champions League')
+		self.assertEqual(row['competition_emblem'], 'https://crests.football-data.org/CL.png')
+
+
+class LeagueMatchPredictionApiTests(APITestCase):
+    """Tests for GET/PUT /api/leagues/<league_id>/predictions/."""
+
+    def setUp(self):
+        self.league = League.objects.create(name='Premier League', code='PL', country='England')
+        self.other_league = League.objects.create(name='Bundesliga', code='BL1', country='Germany')
+        now = datetime.now(timezone.utc)
+        self.open_match = self._fixture(7001, 'Arsenal', 'Chelsea', now + timedelta(days=1), 'SCHEDULED')
+        self.timed_match = self._fixture(7002, 'Spurs', 'Villa', now + timedelta(days=2), 'TIMED')
+        self.finished_match = self._fixture(7003, 'Man City', 'Liverpool', now - timedelta(days=1), 'FINISHED', 2, 1)
+        self.unscheduled_match = self._fixture(7004, 'Newcastle', 'Everton', None, 'SCHEDULED')
+
+    def _fixture(self, match_id, home, away, kickoff, status, home_goals=None, away_goals=None):
+        return LeagueMatch.objects.create(
+            league=self.league,
+            match_id=match_id,
+            home_name=home,
+            away_name=away,
+            home_short=home[:3],
+            away_short=away[:3],
+            kickoff=kickoff,
+            status=status,
+            home_goals=home_goals,
+            away_goals=away_goals,
+        )
+
+    def _url(self, league=None):
+        return f'/api/leagues/{(league or self.league).pk}/predictions/'
+
+    def test_put_saves_pick_and_get_returns_it(self):
+        resp = self.client.put(
+            self._url(),
+            {
+                'player_name': 'Ada',
+                'predictions': [
+                    {'match_id': self.open_match.match_id, 'home_goals': 2, 'away_goals': 1},
+                    {'match_id': self.timed_match.match_id, 'home_goals': 0, 'away_goals': 0},
+                ],
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, {'synced': 2})
+        self.assertEqual(LeagueMatchPrediction.objects.filter(player_name='Ada').count(), 2)
+
+        resp = self.client.get(self._url(), {'player_name': 'Ada'})
+        self.assertEqual(resp.status_code, 200)
+        upcoming = {m['id']: m for m in resp.data['upcoming']}
+        self.assertEqual(upcoming[self.open_match.match_id]['prediction'], {'home_goals': 2, 'away_goals': 1})
+        self.assertFalse(upcoming[self.open_match.match_id]['closed'])
+
+        # A finished fixture carries the real result, is closed, and has no pick.
+        finished = {m['id']: m for m in resp.data['finished']}
+        self.assertEqual(finished[self.finished_match.match_id]['result'], {'home_goals': 2, 'away_goals': 1})
+        self.assertIsNone(finished[self.finished_match.match_id]['prediction'])
+        self.assertTrue(finished[self.finished_match.match_id]['closed'])
+
+    def test_put_upserts_an_existing_pick(self):
+        url = self._url()
+        self.client.put(
+            url,
+            {'player_name': 'Ada', 'predictions': [{'match_id': self.open_match.match_id, 'home_goals': 1, 'away_goals': 0}]},
+            format='json',
+        )
+        self.client.put(
+            url,
+            {'player_name': 'Ada', 'predictions': [{'match_id': self.open_match.match_id, 'home_goals': 3, 'away_goals': 2}]},
+            format='json',
+        )
+        self.assertEqual(LeagueMatchPrediction.objects.count(), 1)
+        row = LeagueMatchPrediction.objects.get()
+        self.assertEqual((row.home_goals, row.away_goals), (3, 2))
+
+    def test_unique_constraint_rejects_second_pick_for_same_match_and_player(self):
+        LeagueMatchPrediction.objects.create(match=self.open_match, player_name='Ada', home_goals=1, away_goals=0)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                LeagueMatchPrediction.objects.create(match=self.open_match, player_name='Ada', home_goals=3, away_goals=3)
+        self.assertEqual(LeagueMatchPrediction.objects.count(), 1)
+
+        # Same player, different fixture and same fixture, different player stay legal.
+        LeagueMatchPrediction.objects.create(match=self.timed_match, player_name='Ada', home_goals=1, away_goals=0)
+        LeagueMatchPrediction.objects.create(match=self.open_match, player_name='Bob', home_goals=2, away_goals=2)
+        self.assertEqual(LeagueMatchPrediction.objects.count(), 3)
+
+    def test_closed_fixture_rejects_whole_batch_and_writes_nothing(self):
+        resp = self.client.put(
+            self._url(),
+            {
+                'player_name': 'Ada',
+                'predictions': [
+                    {'match_id': self.open_match.match_id, 'home_goals': 1, 'away_goals': 0},
+                    {'match_id': self.finished_match.match_id, 'home_goals': 0, 'away_goals': 0},
+                ],
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['detail'], 'Prediction closed for some fixtures')
+        self.assertEqual(resp.data['closed'], [self.finished_match.match_id])
+        self.assertEqual(LeagueMatchPrediction.objects.count(), 0)
+
+    def test_unscheduled_fixture_rejects_whole_batch_and_writes_nothing(self):
+        resp = self.client.put(
+            self._url(),
+            {
+                'player_name': 'Ada',
+                'predictions': [
+                    {'match_id': self.open_match.match_id, 'home_goals': 1, 'away_goals': 0},
+                    {'match_id': self.unscheduled_match.match_id, 'home_goals': 1, 'away_goals': 0},
+                ],
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['detail'], 'Fixture not scheduled')
+        self.assertEqual(resp.data['unscheduled'], [self.unscheduled_match.match_id])
+        self.assertEqual(LeagueMatchPrediction.objects.count(), 0)
+
+    def test_negative_or_non_numeric_score_is_rejected(self):
+        for bad in (-1, 'abc', 1.5, True, '2.5'):
+            with self.subTest(bad=bad):
+                resp = self.client.put(
+                    self._url(),
+                    {
+                        'player_name': 'Ada',
+                        'predictions': [{'match_id': self.open_match.match_id, 'home_goals': bad, 'away_goals': 0}],
+                    },
+                    format='json',
+                )
+                self.assertEqual(resp.status_code, 400)
+        self.assertEqual(LeagueMatchPrediction.objects.count(), 0)
+
+    def test_fixture_from_another_league_is_unknown(self):
+        foreign = LeagueMatch.objects.create(
+            league=self.other_league,
+            match_id=8001,
+            home_name='Bayern',
+            away_name='Dortmund',
+            kickoff=datetime.now(timezone.utc) + timedelta(days=1),
+            status='SCHEDULED',
+        )
+        resp = self.client.put(
+            self._url(),
+            {'player_name': 'Ada', 'predictions': [{'match_id': foreign.match_id, 'home_goals': 1, 'away_goals': 0}]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Unknown fixture id', resp.data['detail'])
+
+    def test_get_without_player_name_lists_fixtures_without_picks(self):
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['player_name'], '')
+        self.assertTrue(all(m['prediction'] is None for m in resp.data['upcoming']))
+        self.assertTrue(all(m['prediction'] is None for m in resp.data['finished']))
+
+    def test_in_play_fixture_is_only_in_in_play_bucket(self):
+        live = self._fixture(7005, 'Brighton', 'Fulham', datetime.now(timezone.utc) - timedelta(minutes=20), 'IN_PLAY')
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+
+        in_play = {m['id']: m for m in resp.data['inPlay']}
+        self.assertIn(live.match_id, in_play)
+        self.assertIsNone(in_play[live.match_id]['result'])
+        self.assertTrue(in_play[live.match_id]['closed'])
+        self.assertNotIn(live.match_id, {m['id'] for m in resp.data['finished']})
+        self.assertNotIn(live.match_id, {m['id'] for m in resp.data['upcoming']})
+
+    def test_finished_fixture_stays_out_of_in_play_bucket(self):
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+
+        in_play_ids = {m['id'] for m in resp.data['inPlay']}
+        finished_ids = {m['id'] for m in resp.data['finished']}
+        self.assertIn(self.finished_match.match_id, finished_ids)
+        self.assertNotIn(self.finished_match.match_id, in_play_ids)
+
+    def test_put_requires_player_name(self):
+        resp = self.client.put(
+            self._url(),
+            {'predictions': [{'match_id': self.open_match.match_id, 'home_goals': 1, 'away_goals': 0}]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['detail'], 'player_name is required')
+        self.assertEqual(LeagueMatchPrediction.objects.count(), 0)

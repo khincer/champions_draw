@@ -14,10 +14,20 @@ const PAD = 32;
 const ROW_H = 36;
 const LOGO = 24;
 
-const INK = '#102033';
-const MUTED = '#64748b';
-const LINE = '#dce4ef';
-const BLUE = '#155cff';
+// The canvas needs resolved colours at draw time (a CSS variable is not a valid
+// fillStyle), so read them from the live theme tokens after the theme is applied.
+function readPalette() {
+  const styles = getComputedStyle(document.documentElement);
+  const value = (name) => styles.getPropertyValue(name).trim();
+  return {
+    ink: value('--ink'),
+    muted: value('--muted'),
+    line: value('--line'),
+    blue: value('--blue'),
+    softBlue: value('--soft-blue'),
+    surface: value('--surface'),
+  };
+}
 
 const logoCache = new Map();
 
@@ -63,7 +73,7 @@ function kickoffTime(value) {
 
 // Draw a 24x24 badge (logo image or initials placeholder) at (x, y) center.
 // A winning team's badge gets a blue ring.
-function drawBadge(ctx, team, x, y, isWinner) {
+function drawBadge(ctx, team, x, y, isWinner, palette) {
   const img = team?.logo_url ? logoCache.get(team.logo_url) : null;
   const cx = x - LOGO / 2;
   const cy = y - LOGO / 2;
@@ -71,18 +81,18 @@ function drawBadge(ctx, team, x, y, isWinner) {
     ctx.drawImage(img, cx, cy, LOGO, LOGO);
   } else {
     // Filled circle placeholder behind initials.
-    ctx.fillStyle = '#eaf0ff';
+    ctx.fillStyle = palette.softBlue;
     ctx.beginPath();
     ctx.arc(x, y, LOGO / 2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = BLUE;
+    ctx.fillStyle = palette.blue;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '800 9px Inter, ui-sans-serif, system-ui, sans-serif';
     ctx.fillText((team?.short_name || team?.name || '?').slice(0, 3), x, y + 0.5);
   }
   if (isWinner) {
-    ctx.strokeStyle = BLUE;
+    ctx.strokeStyle = palette.blue;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(x, y, LOGO / 2 + 2, 0, Math.PI * 2);
@@ -93,7 +103,7 @@ function drawBadge(ctx, team, x, y, isWinner) {
 const KICKOFF_W = 56;
 const SCORE_W = 72;
 
-function drawFixtureRow(ctx, fixture, y) {
+function drawFixtureRow(ctx, fixture, y, palette) {
   const home = fixture.home_team;
   const away = fixture.away_team;
   const [hg, ag] = fixtureScore(fixture);
@@ -102,7 +112,7 @@ function drawFixtureRow(ctx, fixture, y) {
 
   // Kickoff, muted, left.
   ctx.font = '600 12px Inter, ui-sans-serif, system-ui, sans-serif';
-  ctx.fillStyle = MUTED;
+  ctx.fillStyle = palette.muted;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText(kickoffTime(fixture.kickoff), baseX, midY);
@@ -115,13 +125,13 @@ function drawFixtureRow(ctx, fixture, y) {
   }
 
   // Badges only: home on the left of the score, away on the right.
-  drawBadge(ctx, home, baseX + KICKOFF_W + LOGO / 2, midY, winner === 'home');
-  drawBadge(ctx, away, baseX + KICKOFF_W + LOGO + SCORE_W + LOGO / 2, midY, winner === 'away');
+  drawBadge(ctx, home, baseX + KICKOFF_W + LOGO / 2, midY, winner === 'home', palette);
+  drawBadge(ctx, away, baseX + KICKOFF_W + LOGO + SCORE_W + LOGO / 2, midY, winner === 'away', palette);
 
   // Score, centered between the badges, bold.
   ctx.font = '800 15px Inter, ui-sans-serif, system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillStyle = INK;
+  ctx.fillStyle = palette.ink;
   const scoreTxt = hg != null && ag != null ? `${hg}–${ag}` : '–';
   ctx.fillText(scoreTxt, baseX + KICKOFF_W + LOGO + SCORE_W / 2, midY);
 }
@@ -147,36 +157,38 @@ export async function buildPredictionsImage({ playerName, matchday = 1, fixtures
   const ctx = canvas.getContext('2d');
   ctx.scale(SCALE, SCALE);
 
-  ctx.fillStyle = '#ffffff';
+  const palette = readPalette();
+
+  ctx.fillStyle = palette.surface;
   ctx.fillRect(0, 0, WIDTH, height);
 
   // Divider line under the title block.
-  ctx.fillStyle = LINE;
+  ctx.fillStyle = palette.line;
   ctx.fillRect(PAD, PAD + 62, WIDTH - PAD * 2, 1);
 
   let y = PAD + 26;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.font = '800 22px Inter, ui-sans-serif, system-ui, sans-serif';
-  ctx.fillStyle = INK;
+  ctx.fillStyle = palette.ink;
   const title = seasonName ? `UCL League Phase ${seasonName}` : 'UCL League Phase';
   ctx.fillText(title, PAD, y);
 
   y += 8 + 19;
   ctx.font = '600 13px Inter, ui-sans-serif, system-ui, sans-serif';
-  ctx.fillStyle = MUTED;
+  ctx.fillStyle = palette.muted;
   ctx.fillText(`Matchday ${matchday} — Predictions · ${playerName || 'Guest'}`, PAD, y);
 
   y = PAD + 62 + 26;
   for (const fixture of fixtures) {
-    drawFixtureRow(ctx, fixture, y);
+    drawFixtureRow(ctx, fixture, y, palette);
     y += ROW_H;
   }
 
   y += 22;
   ctx.textAlign = 'left';
   ctx.font = '600 11px Inter, ui-sans-serif, system-ui, sans-serif';
-  ctx.fillStyle = MUTED;
+  ctx.fillStyle = palette.muted;
   ctx.fillText('Made with the Champions Draw prediction game.', PAD, y);
 
   return canvas;

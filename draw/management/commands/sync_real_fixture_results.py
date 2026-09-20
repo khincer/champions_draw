@@ -1,5 +1,10 @@
-"""Fetch UCL 2026/27 league-phase results and write them into the
-real fixtures JSON (draw/data/ucl_league_phase_real_fixtures_2026_27.json).
+"""Fetch UCL 2026/27 league-phase results and persist them in Postgres.
+
+The fixtures JSON (draw/data/ucl_league_phase_real_fixtures_2026_27.json) is a
+static, checked-in calendar: this command only *reads* it to map a source
+match back to its fixture id. Results are written to the RealFixtureResult
+model, because a Railway container's filesystem is ephemeral and is not
+shared between the web and cron services.
 
 Sources:
   promiedos (default): free, no API key; real-time scores parsed from the
@@ -10,8 +15,8 @@ Sources:
       Can lag behind on FINISHED status shortly after a match ends.
   fbref: free and needs no API key, but FBref blocks many networks.
 
-Only each fixture's `result` field is touched; kickoffs, team names, and
-structure stay as-is.
+Only each fixture's score is persisted; kickoffs, team names, and structure
+stay as-is.
 
 Usage:
   python manage.py sync_real_fixture_results [--dry-run] [--source football-data|fbref|promiedos] [--fixtures-json <path>]
@@ -25,10 +30,13 @@ import time
 import unicodedata
 import urllib.error
 import urllib.request
+from collections import defaultdict
 from html.parser import HTMLParser
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
+
+from draw.models import RealFixtureResult
 
 FBREF_URL = 'https://fbref.com/en/comps/8/schedule/Champions-League-Scores-and-Fixtures'
 FOOTBALL_DATA_URL = 'https://api.football-data.org/v4/competitions/CL/matches?season={season}'
@@ -358,8 +366,13 @@ def match_results(data, matches):
     return updates, unmatched
 
 
+def fixture_id(matchday, index):
+    """The API fixture id for the ``index``-th fixture within a matchday."""
+    return f'real-{matchday}-{index}'
+
+
 class Command(BaseCommand):
-    help = 'Sync real UCL league-phase results into the fixtures JSON.'
+    help = 'Sync real UCL league-phase results into the RealFixtureResult table.'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -374,7 +387,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--fixtures-json',
             default=str(Path(__file__).resolve().parents[3] / 'draw' / 'data' / 'ucl_league_phase_real_fixtures_2026_27.json'),
-            help='Path to the real fixtures JSON.',
+            help='Path to the static real fixtures JSON (read-only; maps source matches to fixture ids).',
         )
 
     def handle(self, *args, **options):
@@ -406,21 +419,38 @@ class Command(BaseCommand):
         with open(path, encoding='utf-8') as f:
             data = json.load(f)
 
+        matchday_idx = defaultdict(int)
+        fixture_ids = []
+        for fixture in data['fixtures']:
+            md = fixture['matchday']
+            matchday_idx[md] += 1
+            fixture_ids.append(fixture_id(md, matchday_idx[md]))
+
         updates, unmatched = match_results(data, matches)
 
         updated = 0
         already = 0
         for u in updates:
             fixture = data['fixtures'][u['index']]
-            new_result = {'home_goals': u['home_goals'], 'away_goals': u['away_goals']}
-            if fixture.get('result') == new_result:
+            fid = fixture_ids[u['index']]
+            new_home = int(u['home_goals'])
+            new_away = int(u['away_goals'])
+            existing = RealFixtureResult.objects.filter(fixture_id=fid).first()
+            if (
+                existing is not None
+                and existing.home_goals == new_home
+                and existing.away_goals == new_away
+            ):
                 already += 1
                 continue
             updated += 1
             label = 'would update' if dry_run else 'updated'
-            self.stdout.write(f'  {label}: {fixture["home"]} {u["home_goals"]}-{u["away_goals"]} {fixture["away"]}')
+            self.stdout.write(f'  {label}: {fixture["home"]} {new_home}-{new_away} {fixture["away"]}')
             if not dry_run:
-                fixture['result'] = new_result
+                RealFixtureResult.objects.update_or_create(
+                    fixture_id=fid,
+                    defaults={'home_goals': new_home, 'away_goals': new_away},
+                )
 
         if unmatched:
             self.stdout.write(self.style.WARNING(
@@ -430,12 +460,9 @@ class Command(BaseCommand):
                 self.stdout.write(f'  - {name}')
 
         if not dry_run and updated:
-            # Atomic rewrite, same style (indent=2, no trailing newline).
-            tmp = path.with_name(path.name + '.tmp')
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, path)
-            self.stdout.write(self.style.SUCCESS(f'Wrote {path}'))
+            self.stdout.write(self.style.SUCCESS(
+                f'Wrote {updated} result(s) to RealFixtureResult.'
+            ))
 
         self.stdout.write(self.style.SUCCESS(
             f'Done. {len(matches)} source matches, {len(updates)} matched, '

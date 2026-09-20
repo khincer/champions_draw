@@ -1,4 +1,6 @@
 import { Home, Plane } from 'lucide-preact';
+import Crest from './components/Crest';
+import { StateMessage } from './components/States';
 import ScoreInput from './ScoreInput';
 import { computeAgg } from './tieUtils';
 
@@ -8,29 +10,23 @@ function LegRow({ label, homeTeam, awayTeam, homeGoals, awayGoals, homeField, aw
       <span className="playoff-leg-label">{label}</span>
       <div className="playoff-side">
         <Home size={12} className="playoff-venue-icon" />
-        <span className="team-logo sm">
-          {homeTeam?.logo_url
-            ? <img src={homeTeam.logo_url} alt="" />
-            : homeTeam?.short_name?.slice(0, 3)}
-        </span>
+        <Crest team={homeTeam} size="sm" />
         <span className="playoff-name">{homeTeam?.short_name}</span>
         <ScoreInput
           value={homeGoals}
           onChange={(v) => onScoreChange(matchupIdx, homeField, v)}
+          label={`${label}, home goals: ${homeTeam?.name} versus ${awayTeam?.name}`}
         />
       </div>
       <span className="score-sep">–</span>
       <div className="playoff-side">
         <Plane size={12} className="playoff-venue-icon" />
-        <span className="team-logo sm">
-          {awayTeam?.logo_url
-            ? <img src={awayTeam.logo_url} alt="" />
-            : awayTeam?.short_name?.slice(0, 3)}
-        </span>
+        <Crest team={awayTeam} size="sm" />
         <span className="playoff-name">{awayTeam?.short_name}</span>
         <ScoreInput
           value={awayGoals}
           onChange={(v) => onScoreChange(matchupIdx, awayField, v)}
+          label={`${label}, away goals: ${awayTeam?.name} versus ${homeTeam?.name}`}
         />
       </div>
     </div>
@@ -42,28 +38,22 @@ function TiebreakerRow({ label, homeTeam, awayTeam, homeGoals, awayGoals, homeFi
     <div className="playoff-leg-row playoff-tiebreaker">
       <span className="playoff-leg-label">{label}</span>
       <div className="playoff-side">
-        <span className="team-logo sm">
-          {homeTeam?.logo_url
-            ? <img src={homeTeam.logo_url} alt="" />
-            : homeTeam?.short_name?.slice(0, 3)}
-        </span>
+        <Crest team={homeTeam} size="sm" />
         <span className="playoff-name">{homeTeam?.short_name}</span>
         <ScoreInput
           value={homeGoals}
           onChange={(v) => onScoreChange(matchupIdx, homeField, v)}
+          label={`${label}, home goals: ${homeTeam?.name} versus ${awayTeam?.name}`}
         />
       </div>
       <span className="score-sep">–</span>
       <div className="playoff-side">
-        <span className="team-logo sm">
-          {awayTeam?.logo_url
-            ? <img src={awayTeam.logo_url} alt="" />
-            : awayTeam?.short_name?.slice(0, 3)}
-        </span>
+        <Crest team={awayTeam} size="sm" />
         <span className="playoff-name">{awayTeam?.short_name}</span>
         <ScoreInput
           value={awayGoals}
           onChange={(v) => onScoreChange(matchupIdx, awayField, v)}
+          label={`${label}, away goals: ${awayTeam?.name} versus ${homeTeam?.name}`}
         />
       </div>
     </div>
@@ -110,11 +100,7 @@ function BracketMatch({ matchup, onScoreChange }) {
         <span className="playoff-num">#{matchup_index}</span>
         {winner ? (
           <span className="playoff-winner">
-            <span className="team-logo sm">
-              {winner.logo_url
-                ? <img src={winner.logo_url} alt="" />
-                : winner.short_name?.slice(0, 3)}
-            </span>
+            <Crest team={winner} size="sm" />
             <span>{winner.short_name}</span>
             <span className="playoff-won-badge">W</span>
           </span>
@@ -184,10 +170,10 @@ function BracketMatch({ matchup, onScoreChange }) {
 export default function PlayoffBracket({ matchups, onScoreChange }) {
   if (!matchups || matchups.length === 0) {
     return (
-      <div className="state-message">
-        <strong>Playoffs not yet available</strong>
-        <span>Complete your league phase predictions to unlock the playoff bracket.</span>
-      </div>
+      <StateMessage
+        title="Playoffs not yet available"
+        text="Complete your league phase predictions to unlock the playoff bracket."
+      />
     );
   }
 

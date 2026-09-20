@@ -1,28 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import ScoreInput from './ScoreInput';
-import { groupBy } from './main.jsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import Button from '../components/Button';
+import FixtureRow from '../components/FixtureRow';
+import StandingsTable from '../components/StandingsTable';
+import { EmptyState, ErrorState, Skeleton } from '../components/States';
+import ScoreInput from '../ScoreInput';
+import { groupBy } from '../lib/groupBy';
 import {
   loadRealLocal,
   saveRealLocal,
   setPlayerName as persistPlayerName,
-} from './predictionStorage';
-import { computeStandings } from './standingsCalc';
-import { buildPredictionsImage } from './sharePredictionsImage';
+} from '../predictionStorage';
+import { computeStandings } from '../standingsCalc';
+import { buildPredictionsImage } from '../sharePredictionsImage';
 
 const SYNC_DELAY_MS = 1200;
 const LIVE_POLL_MS = 30000;
-
-function TeamLogo({ team }) {
-  return (
-    <span className="team-logo sm">
-      {team.logo_url ? (
-        <img src={team.logo_url} alt={team.name} />
-      ) : (
-        team.short_name?.slice(0, 3)
-      )}
-    </span>
-  );
-}
 
 function formatKickoff(value) {
   if (!value) return 'TBD';
@@ -65,21 +57,36 @@ export default function RealDrawView({
   onOpenMatch,
 }) {
   const [data, setData] = useState(null);
+  const [fixturesStatus, setFixturesStatus] = useState('idle');
   const [error, setError] = useState('');
   const [currentMd, setCurrentMd] = useState(1);
   const [preds, setPreds] = useState(() => loadRealLocal(seasonId, playerName));
   const [live, setLive] = useState({});
+  const [syncStatus, setSyncStatus] = useState('idle');
+  const [syncError, setSyncError] = useState('');
   const predsRef = useRef(preds);
   const syncTimer = useRef(null);
+
+  /* Own three states and its own retry, which re-issues only this request
+     (US:no-silent-failure — the fixtures no longer collapse to a static label). */
+  const loadFixtures = useCallback(async () => {
+    if (!seasonId) return;
+    setFixturesStatus('loading');
+    setError('');
+    try {
+      setData(await apiFetch(`/ui/seasons/${seasonId}/real-fixtures/`));
+      setFixturesStatus('success');
+    } catch (err) {
+      setError(err.message);
+      setFixturesStatus('error');
+    }
+  }, [seasonId]);
 
   useEffect(() => {
     if (!seasonId) return;
     setData(null);
-    setError('');
     setCurrentMd(1);
-    apiFetch(`/ui/seasons/${seasonId}/real-fixtures/`)
-      .then(setData)
-      .catch((err) => setError(err.message));
+    loadFixtures();
   }, [seasonId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -118,12 +125,16 @@ export default function RealDrawView({
       });
   }, [seasonId, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function scheduleSync(predictions) {
+  /* One PUT, three states (task 4.1). A 400 is the by-design "this batch closed"
+     rejection — inputs are already disabled, so there is nothing to retry; every
+     other failure is named and retried by re-issuing only this PUT. */
+  async function syncNow(predictions) {
     const name = (playerName || '').trim();
     if (!seasonId || !name) return;
-    clearTimeout(syncTimer.current);
-    syncTimer.current = setTimeout(() => {
-      apiFetch(`/ui/seasons/${seasonId}/real-predictions/`, {
+    setSyncStatus('saving');
+    setSyncError('');
+    try {
+      await apiFetch(`/ui/seasons/${seasonId}/real-predictions/`, {
         method: 'PUT',
         body: JSON.stringify({
           player_name: name,
@@ -133,12 +144,23 @@ export default function RealDrawView({
             away_goals: v.away_goals ?? null,
           })),
         }),
-      }).catch((err) => {
-        // Closed batches (400) are expected once a matchday kicks off; inputs
-        // are already disabled on the client, so just don't retry.
-        console.log('Real prediction sync skipped:', err.message);
       });
-    }, SYNC_DELAY_MS);
+      setSyncStatus('success');
+    } catch (err) {
+      if (err.status === 400) {
+        setSyncStatus('success'); // closed batch: expected, nothing to retry
+        return;
+      }
+      setSyncError(err.message);
+      setSyncStatus('error');
+    }
+  }
+
+  function scheduleSync(predictions) {
+    const name = (playerName || '').trim();
+    if (!seasonId || !name) return;
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => { syncNow(predictions); }, SYNC_DELAY_MS);
   }
 
   function handleChange(matchupId, field, value) {
@@ -260,11 +282,25 @@ export default function RealDrawView({
           </label>
         </div>
       </div>
-      {error ? (
-        <p className="empty-row">Real fixtures unavailable</p>
+      {fixturesStatus === 'error' ? (
+        <ErrorState
+          title="Real fixtures could not load"
+          detail={error}
+          onRetry={loadFixtures}
+          retryLabel="Retry real fixtures"
+        />
       ) : !data ? (
-        <p className="empty-row">Loading real fixtures...</p>
+        <Skeleton rows={6} variant="fixture" label="Loading real fixtures" />
       ) : (
+        <>
+          {syncError ? (
+            <ErrorState
+              title="Your picks could not be saved"
+              detail={`${syncError}. Your picks are still on this device — retry to sync them.`}
+              onRetry={() => syncNow(predsRef.current)}
+              retryLabel="Retry saving picks"
+            />
+          ) : null}
         <div className="real-layout">
           <section className="matchday-card-wrap">
             {(() => {
@@ -296,33 +332,30 @@ export default function RealDrawView({
                       )}
                     </div>
                     <div className="matchday-head-actions">
-                      <button
-                        type="button"
-                        className="button secondary md-nav-btn"
+                      <Button
+                        className="md-nav-btn"
                         disabled={currentMd <= 1}
                         onClick={() => setCurrentMd((md) => md - 1)}
                         aria-label={`Previous matchday`}
                       >
                         &lsaquo;
-                      </button>
+                      </Button>
                       <span className="md-nav-label">MD {currentMd}/8</span>
-                      <button
-                        type="button"
-                        className="button secondary md-nav-btn"
+                      <Button
+                        className="md-nav-btn"
                         disabled={currentMd >= 8}
                         onClick={() => setCurrentMd((md) => md + 1)}
                         aria-label={`Next matchday`}
                       >
                         &rsaquo;
-                      </button>
-                      <button
-                        type="button"
-                        className="button secondary md-nav-btn"
+                      </Button>
+                      <Button
+                        className="md-nav-btn"
                         disabled={!(playerName || '').trim()}
                         onClick={() => { handleShareMatchday(currentMd); }}
                       >
                         Share MD {currentMd}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                   <div className="fixture-list">
@@ -334,43 +367,43 @@ export default function RealDrawView({
                           // Played with a real result — show it, no input.
                           const verdict = verdictFor(pred, result);
                           return (
-                            <div className="fixture-row score-row" key={fixture.id}>
-                              <div className="fx-status" title={formatKickoff(fixture.kickoff)}>Final</div>
-                              <div className="team-badge score-team">
-                                <TeamLogo team={fixture.home_team} />
-                                <b>{fixture.home_team.name}</b>
-                              </div>
-                              <div className="score-group real-result">
-                                {onOpenMatch ? (
-                                  <a
-                                    className="real-row-link"
-                                    href="#"
-                                    aria-label={`${fixture.home_team.name} vs ${fixture.away_team.name} — view match details`}
-                                    onClick={(e) => { e.preventDefault(); onOpenMatch(fixture.id, seasonId); }}
-                                  >
-                                    <span className="real-score">{result.home_goals}&ndash;{result.away_goals}</span>
-                                    {verdict && (
-                                      <span className={`fx-verdict ${verdict}`}>
-                                        {VERDICT_LABEL[verdict]} &middot; your pick {pred.home_goals}&ndash;{pred.away_goals}
-                                      </span>
-                                    )}
-                                  </a>
-                                ) : (
-                                  <>
-                                    <span className="real-score">{result.home_goals}&ndash;{result.away_goals}</span>
-                                    {verdict && (
-                                      <span className={`fx-verdict ${verdict}`}>
-                                        {VERDICT_LABEL[verdict]} &middot; your pick {pred.home_goals}&ndash;{pred.away_goals}
-                                      </span>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                              <div className="team-badge right score-team">
-                                <b>{fixture.away_team.name}</b>
-                                <TeamLogo team={fixture.away_team} />
-                              </div>
-                            </div>
+                            <FixtureRow
+                              key={fixture.id}
+                              className="score-row"
+                              status="Final"
+                              statusTitle={formatKickoff(fixture.kickoff)}
+                              home={fixture.home_team}
+                              away={fixture.away_team}
+                              nameMode="full"
+                              center={
+                                <div className="score-group real-result">
+                                  {onOpenMatch ? (
+                                    <a
+                                      className="real-row-link"
+                                      href="#"
+                                      aria-label={`${fixture.home_team.name} vs ${fixture.away_team.name} — view match details`}
+                                      onClick={(e) => { e.preventDefault(); onOpenMatch(fixture.id, seasonId); }}
+                                    >
+                                      <span className="real-score">{result.home_goals}&ndash;{result.away_goals}</span>
+                                      {verdict && (
+                                        <span className={`fx-verdict ${verdict}`}>
+                                          {VERDICT_LABEL[verdict]} &middot; your pick {pred.home_goals}&ndash;{pred.away_goals}
+                                        </span>
+                                      )}
+                                    </a>
+                                  ) : (
+                                    <>
+                                      <span className="real-score">{result.home_goals}&ndash;{result.away_goals}</span>
+                                      {verdict && (
+                                        <span className={`fx-verdict ${verdict}`}>
+                                          {VERDICT_LABEL[verdict]} &middot; your pick {pred.home_goals}&ndash;{pred.away_goals}
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              }
+                            />
                           );
                         }
                         const disabled = Boolean(fixture.closed);
@@ -378,135 +411,104 @@ export default function RealDrawView({
                         if (liveScore) {
                           // In play — show the current score, no input.
                           return (
-                            <div className="fixture-row score-row" key={fixture.id}>
-                              <div className="fx-status live" title={formatKickoff(fixture.kickoff)}>
-                                LIVE {liveScore.status}
-                              </div>
-                              <div className="team-badge score-team">
-                                <TeamLogo team={fixture.home_team} />
-                                <b>{fixture.home_team.name}</b>
-                              </div>
-                              <div className="score-group real-result">
-                                {onOpenMatch ? (
-                                  <a
-                                    className="real-row-link"
-                                    href="#"
-                                    aria-label={`${fixture.home_team.name} vs ${fixture.away_team.name} — view match details`}
-                                    onClick={(e) => { e.preventDefault(); onOpenMatch(fixture.id, seasonId); }}
-                                  >
-                                    <span className="real-score">{liveScore.home_goals}&ndash;{liveScore.away_goals}</span>
-                                    <span className="fx-verdict live">Live</span>
-                                  </a>
-                                ) : (
-                                  <>
-                                    <span className="real-score">{liveScore.home_goals}&ndash;{liveScore.away_goals}</span>
-                                    <span className="fx-verdict live">Live</span>
-                                  </>
-                                )}
-                              </div>
-                              <div className="team-badge right score-team">
-                                <b>{fixture.away_team.name}</b>
-                                <TeamLogo team={fixture.away_team} />
-                              </div>
-                            </div>
+                            <FixtureRow
+                              key={fixture.id}
+                              className="score-row"
+                              status={`LIVE ${liveScore.status}`}
+                              statusTone="live"
+                              statusTitle={formatKickoff(fixture.kickoff)}
+                              home={fixture.home_team}
+                              away={fixture.away_team}
+                              nameMode="full"
+                              center={
+                                <div className="score-group real-result">
+                                  {onOpenMatch ? (
+                                    <a
+                                      className="real-row-link"
+                                      href="#"
+                                      aria-label={`${fixture.home_team.name} vs ${fixture.away_team.name} — view match details`}
+                                      onClick={(e) => { e.preventDefault(); onOpenMatch(fixture.id, seasonId); }}
+                                    >
+                                      <span className="real-score">{liveScore.home_goals}&ndash;{liveScore.away_goals}</span>
+                                      <span className="fx-verdict live">Live</span>
+                                    </a>
+                                  ) : (
+                                    <>
+                                      <span className="real-score">{liveScore.home_goals}&ndash;{liveScore.away_goals}</span>
+                                      <span className="fx-verdict live">Live</span>
+                                    </>
+                                  )}
+                                </div>
+                              }
+                            />
                           );
                         }
                         return (
-                          <div className="fixture-row score-row" key={fixture.id}>
-                            <div
-                              className={disabled ? 'fx-status waiting' : 'fx-status'}
-                              title={formatKickoff(fixture.kickoff)}
-                            >
-                              {disabled ? 'Awaiting result' : formatKickoff(fixture.kickoff)}
-                            </div>
-                            <div className="team-badge score-team">
-                              <TeamLogo team={fixture.home_team} />
-                              <b>{fixture.home_team.name}</b>
-                            </div>
-                            <div className="score-group">
-                              <ScoreInput
-                                value={pred.home_goals}
-                                onChange={(v) => handleChange(fixture.id, 'home_goals', v)}
-                                disabled={disabled}
-                              />
-                              <span className="score-sep">&ndash;</span>
-                              <ScoreInput
-                                value={pred.away_goals}
-                                onChange={(v) => handleChange(fixture.id, 'away_goals', v)}
-                                disabled={disabled}
-                              />
-                            </div>
-                            <div className="team-badge right score-team">
-                              <b>{fixture.away_team.name}</b>
-                              <TeamLogo team={fixture.away_team} />
-                            </div>
-                          </div>
+                          <FixtureRow
+                            key={fixture.id}
+                            className="score-row"
+                            status={disabled ? 'Awaiting result' : formatKickoff(fixture.kickoff)}
+                            statusTone={disabled ? 'waiting' : undefined}
+                            statusTitle={formatKickoff(fixture.kickoff)}
+                            home={fixture.home_team}
+                            away={fixture.away_team}
+                            nameMode="full"
+                            center={
+                              <div className="score-group">
+                                <ScoreInput
+                                  value={pred.home_goals}
+                                  onChange={(v) => handleChange(fixture.id, 'home_goals', v)}
+                                  disabled={disabled}
+                                  label={`Home goals, ${fixture.home_team.name} versus ${fixture.away_team.name}, Matchday ${currentMd}`}
+                                />
+                                <span className="score-sep">&ndash;</span>
+                                <ScoreInput
+                                  value={pred.away_goals}
+                                  onChange={(v) => handleChange(fixture.id, 'away_goals', v)}
+                                  disabled={disabled}
+                                  label={`Away goals, ${fixture.home_team.name} versus ${fixture.away_team.name}, Matchday ${currentMd}`}
+                                />
+                              </div>
+                            }
+                          />
                         );
                       })
                     ) : (
-                      <span className="empty-row">No fixtures this matchday.</span>
+                      <EmptyState
+                        title="No fixtures this matchday"
+                        text="Use the matchday arrows above to find a matchday with fixtures."
+                      />
                     )}
                   </div>
                 </article>
               );
             })()}
           </section>
-          <aside className="real-standings">
+          <aside className="real-standings" aria-busy={syncStatus === 'saving'}>
             <div className="real-standings-head">
               <strong>UCL standings</strong>
-              <span>Real results + your picks</span>
+              {/* One stable node: the sync's in-flight and failed states swap its
+                  text instead of mounting a new one, so the row never shifts. */}
+              <span role="status">
+                {syncStatus === 'saving'
+                  ? 'Saving your picks…'
+                  : syncStatus === 'error'
+                    ? 'Your picks could not be saved'
+                    : 'Real results + your picks'}
+              </span>
             </div>
             <div className="real-standings-scroll">
-              <table className="league-table real-league-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th className="tbl-team">Team</th>
-                    <th>Pts</th>
-                    <th>P</th>
-                    <th>GD</th>
-                    <th>W</th>
-                    <th>D</th>
-                    <th>L</th>
-                    <th>GF</th>
-                    <th>GA</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {standings.map((row) => {
-                    let cls = 'table-row';
-                    if (row.position <= 8) cls += ' row-qualified';
-                    else if (row.position <= 24) cls += ' row-playoffs';
-                    else cls += ' row-eliminated';
-                    return (
-                      <tr className={cls} key={row.team_id}>
-                        <td className="tbl-pos">{row.position}</td>
-                        <td className="tbl-team">
-                          <span className="team-logo xs">
-                            {row.team?.logo_url
-                              ? <img src={row.team.logo_url} alt="" />
-                              : row.team?.short_name?.slice(0, 3)}
-                          </span>
-                          <span className="tbl-name">{row.team?.name || row.short_name}</span>
-                        </td>
-                        <td className="tbl-pts"><strong>{row.points}</strong></td>
-                        <td>{row.played}</td>
-                        <td className={row.goal_diff > 0 ? 'gd-pos' : row.goal_diff < 0 ? 'gd-neg' : ''}>
-                          {row.goal_diff > 0 ? '+' : ''}{row.goal_diff}
-                        </td>
-                        <td>{row.wins}</td>
-                        <td>{row.draws}</td>
-                        <td>{row.losses}</td>
-                        <td>{row.goals_for}</td>
-                        <td>{row.goals_against}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <StandingsTable
+                rows={standings}
+                variant="league"
+                nameMode="full"
+                playedHeader="P"
+                className="real-league-table"
+              />
             </div>
           </aside>
         </div>
+        </>
       )}
     </section>
   );
