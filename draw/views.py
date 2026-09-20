@@ -25,6 +25,7 @@ from .models import (
 	InteractiveDrawPick,
 	League,
 	LeagueMatch,
+	LeagueMatchPrediction,
 	LeagueStanding,
 	Prediction,
 	RealFixturePrediction,
@@ -831,6 +832,157 @@ class LeagueFixtureListAPIView(APIView):
 			'finished': [ser(m) for m in finished],
 			'upcoming': [ser(m) for m in upcoming],
 		})
+
+
+# football-data reports these before a ball is kicked. Anything else (FINISHED,
+# IN_PLAY, POSTPONED, …) is not open for a new pick.
+PREDICTABLE_LEAGUE_STATUSES = {'SCHEDULED', 'TIMED'}
+
+
+def _league_fixture_state(match, now):
+	"""'open' | 'closed' | 'unscheduled' for prediction writes."""
+	if match.kickoff is None:
+		return 'unscheduled'
+	if match.status not in PREDICTABLE_LEAGUE_STATUSES or match.kickoff <= now:
+		return 'closed'
+	return 'open'
+
+
+def _clean_goals(value):
+	"""A non-negative int or None; ValueError on anything else (bad score)."""
+	if value is None or value == '':
+		return None
+	# `bool` is an int subclass: reject it explicitly so `True` is not goal 1.
+	if isinstance(value, bool) or not isinstance(value, (int, str)):
+		raise ValueError('Goals must be a non-negative integer')
+	try:
+		number = int(value)
+	except (TypeError, ValueError):
+		raise ValueError('Goals must be a non-negative integer')
+	if number < 0:
+		raise ValueError('Goals must be a non-negative integer')
+	return number
+
+
+def _serialize_league_match(match, prediction, now):
+	"""A league fixture plus the player's pick and the real result if played."""
+	return {
+		'id': match.match_id,
+		'home_name': match.home_name,
+		'away_name': match.away_name,
+		'home_short': match.home_short,
+		'away_short': match.away_short,
+		'home_crest': match.home_crest,
+		'away_crest': match.away_crest,
+		'kickoff': match.kickoff.isoformat() if match.kickoff else None,
+		'status': match.status,
+		'matchday': match.matchday,
+		'result': (
+			{'home_goals': match.home_goals, 'away_goals': match.away_goals}
+			if match.home_goals is not None and match.away_goals is not None
+			else None
+		),
+		'closed': _league_fixture_state(match, now) != 'open',
+		'prediction': (
+			{'home_goals': prediction.home_goals, 'away_goals': prediction.away_goals}
+			if prediction is not None
+			else None
+		),
+	}
+
+
+class LeagueMatchPredictionAPIView(APIView):
+	"""Per-match score picks for one real league.
+
+	GET  /api/leagues/<league_id>/predictions/?player_name=X
+	PUT  /api/leagues/<league_id>/predictions/
+
+	The read mirrors the sibling `/matches/` contract (last 30 finished + next
+	30 upcoming) so the page never pulls a whole season; each fixture carries
+	the player's pick, the real result, and whether it is still open.
+	"""
+
+	def get(self, request, league_id):
+		league = get_object_or_404(League, pk=league_id)
+		player_name = request.query_params.get('player_name', '').strip()
+		now = django.utils.timezone.now()
+		qs = LeagueMatch.objects.filter(league=league)
+		finished = qs.filter(status='FINISHED', kickoff__lte=now).order_by('-kickoff')[:30]
+		upcoming = qs.filter(kickoff__gt=now).order_by('kickoff')[:30]
+
+		by_match_id = {}
+		if player_name:
+			by_match_id = {
+				p.match.match_id: p
+				for p in LeagueMatchPrediction.objects.filter(
+					match__league=league,
+					player_name=player_name,
+				).select_related('match')
+			}
+
+		return Response({
+			'league': {'id': league.id, 'code': league.code, 'name': league.name, 'emblem_url': league.emblem_url},
+			'player_name': player_name,
+			'finished': [_serialize_league_match(m, by_match_id.get(m.match_id), now) for m in finished],
+			'upcoming': [_serialize_league_match(m, by_match_id.get(m.match_id), now) for m in upcoming],
+		})
+
+	def put(self, request, league_id):
+		league = get_object_or_404(League, pk=league_id)
+		player_name = str(request.data.get('player_name', '')).strip()
+		if not player_name:
+			return Response({'detail': 'player_name is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+		predictions_data = request.data.get('predictions', [])
+		if not isinstance(predictions_data, list):
+			return Response({'detail': 'predictions must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+
+		now = django.utils.timezone.now()
+		by_match_id = {m.match_id: m for m in LeagueMatch.objects.filter(league=league)}
+		resolved = []
+		closed_ids = []
+		unscheduled_ids = []
+		for item in predictions_data:
+			if not isinstance(item, dict):
+				return Response({'detail': 'Each prediction must be an object'}, status=status.HTTP_400_BAD_REQUEST)
+			match_id = item.get('match_id')
+			match = by_match_id.get(match_id)
+			if match is None:
+				return Response({'detail': f'Unknown fixture id: {match_id}'}, status=status.HTTP_400_BAD_REQUEST)
+			state = _league_fixture_state(match, now)
+			if state == 'unscheduled':
+				unscheduled_ids.append(match_id)
+			elif state == 'closed':
+				closed_ids.append(match_id)
+			try:
+				home_goals = _clean_goals(item.get('home_goals'))
+				away_goals = _clean_goals(item.get('away_goals'))
+			except ValueError as exc:
+				return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+			resolved.append((match, home_goals, away_goals))
+
+		# All-or-nothing: nothing is written unless every target accepts a pick.
+		if unscheduled_ids:
+			return Response(
+				{'detail': 'Fixture not scheduled', 'unscheduled': unscheduled_ids},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+		if closed_ids:
+			return Response(
+				{'detail': 'Prediction closed for some fixtures', 'closed': closed_ids},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+
+		synced = 0
+		for match, home_goals, away_goals in resolved:
+			LeagueMatchPrediction.objects.update_or_create(
+				match=match,
+				player_name=player_name,
+				defaults={'home_goals': home_goals, 'away_goals': away_goals},
+			)
+			synced += 1
+
+		return Response({'synced': synced}, status=status.HTTP_200_OK)
 
 
 # --- Homepage: recent + upcoming matches ---

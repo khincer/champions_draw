@@ -1396,6 +1396,19 @@ select:focus,
   min-width: 0;
 }
 
+/* Match picks page: stacked fixture cards. min-width:0 on the grid and each
+   card keeps a long team name from pushing the page sideways. */
+.picks-layout {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  margin-top: 16px;
+}
+
+.picks-layout .matchday-card-wrap {
+  min-width: 0;
+}
+
 .real-standings {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);

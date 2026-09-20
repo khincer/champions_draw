@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { Home, LayoutGrid, Menu, Swords, Trophy, UserRound, X } from 'lucide-preact';
+import { Home, LayoutGrid, Menu, Swords, Target, Trophy, UserRound, X } from 'lucide-preact';
 
 /* Mobile navigation (Design.md §5.2): a fixed bottom bar carrying the five
    top-level views plus a `<dialog>` drawer that adds the six workspace
@@ -11,6 +11,7 @@ const VIEWS = [
   { key: 'teams', label: 'Leagues', Icon: LayoutGrid },
   { key: 'career', label: 'Career', Icon: UserRound },
   { key: 'real', label: 'Real', Icon: Swords },
+  { key: 'picks', label: 'Picks', Icon: Target },
   { key: 'workspace', label: 'Simulator', Icon: Trophy },
 ];
 

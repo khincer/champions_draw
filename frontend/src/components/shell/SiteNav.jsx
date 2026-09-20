@@ -1,4 +1,4 @@
-import { Home, LayoutGrid, Swords, Trophy, UserRound } from 'lucide-preact';
+import { Home, LayoutGrid, Swords, Target, Trophy, UserRound } from 'lucide-preact';
 import championsLeagueLogoUrl from '../../assets/uefa-champions-league-logo.svg';
 import ThemeToggle from './ThemeToggle';
 
@@ -26,6 +26,14 @@ export default function SiteNav({ view, setView, setActiveTab }) {
         >
           <Swords size={18} />
           Real Draw
+        </button>
+        <button
+          className={`site-nav-link ${view === 'picks' ? 'active' : ''}`}
+          aria-current={view === 'picks' ? 'page' : undefined}
+          onClick={() => setView('picks')}
+        >
+          <Target size={18} />
+          Match Picks
         </button>
 
         <div className="site-nav-section">Simulators</div>

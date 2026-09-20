@@ -11,6 +11,7 @@ import MatchdayBoard from './views/MatchdayBoard';
 import PlayersRuns from './views/PlayersRuns';
 import PotBoard from './views/PotBoard';
 import RealDrawView from './views/RealDrawView';
+import LeaguePredictionsView from './views/LeaguePredictionsView';
 import SimulationPanel from './views/SimulationPanel';
 import TeamDetailPage from './views/TeamDetailPage';
 import TeamInspector from './views/TeamInspector';
@@ -139,7 +140,7 @@ function App() {
   }, [view, selectedSeasonId, homeMatches]);
 
   useEffect(() => {
-    if (view === 'teams' && leaguesStatus === 'idle') loadLeagues();
+    if ((view === 'teams' || view === 'picks') && leaguesStatus === 'idle') loadLeagues();
   }, [view, leaguesStatus]);
 
   useEffect(() => {
@@ -394,6 +395,18 @@ function App() {
             setPlayerName={setPlayerName}
             apiFetch={apiFetch}
             onOpenMatch={openMatch}
+          />
+        )}
+
+        {view === 'picks' && (
+          <LeaguePredictionsView
+            leagues={leagues}
+            leaguesStatus={leaguesStatus}
+            leaguesError={leaguesError}
+            onRetryLeagues={loadLeagues}
+            playerName={playerName}
+            setPlayerName={setPlayerName}
+            apiFetch={apiFetch}
           />
         )}
 

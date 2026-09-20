@@ -491,3 +491,28 @@ class LeagueMatch(models.Model):
 
 	def __str__(self) -> str:
 		return f'{self.home_name} vs {self.away_name} ({self.league.code})'
+
+
+class LeagueMatchPrediction(models.Model):
+	"""A player's predicted score for one real league fixture.
+
+	Keyed by the LeagueMatch FK (never by team pair), so a team rename can never
+	mismatch a saved pick. One pick per player per fixture, enforced at the DB.
+	"""
+	match = models.ForeignKey(LeagueMatch, on_delete=models.CASCADE, related_name='predictions')
+	player_name = models.CharField(max_length=80)
+	home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['match', 'player_name']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['match', 'player_name'],
+				name='unique_league_prediction_per_player',
+			),
+		]
+
+	def __str__(self) -> str:
+		return f'{self.player_name}: {self.match} — {self.home_goals}-{self.away_goals}'
