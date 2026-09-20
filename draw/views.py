@@ -845,7 +845,13 @@ class HomepageMatchesAPIView(APIView):
 		# UCL block above, this is best-effort: a failure must not drop the UCL
 		# or CONMEBOL rows already collected.
 		try:
-			active_leagues = list(League.objects.filter(is_active=True))
+			# CL is deliberately excluded. The UCL block above already serves the
+			# Champions League from the checked-in official fixture list, which is
+			# the richer source (full league phase with matchdays). Including the
+			# football-data CL rows as well produced a second, differently-named
+			# "UEFA Champions League" pill beside the "Champions League" one, and
+			# would duplicate fixtures once the two sources overlap.
+			active_leagues = list(League.objects.filter(is_active=True).exclude(code='CL'))
 			if active_leagues:
 				league_matches = list(
 					LeagueMatch.objects.select_related('league')
