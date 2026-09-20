@@ -422,6 +422,28 @@ class RealFixturePrediction(models.Model):
 		return f'{self.home_team} vs {self.away_team}: {self.home_goals}-{self.away_goals}'
 
 
+class RealFixtureResult(models.Model):
+	"""Live score for one real league-phase fixture, keyed by fixture id.
+
+	The fixture calendar is static and checked in as
+	draw/data/ucl_league_phase_real_fixtures_2026_27.json. Only the score is
+	live data, and it lives in Postgres because a Railway container's
+	filesystem is ephemeral and is not shared between the web and cron
+	services. The id is the same one the fixtures API serves
+	(``real-{matchday}-{index}`` within the matchday).
+	"""
+	fixture_id = models.CharField(max_length=50, unique=True)
+	home_goals = models.PositiveSmallIntegerField()
+	away_goals = models.PositiveSmallIntegerField()
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['fixture_id']
+
+	def __str__(self) -> str:
+		return f'{self.fixture_id}: {self.home_goals}-{self.away_goals}'
+
+
 class League(models.Model):
 	"""A real-world league fetched from football-data.org."""
 	code = models.CharField(max_length=10, unique=True, help_text='API code, e.g. PL, BL1, CL')

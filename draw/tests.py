@@ -13,7 +13,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueMatch, LeagueMatchPrediction, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, RealFixturePrediction, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
+from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueMatch, LeagueMatchPrediction, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, RealFixturePrediction, RealFixtureResult, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
 from .serializers import CompactSeasonTeamSerializer
 from .services.draw import DrawError, compute_forbidden_directions, generate_season_draw, previous_season_names
 from .services.import_seed_input import import_seed_input_payload
@@ -1390,6 +1390,27 @@ class RealPredictionSyncApiTests(APITestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.data, {'player_name': 'Nobody', 'predictions': []})
 
+	def test_fixtures_endpoint_merges_db_result_over_static_json(self):
+		RealFixtureResult.objects.create(fixture_id='real-1-1', home_goals=4, away_goals=0)
+
+		response = self.client.get(reverse('draw:ui-season-real-fixtures', args=[self.season.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(len(response.data['matchups']), 144)
+		by_id = {m['id']: m for m in response.data['matchups']}
+		# The shipped JSON carries a static 1-0 for real-1-1; the DB must win.
+		self.assertEqual(by_id['real-1-1']['result'], {'home_goals': 4, 'away_goals': 0})
+
+	def test_fixtures_endpoint_falls_back_to_static_json_result(self):
+		response = self.client.get(reverse('draw:ui-season-real-fixtures', args=[self.season.pk]))
+
+		self.assertEqual(response.status_code, 200)
+		by_id = {m['id']: m for m in response.data['matchups']}
+		# No DB row: the checked-in static result (AEK Athens 1-0 LASK) is served.
+		self.assertEqual(by_id['real-1-1']['result'], {'home_goals': 1, 'away_goals': 0})
+		# A fixture with no result anywhere stays null.
+		self.assertIsNone(by_id['real-8-1']['result'])
+
 	def test_live_scores_maps_in_play_matches_to_fixture_ids(self):
 		url = reverse('draw:ui-season-live-scores', args=[self.season.pk])
 		with mock.patch('draw.views._fetch_promiedos_live_html', return_value='cached'):
@@ -1869,6 +1890,51 @@ class SyncRealFixtureResultsTests(TestCase):
 		self.assertEqual(resolve('viking'), 'viking fk')
 		self.assertEqual(resolve('lens'), 'rc lens')
 		self.assertEqual(resolve('psg'), 'paris saint germain')
+
+	def test_sync_persists_results_and_never_writes_fixtures_json(self):
+		import json
+
+		fixtures_path = (
+			Path(__file__).resolve().parent / 'data' / 'ucl_league_phase_real_fixtures_2026_27.json'
+		)
+		payload = {
+			'props': {'pageProps': {'data': {'games': {'filters': [
+				{'name': 'Partidos actuales', 'games': [
+					{'id': 'a', 'game_time_status_to_display': 'Final',
+					 'teams': [{'name': 'AEK Atenas', 'url_name': 'aek-athens'},
+					           {'name': 'LASK Linz', 'url_name': 'lask-linz'}],
+					 'scores': [3, 1]},
+				]},
+			]}}},
+		}}
+		html_text = (
+			'<div id="root"></div>'
+			'<script id="__NEXT_DATA__" type="application/json">'
+			f'{json.dumps(payload)}'
+			'</script>'
+		)
+
+		with TemporaryDirectory() as tmp:
+			copied = Path(tmp) / 'fixtures.json'
+			copied.write_bytes(fixtures_path.read_bytes())
+			before = copied.read_bytes()
+
+			with mock.patch(
+				'draw.management.commands.sync_real_fixture_results.fetch',
+				return_value=html_text,
+			):
+				call_command(
+					'sync_real_fixture_results',
+					'--source', 'promiedos',
+					'--fixtures-json', str(copied),
+				)
+
+			# The calendar is static: a sync must never rewrite it.
+			self.assertEqual(copied.read_bytes(), before)
+
+		# The result landed in Postgres under the fixture id the API serves.
+		result = RealFixtureResult.objects.get(fixture_id='real-1-1')
+		self.assertEqual((result.home_goals, result.away_goals), (3, 1))
 
 
 class LeagueFixtureListAPITests(APITestCase):

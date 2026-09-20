@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from .management.commands.sync_real_fixture_results import (
     PROMIEDOS_URL,
     fetch,
+    fixture_id as real_fixture_id,
     parse_promiedos_live,
     resolve,
 )
@@ -29,6 +30,7 @@ from .models import (
 	LeagueStanding,
 	Prediction,
 	RealFixturePrediction,
+	RealFixtureResult,
 	Season,
 	SeasonDraw,
 	SeasonMatchup,
@@ -306,6 +308,13 @@ def _load_real_fixtures(season: Season) -> list:
 	with open(fixtures_path, 'r', encoding='utf-8') as f:
 		data = json.load(f)
 
+	# Live scores come from the DB (Railway's filesystem is ephemeral and not
+	# shared across services); the JSON above is only the static calendar.
+	db_results = {
+		row.fixture_id: {'home_goals': row.home_goals, 'away_goals': row.away_goals}
+		for row in RealFixtureResult.objects.all()
+	}
+
 	entries = SeasonTeam.objects.select_related('team', 'team__association').filter(season=season)
 	team_map = {}
 	for entry in entries:
@@ -318,6 +327,7 @@ def _load_real_fixtures(season: Season) -> list:
 		md = fixture['matchday']
 		matchday_idx[md] += 1
 		idx = matchday_idx[md]
+		fid = real_fixture_id(md, idx)
 
 		home_name = fixture['home']
 		away_name = fixture['away']
@@ -339,7 +349,7 @@ def _load_real_fixtures(season: Season) -> list:
 		closed = datetime.now(timezone.utc) >= (kickoff_utc - timedelta(minutes=10))
 
 		matchups.append({
-			'id': f'real-{md}-{idx}',
+			'id': fid,
 			'home_team': CompactSeasonTeamSerializer(home_entry).data,
 			'away_team': CompactSeasonTeamSerializer(away_entry).data,
 			'home_entry': home_entry,
@@ -352,7 +362,8 @@ def _load_real_fixtures(season: Season) -> list:
 			# format it in the user's local timezone (naive strings would be
 			# misread as local wall time).
 			'kickoff': kickoff_utc.isoformat().replace('+00:00', 'Z'),
-			'result': fixture.get('result'),
+			# DB result wins; the JSON's static result is the fallback.
+			'result': db_results.get(fid) or fixture.get('result'),
 			'closed': closed,
 		})
 

@@ -1,6 +1,19 @@
 # Proposal: Scheduling data syncs on Railway
 
-Status: **proposal only — not applied.** No deploy config, `Procfile`, or application code is changed by this document.
+Status: **implemented** — the recommendation (Option B, Railway Cron Jobs) is applied, together with the Postgres persistence change it depended on. See [RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md) for the operational guide.
+
+## 0. Implementation status (applied)
+
+The blocker in section 2 was resolved by moving real-fixture results into Postgres, which unblocks scheduling `cron-results` as a separate service. What changed:
+
+- **`RealFixtureResult` model** (`draw/models.py`, migration `draw/migrations/0020_realfixtureresult.py`): one row per fixture id `real-{matchday}-{index}`, with `home_goals`, `away_goals`, `updated_at`.
+- **`sync_real_fixture_results`** now reads the checked-in JSON as a static calendar and writes results to `RealFixtureResult`; it no longer mutates the JSON. Its matching/normalisation logic (`normalize`, `resolve`, aliases) and its CLI surface (`--source`, `--dry-run`, `--fixtures-json`, `--url`) are unchanged.
+- **`_load_real_fixtures`** (`draw/views.py`) merges the DB result over the JSON's static `result`, preserving the response shape (`result: {home_goals, away_goals}` or `null`).
+- **`Procfile`**: the seed import now runs only when `2026-27` does not exist, and the active season is set explicitly to `2026-27`. A redeploy no longer re-imports, recomputes seeding, prunes entries, or flips the active season back to `2025-26`. A fresh database still bootstraps.
+- **`railway.json`**: pins the builder to Nixpacks and the start command to `migrate` → conditional seed import → `collectstatic` → gunicorn, so the root `Dockerfile` no longer silently skips the deploy steps.
+- **Cron services**: `cron-leagues` (`0 4 * * *`) and `cron-results` (`*/5 * * * *`) as described in sections 4 and 5, configured per service in the Railway dashboard.
+
+The remainder of this document is the original proposal and its rationale; the recommendations in section 4 are now the deployed design.
 
 ## 1. Problem
 
@@ -133,8 +146,7 @@ the JSON file into Postgres.** Until then that cron produces data no web request
 
 - **(Recommended) Persist real-fixture results in a DB table** and change `_load_real_fixtures`
   (`draw/views.py:287`) to read from it. Small change, and it makes the web service and any cron service
-  agree through the one store Railway already shares. *Requires a change in `draw/`, which is owned by
-  another workstream — this document does not make it.*
+  agree through the one store Railway already shares. *(Implemented — see section 0.)*
 - **(Interim, no code change) Run the results sync inside the web service** and attach a Railway volume
   to the **web** service at `/app/draw/data`. This persists the file across redeploys and keeps the
   writer/reader on the same filesystem. Constraints: it needs an in-process scheduler or an authenticated
@@ -224,6 +236,8 @@ Running on every deploy (and every restart), this:
 None of this refreshes live data; it re-imports a static seed file. Recommendation (not applied here):
 move `import_seed_input --set-active --seed` to a one-time release step, or make activation explicit
 rather than hardcoded to `2025-26`. This belongs to whoever owns deployment config.
+*(Implemented — see section 0: the import is now conditional on the season not existing, and the active
+season is set explicitly to `2026-27`.)*
 
 **8b. Builder ambiguity: root `Dockerfile` vs `Procfile`.**
 
@@ -234,11 +248,17 @@ builder. This proposal assumes the setup described in `AGENTS.md` (Nixpacks + `P
 actually configured in the Railway dashboard. **Verify in the dashboard which builder is active:** if
 Railway is silently using the `Dockerfile`, none of the deploy-time steps run, and the "sync gap" is the
 least of the problems. (A cron service with a custom start command is compatible with either builder.)
+*(Implemented — see section 0: the builder and start command are now pinned in `railway.json`.)*
 
 **8c. Real-fixture results are ephemeral on Railway.** As in section 2, the results file is written into
 the container filesystem and reset on every redeploy; with no volume it also diverges across replicas.
+*(Implemented — see section 0: results are now persisted in the `RealFixtureResult` table, and the JSON
+is a read-only calendar.)*
 
 ## 9. The one decision needed from the maintainer
+
+*Resolved — see section 0. The recommendation was approved and implemented: results now live in the
+`RealFixtureResult` table, and `cron-results` can run as its own service.*
 
 > **Approve moving `sync_real_fixture_results`' output from the tracked JSON file into Postgres (so any
 > service can write it and the web service reads it), or keep the file and instead run that sync inside
