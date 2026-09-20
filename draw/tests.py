@@ -7,6 +7,7 @@ from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
@@ -2287,3 +2288,89 @@ class LeagueMatchPredictionApiTests(APITestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.data['detail'], 'player_name is required')
         self.assertEqual(LeagueMatchPrediction.objects.count(), 0)
+
+
+class BootstrapSeasonCommandTests(TestCase):
+	"""The deploy startup command: import + seed once, then keep the season active.
+
+	It reads the checked-in 2026-27 seed file (never writes it), so these tests
+	exercise the exact JSON production bootstraps from.
+	"""
+
+	def test_fresh_database_imports_seeds_and_activates(self):
+		from io import StringIO
+
+		out = StringIO()
+		call_command('bootstrap_season', stdout=out)
+
+		season = Season.objects.get(name='2026-27')
+		self.assertTrue(season.is_active)
+		self.assertEqual(Season.objects.filter(is_active=True).count(), 1)
+		self.assertEqual(SeasonTeam.objects.filter(season=season).count(), 36)
+		# Seeding ran: four pots of nine.
+		self.assertEqual(
+			{
+				pot: SeasonTeam.objects.filter(season=season, pot=pot).count()
+				for pot in range(1, 5)
+			},
+			{1: 9, 2: 9, 3: 9, 4: 9},
+		)
+		self.assertTrue(SeasonTeam.objects.filter(season=season, is_title_holder=True).exists())
+		# The deploy log shows what happened.
+		self.assertIn('2026-27', out.getvalue())
+
+	def test_second_run_is_a_noop(self):
+		call_command('bootstrap_season')
+		season = Season.objects.get(name='2026-27')
+		before = list(
+			SeasonTeam.objects.filter(season=season)
+			.order_by('pk')
+			.values_list('pk', 'pot', 'seeding_position')
+		)
+
+		with mock.patch('draw.management.commands.bootstrap_season.call_command') as import_command:
+			call_command('bootstrap_season')
+
+		# No re-import: the import command is never invoked again.
+		import_command.assert_not_called()
+		after = list(
+			SeasonTeam.objects.filter(season=season)
+			.order_by('pk')
+			.values_list('pk', 'pot', 'seeding_position')
+		)
+		self.assertEqual(after, before)
+		self.assertTrue(Season.objects.get(name='2026-27').is_active)
+
+	def test_existing_target_season_is_not_reimported_or_pruned(self):
+		existing = Season.objects.create(name='2026-27', is_active=False)
+		association = Association.objects.create(name='Marker', code='MRK')
+		team = Team.objects.create(name='Marker FC', short_name='MRK', association=association)
+		marker = SeasonTeam.objects.create(
+			season=existing,
+			team=team,
+			uefa_club_coefficient=Decimal('1.000'),
+		)
+
+		call_command('bootstrap_season')
+
+		marker.refresh_from_db()
+		self.assertEqual(marker.season_id, existing.pk)
+		self.assertEqual(SeasonTeam.objects.filter(season=existing).count(), 1)
+		self.assertTrue(Season.objects.get(name='2026-27').is_active)
+
+	def test_activates_target_and_deactivates_other_seasons(self):
+		Season.objects.create(name='2024-25', is_active=True)
+		Season.objects.create(name='2025-26', is_active=True)
+
+		call_command('bootstrap_season')
+
+		self.assertFalse(Season.objects.get(name='2024-25').is_active)
+		self.assertFalse(Season.objects.get(name='2025-26').is_active)
+		self.assertTrue(Season.objects.get(name='2026-27').is_active)
+		self.assertEqual(Season.objects.filter(is_active=True).count(), 1)
+
+	def test_missing_seed_file_fails_loudly(self):
+		with self.assertRaises(CommandError):
+			call_command('bootstrap_season', '--seed-file', 'does/not/exist.json')
+
+		self.assertFalse(Season.objects.filter(name='2026-27').exists())
