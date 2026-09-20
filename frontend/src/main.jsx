@@ -26,6 +26,7 @@ import PredictionApp from './PredictionApp';
 import MatchDetailView from './MatchDetailView';
 import RealDrawView from './RealDrawView';
 import { clearLocal, loadLocal } from './predictionStorage';
+import { formatAggregate, pairPlayoffTies } from './tieUtils';
 
 const API_ROOT = '/api';
 const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
@@ -156,13 +157,17 @@ function SiteNav({ view, setView, setActiveTab }) {
 
 /* ─── Homepage (live hub, la-cancha style) ─── */
 
-function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef }) {
+function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef, focusable }) {
   const result = match.result;
   const eligible = result || (match.kickoff && new Date(match.kickoff) <= new Date());
   const status = result ? 'finished' : match.closed ? 'live' : 'upcoming';
   const statusLabel = result ? 'Final' : match.closed ? 'Live' : 'Kickoff';
   return (
-    <article className="home-game-card" aria-label={`${match.home_team.name} versus ${match.away_team.name}`}>
+    <article
+      className="home-game-card"
+      aria-label={`${match.home_team.name} versus ${match.away_team.name}`}
+      tabIndex={focusable ? 0 : undefined}
+    >
       <header className="home-game-card-header">
         <div>
           <p className="hub-eyebrow">{match.competition || 'Champions League'}</p>
@@ -241,6 +246,16 @@ function Homepage({ matches, liveScores, onOpenMatch, seasonId, detailReturnFocu
     );
   }, [inRange]);
 
+  const latestResults = useMemo(
+    () =>
+      matches
+        .filter((m) => m.result)
+        .sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || ''))
+        // ponytail: hardcoded cap of 6 cards; raise when the homepage routinely shows more fresh results
+        .slice(0, 6),
+    [matches],
+  );
+
   if (!inRange.length) {
     return (
       <div className="homepage-matches">
@@ -255,6 +270,27 @@ function Homepage({ matches, liveScores, onOpenMatch, seasonId, detailReturnFocu
 
   return (
     <div className="homepage-matches">
+      {latestResults.length > 0 && (
+        <section role="region" aria-label="Latest results" className="homepage-results">
+          <div className="match-section-title">
+            <History size={16} />
+            Latest results
+          </div>
+          <div className="homepage-carousel">
+            {latestResults.map((m) => (
+              <HomeMatchCard
+                key={m.id}
+                match={m}
+                liveScore={liveScores[m.id]}
+                onOpenMatch={onOpenMatch}
+                seasonId={seasonId}
+                detailReturnFocusRef={detailReturnFocusRef}
+                focusable
+              />
+            ))}
+          </div>
+        </section>
+      )}
       {Object.entries(groups).map(([label, dayMatches]) =>
         dayMatches.length ? (
           <div key={label} className="homepage-day-section">
@@ -582,6 +618,38 @@ function GroupStandingsTables({ rows, onOpenTeam }) {
   );
 }
 
+/* Read-only playoff tie in the league Playoffs view: the aggregate line plus
+   its legs, paired client-side by pairPlayoffTies (LPV-4). No score editing. */
+function PlayoffTieCard({ tie }) {
+  const { legs, aggregate } = tie;
+  return (
+    <section className="playoff-tie-card" aria-label="Playoff tie">
+      <span className="tie-agg">{formatAggregate(aggregate)}</span>
+      <div className="tie-legs">
+        {legs.map((m, i) => (
+          <div className="playoff-leg-row" key={m.id}>
+            <span className="playoff-leg-label">Leg {i + 1}</span>
+            <div className="playoff-side">
+              <Home size={12} className="playoff-venue-icon" />
+              <TeamLogo team={m.home_team} size="sm" />
+              <span className="playoff-name">{m.home_team?.short_name || m.home_team?.name}</span>
+            </div>
+            <span className="score-sep">
+              {m.home_goals != null && m.away_goals != null ? `${m.home_goals}–${m.away_goals}` : '–'}
+            </span>
+            <div className="playoff-side">
+              <span className="playoff-name">{m.away_team?.short_name || m.away_team?.name}</span>
+              <TeamLogo team={m.away_team} size="sm" />
+              <Plane size={12} className="playoff-venue-icon" />
+            </div>
+            <span className="tie-kickoff">{shortTime(m.kickoff)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function TeamsBrowser({
   leagues, selectedLeague, leagueStandings, setSelectedLeague, setLeagueStandings,
   leagueMatches, setLeagueMatches, viewTeam, setViewTeam,
@@ -589,6 +657,9 @@ function TeamsBrowser({
   const [loadingStandings, setLoadingStandings] = useState(false);
   const [loadingMatches, setLoadingMatches] = useState(false);
   const [showNextMatches, setShowNextMatches] = useState(false);
+  const [leaguePhase, setLeaguePhase] = useState('group'); // 'group' | 'playoffs' — LPV-1, not persisted
+  const [seasonMatchups, setSeasonMatchups] = useState([]);
+  const playoffTies = useMemo(() => pairPlayoffTies(seasonMatchups), [seasonMatchups]);
 
   async function loadLeagueData(league) {
     if (league.kind === 'season') {
@@ -601,6 +672,7 @@ function TeamsBrowser({
           apiFetch(`/seasons/${league.season_id}/group-standings/`),
         ]);
         const matchups = stateData?.matchups || [];
+        setSeasonMatchups(stateData?.matchups || []);
         const finished = matchups.filter((m) => m.status === 'FINISHED').map(toMiniRow);
         const upcoming = matchups.filter((m) => m.status !== 'FINISHED' && m.kickoff).map(toMiniRow);
         setLeagueMatches({ finished, upcoming });
@@ -651,6 +723,8 @@ function TeamsBrowser({
     setViewTeam(null);
     setLeagueStandings([]);
     setLeagueMatches({ finished: [], upcoming: [] });
+    setLeaguePhase('group');
+    setSeasonMatchups([]);
   }
 
   if (viewTeam) {
@@ -677,6 +751,8 @@ function TeamsBrowser({
               setSelectedLeague(null);
               setLeagueStandings([]);
               setLeagueMatches({ finished: [], upcoming: [] });
+              setLeaguePhase('group');
+              setSeasonMatchups([]);
             }}
           >
             <ArrowLeft size={16} />
@@ -686,6 +762,35 @@ function TeamsBrowser({
             <RefreshCw size={14} /> Refresh
           </button>
         </div>
+        {selectedLeague.kind === 'season' && (
+          <div className="segment-control" role="group" aria-label="League phase">
+            <button
+              type="button"
+              className={leaguePhase === 'group' ? 'active' : ''}
+              aria-pressed={leaguePhase === 'group'}
+              onClick={() => setLeaguePhase('group')}
+            >
+              Group Stage
+            </button>
+            <button
+              type="button"
+              className={leaguePhase === 'playoffs' ? 'active' : ''}
+              aria-pressed={leaguePhase === 'playoffs'}
+              onClick={() => setLeaguePhase('playoffs')}
+            >
+              Playoffs
+            </button>
+          </div>
+        )}
+        {selectedLeague.kind === 'season' && leaguePhase === 'playoffs' ? (
+          playoffTies.length ? (
+            <div className="playoff-tie-list">
+              {playoffTies.map((tie) => <PlayoffTieCard key={tie.legs[0].id} tie={tie} />)}
+            </div>
+          ) : (
+            <p className="muted">No playoff matchups yet.</p>
+          )
+        ) : (
         <div className="standings-layout standings-layout--league">
           <div>
             <h2 style={{ marginTop: 16 }}>{selectedLeague.name}</h2>
@@ -769,6 +874,7 @@ function TeamsBrowser({
             ) : null}
           </aside>
         </div>
+        )}
       </div>
     );
   }
