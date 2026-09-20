@@ -1812,7 +1812,12 @@ class LeagueFixtureListAPITests(APITestCase):
 
 class HomepageMatchesLeagueTests(APITestCase):
 	def setUp(self):
-		self.league = League.objects.create(name='Premier League', code='PL', country='England')
+		self.league = League.objects.create(
+			name='Premier League',
+			code='PL',
+			country='England',
+			emblem_url='https://crests.football-data.org/PL.png',
+		)
 
 	def _fixture(self, match_id, home, away, kickoff, status, home_goals=None, away_goals=None):
 		return LeagueMatch.objects.create(
@@ -1844,6 +1849,7 @@ class HomepageMatchesLeagueTests(APITestCase):
 		row = rows[f'lm-{finished.match_id}']
 		self.assertIsNone(row['season_id'])
 		self.assertEqual(row['competition'], 'Premier League')
+		self.assertEqual(row['competition_emblem'], 'https://crests.football-data.org/PL.png')
 		self.assertFalse(row['openable'])
 		self.assertEqual(row['home_team'], {
 			'name': 'Arsenal',
@@ -1872,3 +1878,54 @@ class HomepageMatchesLeagueTests(APITestCase):
 		ids = {r['id'] for r in self._league_rows()}
 		self.assertNotIn('lm-9003', ids)
 		self.assertIn('lm-9004', ids)
+
+	def test_league_row_without_emblem_sends_null(self):
+		self.league.emblem_url = ''
+		self.league.save(update_fields=['emblem_url'])
+		self._fixture(9005, 'A', 'B', datetime.now(timezone.utc), 'SCHEDULED')
+		rows = {r['id']: r for r in self._league_rows()}
+		self.assertIsNone(rows['lm-9005']['competition_emblem'])
+
+	def test_conmebol_row_carries_api_sports_emblem(self):
+		association = Association.objects.create(name='Uruguay', code='URU')
+		season = Season.objects.create(name='Libertadores 2026', competition='LIB')
+		home = SeasonTeam.objects.create(
+			season=season,
+			team=Team.objects.create(name='Penarol', short_name='PEN', association=association),
+			uefa_club_coefficient=Decimal('0.000'),
+		)
+		away = SeasonTeam.objects.create(
+			season=season,
+			team=Team.objects.create(name='Nacional', short_name='NAC', association=association),
+			uefa_club_coefficient=Decimal('0.000'),
+		)
+		SeasonMatchup.objects.create(
+			season=season,
+			home_team=home,
+			away_team=away,
+			kickoff=datetime.now(timezone.utc),
+			status='SCHEDULED',
+		)
+
+		resp = self.client.get('/api/homepage/matches/')
+		row = next(r for r in resp.json()['matchups'] if r['id'].startswith('sm-'))
+		self.assertEqual(row['competition'], 'Libertadores')
+		self.assertEqual(row['competition_emblem'], 'https://media.api-sports.io/football/leagues/13.png')
+
+	def test_ucl_row_carries_football_data_emblem(self):
+		Season.objects.create(name='2026-27', competition='UCL')
+		fake_fixtures = [{
+			'id': 'real-1-1',
+			'home_team': {'name': 'Arsenal', 'short_name': 'ARS', 'logo_url': ''},
+			'away_team': {'name': 'Chelsea', 'short_name': 'CHE', 'logo_url': ''},
+			'matchday': 1,
+			'kickoff': '2026-09-19T19:00:00Z',
+			'result': None,
+			'closed': False,
+			'status': 'SCHEDULED',
+		}]
+		with mock.patch('draw.views._load_real_fixtures', return_value=fake_fixtures):
+			resp = self.client.get('/api/homepage/matches/')
+		row = next(r for r in resp.json()['matchups'] if r['id'] == 'real-1-1')
+		self.assertEqual(row['competition'], 'Champions League')
+		self.assertEqual(row['competition_emblem'], 'https://crests.football-data.org/CL.png')

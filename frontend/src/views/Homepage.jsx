@@ -1,22 +1,22 @@
-import { useMemo } from 'preact/hooks';
-import { Activity, CalendarDays, History, LayoutGrid, Swords, Trophy, UserRound } from 'lucide-preact';
+import { useMemo, useState } from 'preact/hooks';
+import { CalendarDays, History, LayoutGrid, Swords, Trophy, UserRound } from 'lucide-preact';
 import Crest from '../components/Crest';
 import Button from '../components/Button';
-import Metric from '../components/Metric';
+import SegmentControl from '../components/SegmentControl';
 import { EmptyState, ErrorState, LiveRegion, Skeleton } from '../components/States';
 import { getPlayerName } from '../predictionStorage';
 import { inHomeRange, shortDay, shortTime } from '../lib/format';
 
-/* Home composition (Design.md §7.2, task 3.3): greeting + metric cards + live
-   hub + quick actions. No charts and no recent-draw section — the maintainer
-   confirmed that scope. The hub content (today/yesterday plus the latest-results
-   strip) was moved out of `main.jsx` verbatim; `HomeMatchCard` stays local
-   because nothing else renders it.
+/* Home composition (Design.md §7.2, task 3.3): greeting + live hub + quick
+   actions. No charts and no recent-draw section — the maintainer confirmed that
+   scope. The hub content (today/yesterday plus the latest-results strip) was
+   moved out of `main.jsx` verbatim; `HomeMatchCard` stays local because nothing
+   else renders it.
 
-   Every metric is derived from the matches feed `App` already fetches, so no
-   endpoint or payload changed. The shortcuts mirror `SiteNav`; `App` owns the
-   view state and passes its switch down as `onNavigate`, so this view never
-   holds navigation state of its own. */
+   The competition filter narrows the feed `App` already fetches; no endpoint or
+   payload changed. The shortcuts mirror `SiteNav`; `App` owns the view state and
+   passes its switch down as `onNavigate`, so this view never holds navigation
+   state of its own. */
 
 const QUICK_ACTIONS = [
   { key: 'real', label: 'Real draw', icon: Swords },
@@ -24,8 +24,6 @@ const QUICK_ACTIONS = [
   { key: 'career', label: 'Career mode', icon: UserRound },
   { key: 'teams', label: 'Leagues', icon: LayoutGrid },
 ];
-
-const isToday = (match) => Boolean(match.kickoff) && new Date(match.kickoff).toDateString() === new Date().toDateString();
 
 /* The card itself is not a control: its opener is the real button inside the
    footer, so the card carries no `tabIndex`. The opener names the fixture it
@@ -101,9 +99,47 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
 }
 
 export default function Homepage({ matches, matchesStatus, matchesError, onRetryMatches, liveScores, liveScoresError, onOpenMatch, onNavigate, playerName, seasonId, detailReturnFocusRef }) {
+  const [competition, setCompetition] = useState('all');
+
+  /* One pill per competition in the feed, remembering the first emblem a row
+     carries so a mix of null and set emblems still yields an icon. */
+  const competitions = useMemo(() => {
+    const byName = new Map();
+    for (const match of matches) {
+      const name = match.competition || 'Champions League';
+      if (!byName.has(name)) byName.set(name, match.competition_emblem || null);
+      else if (!byName.get(name) && match.competition_emblem) byName.set(name, match.competition_emblem);
+    }
+    return [...byName.entries()];
+  }, [matches]);
+
+  const visibleMatches = useMemo(
+    () =>
+      competition === 'all'
+        ? matches
+        : matches.filter((match) => (match.competition || 'Champions League') === competition),
+    [matches, competition],
+  );
+
+  const filterItems = useMemo(
+    () => [
+      { key: 'all', label: 'All' },
+      ...competitions.map(([name, emblem]) => ({
+        key: name,
+        label: (
+          <span className="homepage-filter-label">
+            {emblem ? <img className="homepage-filter-emblem" src={emblem} alt="" /> : null}
+            {name}
+          </span>
+        ),
+      })),
+    ],
+    [competitions],
+  );
+
   const inRange = useMemo(
-    () => matches.filter(inHomeRange).sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || '')),
-    [matches],
+    () => visibleMatches.filter(inHomeRange).sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || '')),
+    [visibleMatches],
   );
 
   const groups = useMemo(() => {
@@ -120,19 +156,14 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
 
   const latestResults = useMemo(
     () =>
-      matches
+      visibleMatches
         .filter((m) => m.result)
         .sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || ''))
         // ponytail: hardcoded cap of 6 cards; raise when the homepage routinely shows more fresh results
         .slice(0, 6),
-    [matches],
+    [visibleMatches],
   );
 
-  /* Honest metric sources: the hub window is what this view renders, so its
-     counts are the only numbers the feed can back without invention. */
-  const todayMatches = useMemo(() => inRange.filter(isToday), [inRange]);
-  const liveNow = useMemo(() => inRange.filter((m) => m.closed && !m.result), [inRange]);
-  const finished = useMemo(() => inRange.filter((m) => m.result), [inRange]);
   const name = (playerName || getPlayerName() || '').trim();
 
   return (
@@ -141,17 +172,6 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
         <p className="home-greeting">{name ? `Welcome back, ${name}` : 'Welcome'}</p>
         <p className="home-intro-sub">Today's results, live scores and shortcuts in one place.</p>
       </header>
-
-      <section className="home-metrics" aria-label="At a glance">
-        <Metric
-          icon={CalendarDays}
-          label="Matches today"
-          value={todayMatches.length}
-          support={todayMatches.length ? shortDay(todayMatches[0].kickoff) : 'Nothing scheduled in the hub window'}
-        />
-        <Metric icon={Activity} label="Live now" value={liveNow.length} support="Scores poll every 30s" />
-        <Metric icon={History} label="Results" value={finished.length} support="Finished today or yesterday" />
-      </section>
 
       {/* The hub's live region (task 4.2). Mounted once for the life of the view:
           a poll tick rewrites its text and nothing else, so there is no
@@ -184,6 +204,17 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
       </section>
 
       <div className="homepage-matches">
+        {/* Competition filter (above the results strip). It narrows the results
+            and today/yesterday sections; "All" restores the whole feed. */}
+        {matchesStatus === 'success' && filterItems.length > 1 ? (
+          <SegmentControl
+            items={filterItems}
+            value={competition}
+            onChange={setCompetition}
+            className="segment-control homepage-filter"
+            label="Filter by competition"
+          />
+        ) : null}
         {matchesStatus === 'loading' || matchesStatus === 'idle' ? (
           <Skeleton rows={1} label="Loading matches" variant="card" />
         ) : matchesStatus === 'error' ? (

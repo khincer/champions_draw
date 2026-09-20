@@ -2020,11 +2020,14 @@ select:focus,
 .home-intro { display: grid; gap: var(--space-1); }
 .home-greeting { font-size: var(--font-h2); font-weight: var(--fw-bold); color: var(--ink); }
 .home-intro-sub { color: var(--muted); font-size: var(--font-small); }
-.home-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-4); }
 .home-quick-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 
-/* Homepage matches */
-.homepage-matches { display: grid; gap: 26px; }
+/* Homepage matches. Each of these is a grid/flex item whose default
+   `min-width: auto` would size it to the carousel's content (6 x 280px cards)
+   instead of the available width, so the carousel never becomes the scroll
+   container and the whole page scrolls sideways. `min-width: 0` shrinks each
+   link in the chain to its container so `overflow-x: auto` can engage. */
+.homepage-matches { display: grid; gap: 26px; min-width: 0; }
 .homepage-day-section { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .homepage-day-section .match-section-title { grid-column: 1 / -1; margin-bottom: 0; }
 .match-section-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
@@ -2051,10 +2054,16 @@ select:focus,
 @keyframes hub-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 
 /* Homepage latest results strip */
-.homepage-results { display: flex; flex-direction: column; gap: 14px; }
-.homepage-carousel { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+.homepage-results { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.homepage-carousel { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; min-width: 0; }
 .homepage-carousel .home-game-card { flex: 0 0 280px; scroll-snap-align: start; }
 .homepage-carousel .home-game-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* Competition filter: a segmented control that wraps rather than widening the
+   page. Focus ring and aria-pressed come from the shared `.segment-control`. */
+.homepage-filter { flex-wrap: wrap; margin-bottom: 0; }
+.homepage-filter-label { display: inline-flex; align-items: center; gap: var(--space-2); }
+.homepage-filter-emblem { width: 18px; height: 18px; object-fit: contain; }
 
 /* League cards */
 .leagues-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 24px; }

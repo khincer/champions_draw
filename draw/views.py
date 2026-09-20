@@ -571,6 +571,19 @@ def parse_bool(value) -> bool:
 
 # --- Leagues & Standings ---
 
+# Competition emblems keyed by code, shared by the league list and the homepage
+# feed. CONMEBOL seasons carry no emblem in their own data, so the api-sports
+# crests stand in — the same convention the team-logo backfill uses.
+CONMEBOL_EMBLEMS = {
+	'LIB': 'https://media.api-sports.io/football/leagues/13.png',
+	'SUD': 'https://media.api-sports.io/football/leagues/11.png',
+}
+
+# football-data's Champions League crest. UCL homepage rows come from a static
+# fixture JSON with no emblem, so this mirrors the `League.emblem_url` the UCL
+# league row already carries instead of leaving the pill name-only.
+UCL_EMBLEM_URL = 'https://crests.football-data.org/CL.png'
+
 
 class LeagueListAPIView(generics.ListAPIView):
 	serializer_class = None
@@ -587,17 +600,13 @@ class LeagueListAPIView(generics.ListAPIView):
 			}
 			for lg in leagues
 		]
-		conmebol_emblems = {
-			'LIB': 'https://media.api-sports.io/football/leagues/13.png',
-			'SUD': 'https://media.api-sports.io/football/leagues/11.png',
-		}
 		conmebol = [
 			{
 				'id': f'season-{s.pk}',
 				'code': s.competition,
 				'name': s.name,
 				'country': 'CONMEBOL',
-				'emblem_url': conmebol_emblems.get(s.competition),
+				'emblem_url': CONMEBOL_EMBLEMS.get(s.competition),
 				'kind': 'season',
 				'season_id': s.pk,
 			}
@@ -787,6 +796,7 @@ class HomepageMatchesAPIView(APIView):
 						'id': f['id'],
 						'season_id': ucl_season.id,
 						'competition': 'Champions League',
+						'competition_emblem': UCL_EMBLEM_URL,
 						'openable': True,
 						'home_team': f['home_team'],
 						'away_team': f['away_team'],
@@ -815,6 +825,7 @@ class HomepageMatchesAPIView(APIView):
 					'id': f'sm-{m.id}',
 					'season_id': m.season_id,
 					'competition': competition_label.get(m.season.competition, m.season.competition),
+					'competition_emblem': CONMEBOL_EMBLEMS.get(m.season.competition),
 					'openable': False,
 					'home_team': CompactSeasonTeamSerializer(m.home_team).data,
 					'away_team': CompactSeasonTeamSerializer(m.away_team).data,
@@ -848,6 +859,7 @@ class HomepageMatchesAPIView(APIView):
 						# (Homepage gates on openable). None is the honest value.
 						'season_id': None,
 						'competition': m.league.name,
+						'competition_emblem': m.league.emblem_url or None,
 						'openable': False,
 						'home_team': {
 							'name': m.home_name,
