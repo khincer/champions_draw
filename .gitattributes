@@ -1,0 +1,6 @@
+# Shell scripts must keep LF endings even when checked out on Windows.
+# docker-entrypoint.sh with CRLF makes sh read the case patterns as
+# "cron-leagues)\r", which never matches SERVICE_ROLE, so every cron service
+# silently falls through to the web branch.
+* text=auto
+*.sh text eol=lf
