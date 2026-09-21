@@ -19,11 +19,20 @@ set -e
 
 case "${SERVICE_ROLE:-}" in
   cron-leagues)
-    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, then sync_league_fixtures"
+    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_league_fixtures, sync_promiedos_fixtures"
     # Order matters: sync_league_fixtures refuses to run without League rows,
     # so sync_leagues must succeed first (set -e aborts otherwise).
     python manage.py sync_leagues
     python manage.py sync_league_fixtures
+    # CONMEBOL (Libertadores / Sudamericana), a different source from the
+    # football-data leagues above: Promiedos carries the current season when
+    # API-Football's free plan blocks it, and needs no API key. Without this the
+    # homepage's CONMEBOL block has nothing to render -- neither
+    # sync_conmebol_fixtures nor sync_promiedos_fixtures was ever scheduled, so
+    # production has never had a Libertadores or Sudamericana season at all.
+    # --competition is required and accepts one value, so both run.
+    python manage.py sync_promiedos_fixtures --competition lib
+    python manage.py sync_promiedos_fixtures --competition sud
     ;;
   cron-results)
     echo "[entrypoint] SERVICE_ROLE=cron-results -> sync_real_fixture_results --source promiedos"
