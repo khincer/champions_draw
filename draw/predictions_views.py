@@ -15,13 +15,10 @@ from .models import (
 )
 from .predictions_serializers import (
     KnockoutPredictionSerializer,
-    KnockoutPredictionWriteSerializer,
     MatchPredictionSerializer,
     MatchPredictionWriteSerializer,
     PlayoffPredictionSerializer,
-    PlayoffPredictionWriteSerializer,
     PredictionSerializer,
-    PredictionWriteSerializer,
 )
 from .serializers import CompactSeasonTeamSerializer
 from .services.bracket import generate_knockout_bracket

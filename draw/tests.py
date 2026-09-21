@@ -1355,7 +1355,7 @@ class RealPredictionSyncApiTests(APITestCase):
 
 	@staticmethod
 	def _make_datetime_stub(fixed_now):
-		"""Stub for draw.views.datetime: real parsing, pinned now()."""
+		"""Stub for draw.selectors.datetime: real parsing, pinned now()."""
 		class _Stub:
 			fromisoformat = staticmethod(datetime.fromisoformat)
 
@@ -1389,7 +1389,7 @@ class RealPredictionSyncApiTests(APITestCase):
 
 	def test_put_saves_predictions_and_get_returns_them(self):
 		now = datetime(2026, 1, 1, tzinfo=timezone.utc)
-		with mock.patch('draw.views.datetime', self._make_datetime_stub(now)):
+		with mock.patch('draw.selectors.datetime', self._make_datetime_stub(now)):
 			url = reverse('draw:ui-season-real-predictions', args=[self.season.pk])
 			response = self.client.put(
 				url,
@@ -1407,7 +1407,7 @@ class RealPredictionSyncApiTests(APITestCase):
 		self.assertEqual(response.data, {'synced': 2})
 		self.assertEqual(RealFixturePrediction.objects.count(), 2)
 
-		with mock.patch('draw.views.datetime', self._make_datetime_stub(now)):
+		with mock.patch('draw.selectors.datetime', self._make_datetime_stub(now)):
 			response = self.client.get(url, {'player_name': 'Tester'})
 
 		self.assertEqual(response.status_code, 200)
@@ -1420,7 +1420,7 @@ class RealPredictionSyncApiTests(APITestCase):
 	def test_put_with_closed_fixture_is_rejected_and_saves_nothing(self):
 		# After matchday 1 has kicked off, real-1-1 is closed but real-8-1 is not.
 		now = datetime(2026, 9, 9, tzinfo=timezone.utc)
-		with mock.patch('draw.views.datetime', self._make_datetime_stub(now)):
+		with mock.patch('draw.selectors.datetime', self._make_datetime_stub(now)):
 			url = reverse('draw:ui-season-real-predictions', args=[self.season.pk])
 			response = self.client.put(
 				url,
@@ -1469,7 +1469,7 @@ class RealPredictionSyncApiTests(APITestCase):
 
 	def test_live_scores_maps_in_play_matches_to_fixture_ids(self):
 		url = reverse('draw:ui-season-live-scores', args=[self.season.pk])
-		with mock.patch('draw.views._fetch_promiedos_live_html', return_value='cached'):
+		with mock.patch('draw.views.fetch_promiedos_live_html', return_value='cached'):
 			with mock.patch('draw.views.parse_promiedos_live', return_value=[
 				{'home': 'fc barcelona', 'away': 'feyenoord', 'home_goals': 2, 'away_goals': 0, 'status': "28'"},
 				{'home': 'not a team', 'away': 'either', 'home_goals': 0, 'away_goals': 0, 'status': 'HT'},
@@ -1485,7 +1485,7 @@ class RealPredictionSyncApiTests(APITestCase):
 
 	def test_live_scores_unreachable_source_returns_502(self):
 		url = reverse('draw:ui-season-live-scores', args=[self.season.pk])
-		with mock.patch('draw.views._fetch_promiedos_live_html', side_effect=RuntimeError('boom')):
+		with mock.patch('draw.views.fetch_promiedos_live_html', side_effect=RuntimeError('boom')):
 			response = self.client.get(url)
 
 		self.assertEqual(response.status_code, 502)
@@ -1576,7 +1576,7 @@ class MatchDetailsApiTests(APITestCase):
 
 	def _get(self, fixture_id, now):
 		with mock.patch('draw.views.datetime', self._make_datetime_stub(now)):
-			with mock.patch('draw.views._load_real_fixtures', return_value=self._fake_fixtures):
+			with mock.patch('draw.views.load_real_fixtures', return_value=self._fake_fixtures):
 				return self.client.get(
 					reverse('draw:ui-season-match-details', args=[self.season.pk, fixture_id])
 				)
@@ -1613,7 +1613,7 @@ class MatchDetailsApiTests(APITestCase):
 	def test_missing_season_returns_404(self):
 		now = datetime(2026, 9, 9, tzinfo=timezone.utc)
 		with mock.patch('draw.views.datetime', self._make_datetime_stub(now)):
-			with mock.patch('draw.views._load_real_fixtures', return_value=self._fake_fixtures):
+			with mock.patch('draw.views.load_real_fixtures', return_value=self._fake_fixtures):
 				response = self.client.get(
 					reverse('draw:ui-season-match-details', args=[9999, 'real-1-1'])
 				)
@@ -2149,7 +2149,7 @@ class HomepageMatchesLeagueTests(APITestCase):
 			'closed': False,
 			'status': 'SCHEDULED',
 		}]
-		with mock.patch('draw.views._load_real_fixtures', return_value=fake_fixtures):
+		with mock.patch('draw.views.load_real_fixtures', return_value=fake_fixtures):
 			resp = self.client.get('/api/homepage/matches/')
 		row = next(r for r in resp.json()['matchups'] if r['id'] == 'real-1-1')
 		self.assertEqual(row['competition'], 'Champions League')
