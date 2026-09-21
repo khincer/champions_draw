@@ -11,8 +11,6 @@
       rel="stylesheet"
     />
     <script>
-      // Applies the persisted theme before first paint so no wrong-theme flash
-      // occurs. Light is the default. Mirrors frontend/src/lib/theme.js.
       (function () {
         var theme = 'light';
         try {
@@ -20,7 +18,6 @@
             theme = 'dark';
           }
         } catch (error) {
-          // Storage unavailable — keep the light default.
         }
         document.documentElement.setAttribute('data-theme', theme);
         document.documentElement.style.colorScheme = theme;

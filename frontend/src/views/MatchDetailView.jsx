@@ -11,19 +11,14 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
   const [error, setError] = useState('');
   const [liveScore, setLiveScore] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  /* Bumped by the error state's retry, which re-issues only the detail request
-     (US:no-silent-failure — the error card used to be a dead end). */
   const [reloadToken, setReloadToken] = useState(0);
   const backRef = useRef(null);
   const dialogRef = useRef(null);
 
-  /* League rows (`lm-{fixture_id}`) have no season, so they resolve through the
-     league-scoped route; UCL rows keep the season-scoped one. */
   const isLeague = leagueId != null;
   const detailUrl = isLeague
     ? `/leagues/${leagueId}/matches/${String(fixtureId).replace(/^lm-/, '')}/details/`
     : `/ui/seasons/${seasonId}/match-details/${fixtureId}/`;
-  /* No live-scores feed for leagues, so the in-play overlay is UCL-only. */
   const liveUrl = isLeague ? null : `/ui/seasons/${seasonId}/live-scores/`;
 
   useEffect(() => {
@@ -39,8 +34,6 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
     return () => { cancelled = true; };
   }, [detailUrl, reloadToken]);
 
-  /* Modal so the top layer seals the page behind the overlay: Tab cannot leave
-     it and the background is inert. Escape arrives as `cancel` (handled below). */
   useEffect(() => {
     const node = dialogRef.current;
     if (node && !node.open) node.showModal();
@@ -52,10 +45,6 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
 
   const status = data?.header?.status;
 
-  // Poll only while the match is in play: refresh the detail (the listing is
-  // cached server-side, so this costs no upstream request) and overlay the
-  // live score. The interval is torn down on unmount or when a refetch lands
-  // as FINISHED (status change re-runs this effect, clearing the timer).
   useEffect(() => {
     if (status !== 'IN_PLAY' || !liveUrl) return undefined;
     let cancelled = false;
@@ -82,10 +71,6 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
     ? `Match details: ${header.home_team.name} versus ${header.away_team.name}`
     : 'Match details';
 
-  /* Native `showModal()` seals the page behind the overlay, but with a single
-     focusable control (the Back button) Chromium lets Tab fall out to <body>
-     and back. Wrap the ring so focus never leaves the dialog while it is open
-     (A11Y:dialog-focus-return). */
   function trapTab(event) {
     if (event.key !== 'Tab') return;
     const node = dialogRef.current;
@@ -187,9 +172,6 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
             {data.detail ? (
               <section className="match-detail-info" aria-labelledby="match-detail-info-title">
                 <h2 id="match-detail-info-title">Match Information</h2>
-                {/* Key presence drives the block: UCL always carries `venue`
-                    (possibly null) and `odds`, leagues carry neither. So the
-                    league view shows no empty Venue/Odds rows. */}
                 {('venue' in data.detail || data.detail.half_time) && (
                   <dl className="match-detail-facts">
                     {'venue' in data.detail && (
@@ -249,7 +231,6 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
               </p>
             )}
 
-            {/* Reservoir for a future timeline/lineups block (spec seam slot). */}
             <div data-match-detail-seam hidden />
           </div>
         </>

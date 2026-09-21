@@ -17,8 +17,6 @@ function matchup(overrides = {}) {
   };
 }
 
-/* computeAgg approval tests — capture the current PlayoffBracket behavior
-   (LPV-4: reuse the aggregate logic; null when any leg score is missing). */
 test('computeAgg sums leg home/away goals into a {home, away} object', () => {
   assert.deepEqual(computeAgg(2, 1, 2, 2), { home: 4, away: 3 });
 });

@@ -3,9 +3,6 @@ import test from 'node:test';
 
 import { compareStandings, comparePlayoffs, compareKnockout } from '../lib/reconcile.js';
 
-/* Task 6.1 — RED first. These tests describe the semantic comparison contract:
-   same data in a different order/form must be equal; a real value divergence or
-   a row present on one side only must be reported with both values. */
 
 const team = (id, name, short_name = name) => ({ id, name, short_name });
 

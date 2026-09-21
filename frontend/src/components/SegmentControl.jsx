@@ -1,13 +1,5 @@
 import { useRef } from 'preact/hooks';
 
-/* Single segment/tab control (Design.md §7.8).
-   Replaces `ViewTabs`, the `PredictionApp` sub-tabs and `.segment-control`.
-   Roving tabindex + Arrow/Home/End keys move and apply selection (the APG
-   "selection follows focus" pattern for segmented controls); `aria-pressed` is
-   kept so the announcement that ships today does not regress.
-
-   `className` is the shell class only — a site passes exactly one of
-   `view-tabs` / `segment-control`, never both, so no rule cascade is retuned. */
 export default function SegmentControl({
   items,
   value,

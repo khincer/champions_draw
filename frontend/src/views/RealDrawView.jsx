@@ -67,8 +67,6 @@ export default function RealDrawView({
   const predsRef = useRef(preds);
   const syncTimer = useRef(null);
 
-  /* Own three states and its own retry, which re-issues only this request
-     (US:no-silent-failure — the fixtures no longer collapse to a static label). */
   const loadFixtures = useCallback(async () => {
     if (!seasonId) return;
     setFixturesStatus('loading');
@@ -97,8 +95,6 @@ export default function RealDrawView({
     predsRef.current = preds;
   }, [preds]);
 
-  // Pull the player's saved predictions from the backend once, keeping any
-  // local (possibly unsaved) values — local wins for ids already present.
   useEffect(() => {
     const name = (playerName || '').trim();
     if (!seasonId || !name) return;
@@ -121,13 +117,9 @@ export default function RealDrawView({
         });
       })
       .catch(() => {
-        // Backend unavailable: localStorage stays the source of truth.
       });
-  }, [seasonId, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [seasonId, playerName]);
 
-  /* One PUT, three states (task 4.1). A 400 is the by-design "this batch closed"
-     rejection — inputs are already disabled, so there is nothing to retry; every
-     other failure is named and retried by re-issuing only this PUT. */
   async function syncNow(predictions) {
     const name = (playerName || '').trim();
     if (!seasonId || !name) return;
@@ -148,7 +140,7 @@ export default function RealDrawView({
       setSyncStatus('success');
     } catch (err) {
       if (err.status === 400) {
-        setSyncStatus('success'); // closed batch: expected, nothing to retry
+        setSyncStatus('success'); 
         return;
       }
       setSyncError(err.message);
@@ -175,16 +167,11 @@ export default function RealDrawView({
 
   const matchdays = useMemo(() => groupBy(data?.matchups || [], 'matchday'), [data]);
 
-  // A fixture is 'awaiting' once predictions close and no final result has
-  // landed yet -- that is the window where a live score can exist.
   const anyAwaiting = useMemo(
     () => Boolean(data && data.matchups && data.matchups.some((f) => f.closed && !f.result)),
     [data],
   );
 
-  // Poll the fixtures + live scores every 30s while a matchday is in play.
-  // Refetching fixtures also picks up final results as the sync writes them.
-  // Polling stops (and live is cleared) once every closed match has a result.
   useEffect(() => {
     if (!seasonId || !anyAwaiting) {
       setLive({});
@@ -196,15 +183,13 @@ export default function RealDrawView({
         .catch(() => {});
       apiFetch(`/ui/seasons/${seasonId}/live-scores/`)
         .then((payload) => setLive(payload.live || {}))
-        .catch(() => {}); // source down → keep 'Awaiting result' rows
+        .catch(() => {}); 
     };
     poll();
     const timer = setInterval(poll, LIVE_POLL_MS);
     return () => clearInterval(timer);
   }, [seasonId, anyAwaiting]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Real standings: computed from the actual results inside the fixtures
-  // payload, which the backend adds as fixtures are played.
   const standings = useMemo(() => {
     const matchups = data?.matchups || [];
     const teamsMap = new Map();
@@ -364,7 +349,6 @@ export default function RealDrawView({
                         const pred = preds[fixture.id] || {};
                         const result = fixture.result;
                         if (result) {
-                          // Played with a real result — show it, no input.
                           const verdict = verdictFor(pred, result);
                           return (
                             <FixtureRow
@@ -409,7 +393,6 @@ export default function RealDrawView({
                         const disabled = Boolean(fixture.closed);
                         const liveScore = !result && live[fixture.id];
                         if (liveScore) {
-                          // In play — show the current score, no input.
                           return (
                             <FixtureRow
                               key={fixture.id}
@@ -487,8 +470,6 @@ export default function RealDrawView({
           <aside className="real-standings" aria-busy={syncStatus === 'saving'}>
             <div className="real-standings-head">
               <strong>UCL standings</strong>
-              {/* One stable node: the sync's in-flight and failed states swap its
-                  text instead of mounting a new one, so the row never shifts. */}
               <span role="status">
                 {syncStatus === 'saving'
                   ? 'Saving your picks…'

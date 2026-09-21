@@ -11,11 +11,8 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
     .map((pick) => teams.find((team) => team.id === pick.season_team_id))
     .filter(Boolean);
   const [pickingId, setPickingId] = useState(null);
-  /* `{ message, team }` — the team is what the retry re-issues, so a retry can
-     only ever repeat the pick that failed (US:no-silent-failure). */
+  
   const [error, setError] = useState(null);
-  /* One pick at a time: a second POST while the first is in flight would
-     double-advance the draw (same rule as the matchday save, task 4.3). */
   const pickingRef = useRef(false);
   const [revealCount, setRevealCount] = useState(0);
   const [revealStart, setRevealStart] = useState(0);
@@ -34,10 +31,6 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
     .map((m) => (m.home_team.id === activeTeam.id ? m.away_team : m.home_team))
     .sort((a, b) => a.pot - b.pot || a.name.localeCompare(b.name));
 
-  // Reveal the selected team's opponents one by one, 1s apart. Opponents whose
-  // matchup already existed (knownCount = revealStart) appear instantly; only
-  // freshly-created matchups animate. Restarts on every selection via
-  // revealSession.
   useEffect(() => {
     setRevealCount(revealStart);
     if (revealStart >= activeOpponents.length) return undefined;
@@ -53,14 +46,10 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
     return () => window.clearInterval(timer);
   }, [revealSession, revealStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep the parent (TeamInspector) in sync with the reveal: it should show
-  // the same opponents, at the same pace, as the pots panel below.
   useEffect(() => {
     onReveal?.(new Set(revealedIds));
   }, [revealSession, revealCount, activeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The pick that ended the draw still plays its full one-by-one reveal before
-  // switching away to matchdays ("even if the simulator already finished").
   useEffect(() => {
     if (pendingFinalize && activeOpponents.length && revealCount >= activeOpponents.length) {
       const timer = window.setTimeout(() => onComplete(), 600);
@@ -69,8 +58,6 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
     return undefined;
   }, [pendingFinalize, revealCount, activeOpponents.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* The pick write: pending, failed and succeeded all show here, and the retry
-     re-issues only this POST. */
   async function commitPick(team) {
     if (pickingRef.current) return;
     pickingRef.current = true;
@@ -97,14 +84,10 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
 
   async function handlePick(team) {
     setSelectedTeamId(team.id);
-    // Opponents whose matchup already exists are "known": reveal them instantly
-    // instead of replaying the one-by-one animation for them too.
     const knownCount = (matchups || []).filter(
       (m) => m.home_team.id === team.id || m.away_team.id === team.id,
     ).length;
     if (pickedIds.has(team.id) || String(team.pot) !== String(current_pot)) {
-      // Re-click or inspect-only: existing matchups are all known, so show the
-      // whole list at once and leave the draw untouched.
       setRevealStart(knownCount);
       setRevealSession((session) => session + 1);
       return;
@@ -144,8 +127,6 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
 
       <div className="interactive-head">
         <strong>{current_pot ? `Pot ${current_pot} on the clock` : 'All teams picked'}</strong>
-        {/* One stable node: the in-flight state swaps its text, so the row never
-            shifts and the pick is announced once. */}
         <span role="status">
           {pickingId
             ? 'Locking in your pick…'

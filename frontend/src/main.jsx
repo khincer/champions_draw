@@ -75,8 +75,7 @@ function App() {
   const detailOpenerRef = useRef(null);
 
   function openMatch(fixtureId, seasonId, leagueId) {
-    /* The shared ref holds the last-rendered card button, which need not be the
-       one the user activated, so remember the real opener. */
+    
     const active = document.activeElement;
     detailOpenerRef.current = active instanceof HTMLElement && active !== document.body
       ? active
@@ -87,13 +86,9 @@ function App() {
   function closeMatch() {
     const opener = detailOpenerRef.current || detailReturnFocusRef.current;
     setMatchDetail(null);
-    /* Focus can only land once the `hidden` wrapper has re-rendered: while it is
-       still display:none focus() is a no-op and focus falls to <body>. */
     window.requestAnimationFrame(() => opener?.focus());
   }
 
-  /* Shell-owned view-switch policy: mirrors the rail, so entering the workspace
-     always lands on a real section instead of its unused 'home' default. */
   function selectView(next) {
     setView(next);
     if (next === 'workspace') setActiveTab('simulate');
@@ -106,14 +101,12 @@ function App() {
   useEffect(() => {
     if (view !== 'home' || !selectedSeasonId) return undefined;
     loadRealMatches();
-    // Keep refreshing while any today/yesterday match is not finished yet.
     const timer = window.setInterval(() => {
       if (homeMatchesRef.current.some((m) => inHomeRange(m) && !m.result)) loadRealMatches();
     }, 60_000);
     return () => window.clearInterval(timer);
   }, [view, selectedSeasonId]);
 
-  // Poll live scores while any closed match lacks a final result.
   useEffect(() => {
     if (view !== 'home' || !selectedSeasonId) return undefined;
     const anyAwaiting = homeMatchesRef.current.some((m) => m.closed && !m.result);
@@ -124,13 +117,6 @@ function App() {
         setLiveScores(data.live || {});
         setLiveScoresError('');
       } catch {
-        /* Best-effort background poll (task 4.2): a failure — 502 included —
-           belongs to the hub's inline live region. It must never become a
-           page-level error and never disables the rest of the page. The copy
-           names what failed and the retry, and points at the safe reference
-           (the scores already on screen). Only the region's text changes; the
-           node itself is never remounted per tick, which is what keeps a
-           scrolled reader from being re-announced. */
         setLiveScoresError('Live scores unavailable — retrying every 30 seconds; showing the last known scores.');
       }
     };
@@ -179,9 +165,7 @@ function App() {
     try {
       const seasonPayload = await apiFetch('/seasons/');
       setSeasons(seasonPayload);
-      // Seasons arrive ordered -name, so seasonPayload[0] is the newest.
-      // Default the simulator to it; the season picker in the workspace lets
-      // the user switch to any other season.
+      
       const activeSeason = seasonPayload[0];
       if (activeSeason) setSelectedSeasonId(String(activeSeason.id));
     } catch (err) {
@@ -191,9 +175,6 @@ function App() {
     }
   }
 
-  /* Home hub feed (task 4.1). A refresh failure keeps the cards already on
-     screen and reports inline; only a first load with nothing to show becomes
-     the error state, so a blip never blanks the hub or becomes a page error. */
   async function loadRealMatches() {
     const hadCards = homeMatchesRef.current.length > 0;
     if (!hadCards) setHomeMatchesStatus('loading');
@@ -209,7 +190,6 @@ function App() {
     }
   }
 
-  /* League list for the browser (task 4.1). */
   async function loadLeagues() {
     setLeaguesStatus('loading');
     setLeaguesError('');
@@ -267,7 +247,7 @@ function App() {
       });
 
       // A fresh simulation must not inherit the previous run's predictions:
-      // the draw seed never changes (season name), so loadLocal's
+      // the draw seed never changes, so loadLocal's
       // drawSeed-mismatch discard can't tell them apart.
       clearLocal(selectedSeasonId, normalizedPlayer);
 
@@ -286,7 +266,7 @@ function App() {
       }, 650);
     } catch (err) {
       /* The failure stays on the simulation panel and names itself, with the
-         retry re-issuing only the draw POST (US:no-silent-failure). */
+         retry re-issuing only the draw POST. */
       setDrawError(err.message);
       setDrawAnimation({ isActive: false, phase: 'idle', revealedCount: 0 });
       await loadSeasonState(selectedSeasonId);
@@ -317,8 +297,6 @@ function App() {
 
   const latestDraw = seasonState?.draws?.[0];
   const latestDrawSeed = latestDraw?.draw_seed;
-  // Predicted scores for the current draw, read from the same localStorage
-  // snapshot PredictionApp persists to, so the Teams tab shows predictions.
   const teamPredictions = useMemo(
     () => (latestDrawSeed ? (loadLocal(selectedSeasonId, playerName, latestDrawSeed).matchPredictions || {}) : {}),
     [selectedSeasonId, playerName, latestDrawSeed],
@@ -328,15 +306,12 @@ function App() {
 
   return (
     <div className="app-layout">
-      {/* The shell owns one h1 per view where a view has no single leading
-          heading of its own; `career` and `real` already lead with exactly one. */}
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <SiteNav view={view} setView={setView} setActiveTab={setActiveTab} />
       <main className="app-main" id="main-content" aria-label="Main content" tabIndex={-1}>
         <div hidden={!!matchDetail}>
         {view === 'home' && (
           <section className="workspace">
-            <h1 className="view-heading">Live hub</h1>
             <Homepage
               matches={homeMatches}
               matchesStatus={homeMatchesStatus}

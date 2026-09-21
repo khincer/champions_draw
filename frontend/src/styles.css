@@ -1,13 +1,7 @@
-/* ─── Design tokens (Design.md §3.2–§5) ───────────────────────────────────
-   Contract: a light set on `:root` plus theme-dependent overrides under
-   `[data-theme="dark"]`. Theme-invariant tokens (accents, status hues, scales)
-   are declared once on `:root` and resolve in both themes. No rule may consume
-   a token undefined here. Values are closed in `.agents/Design.md` +
-   openspec/changes/champions-draw-update-plan/design.md.                    */
 :root {
   color-scheme: light;
 
-  /* Palette — Design.md §3.2 */
+  /* Palette — 3.2 */
   --bg: #f5f7fb;
   --surface: #ffffff;
   --surface-soft: #eef2f7;
@@ -126,7 +120,7 @@
   --sh-card: 0 1px 3px rgba(0, 0, 0, 0.04);
   --sh-card-strong: 0 1px 3px rgba(0, 0, 0, 0.08);
 
-  /* Type scale — Design.md §4 */
+  /* Type scale —  */
   --font-display: 32px;
   --font-h1: 28px;
   --font-h2: 22px;
@@ -158,8 +152,8 @@
   background: var(--bg);
 }
 
-/* Dark theme — surface/text/border from Design.md §3.2. The lifted tints below
-   are NOT closed by Design.md §3.2; they are derived for dark surfaces so no
+/* Dark theme — surface/text/border from 3.2. The lifted tints below
+   are NOT closed by 3.2; they are derived for dark surfaces so no
    rule keeps a light-only value. Flagged for design confirmation. */
 [data-theme="dark"] {
   color-scheme: dark;
@@ -312,7 +306,7 @@ select:focus,
 }
 
 /* One definition per variant; hover/active/disabled live here, never at a call
-   site (UC:shared-primitives). 44px minimum target (Design.md §5.2). */
+   site (UC:shared-primitives). 44px minimum target (5.2). */
 .button {
   min-height: 44px;
   border: 1px solid transparent;
@@ -959,7 +953,7 @@ select:focus,
   margin-top: 3px;
 }
 
-/* Status marker (Design.md §2, §7.7). The icon inside states the status, so
+/* Status marker (2, §7.7). The icon inside states the status, so
    the marker is still readable without colour; the fill is ink-on-fill like
    every other status surface (computed: 4.78:1 completed, 5.39:1 failed,
    6.80:1 running). */
@@ -1339,7 +1333,7 @@ select:focus,
   animation: live-pulse 1.6s ease-in-out infinite;
 }
 
-/* Competition slot of the shared fixture row (Design.md §7.5). Opt-in: no
+/* Competition slot of the shared fixture row (7.5). Opt-in: no
    adopter passes it today, so it adds no pixels to any current surface. */
 .fx-competition {
   display: block;
@@ -1797,7 +1791,7 @@ select:focus,
 .sp { background: var(--dot-playoff); }
 .se { background: var(--dot-neutral); }
 
-/* Site Nav Sidebar — dark navy rail on light content (Design.md §3.2, §5.1) */
+/* Site Nav Sidebar — dark navy rail on light content (3.2, §5.1) */
 .site-nav { position: fixed; top: 0; left: 0; bottom: 0; width: 240px; background: var(--sidebar); border-right: none; display: flex; flex-direction: column; z-index: 100; padding: 20px 0; }
 .site-nav-logo { padding: 0 20px 20px; border-bottom: 1px solid var(--sidebar-hover); }
 .site-nav-logo img { height: 28px; }
@@ -1847,7 +1841,7 @@ select:focus,
   font-weight: 700;
 }
 
-/* Mobile navigation (Design.md §5.2): a bottom bar plus a `<dialog>` drawer.
+/* Mobile navigation (5.2): a bottom bar plus a `<dialog>` drawer.
    The bar is switched on by the one shell threshold below; the drawer is a
    bottom sheet whose backdrop, Escape handling and focus trap come from
    `showModal()`. */
@@ -2094,7 +2088,7 @@ select:focus,
 .standings-table td { padding: var(--space-2) var(--space-2); border-bottom: 1px solid var(--line); }
 .standings-table tr:hover { background: var(--surface-soft); }
 
-/* Strong numerical typography (Design.md §4 "Numerical data should use tabular
+/* Strong numerical typography (4 "Numerical data should use tabular
    figures when supported"; §7.10 "Use tabular figures" for data tables). The
    fixture-row score surfaces are included with the shared FixtureRow
    (UC:single-fixture-row). All three StandingsTable dialects are numerical
@@ -3341,7 +3335,7 @@ select:focus-visible {
   color: var(--status-ink);
 }
 
-/* Tones added with the shared primitive (Design.md §7.7). The label text is
+/* Tones added with the shared primitive (7.7). The label text is
    the status signal; the fill never carries it alone. */
 .badge-neutral {
   background: var(--surface-soft);
@@ -3785,7 +3779,7 @@ dialog.match-detail-view {
   text-underline-offset: 3px;
 }
 
-/* Metric card (Design.md §7.2). Value stays dominant; the trend is text. */
+/* Metric card (7.2). Value stays dominant; the trend is text. */
 .metric {
   display: grid;
   gap: var(--space-1);

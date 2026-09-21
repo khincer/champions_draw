@@ -89,14 +89,10 @@ export default function TeamsBrowser({
   const [standingsReq, setStandingsReq] = useState({ status: 'idle', error: '' });
   const [fixturesReq, setFixturesReq] = useState({ status: 'idle', error: '' });
   const [showNextMatches, setShowNextMatches] = useState(false);
-  const [leaguePhase, setLeaguePhase] = useState('group'); // 'group' | 'playoffs' — LPV-1, not persisted
+  const [leaguePhase, setLeaguePhase] = useState('group');
   const [seasonMatchups, setSeasonMatchups] = useState([]);
   const playoffTies = useMemo(() => pairPlayoffTies(seasonMatchups), [seasonMatchups]);
 
-  /* Each endpoint owns its request state so the error copy names the one thing
-     that failed and its retry re-issues only that request (task 4.1). The
-     season branch's two calls stay independent for the same reason: group
-     standings and the matchups feed fail and recover separately. */
   async function loadStandings(league) {
     if (!league) return;
     setStandingsReq({ status: 'loading', error: '' });
@@ -104,9 +100,6 @@ export default function TeamsBrowser({
       if (league.kind === 'season') {
         const groupsData = await apiFetch(`/seasons/${league.season_id}/group-standings/`);
         const groups = groupsData?.groups || [];
-        // Flatten every group's standings; each row keeps its group label so
-        // the league page can split tables again (TeamPage reuses the flat
-        // list unchanged).
         setLeagueStandings(
           groups.flatMap((g) => (g.standings || []).map((row) => ({ ...row, group: g.group }))),
         );
@@ -150,8 +143,6 @@ export default function TeamsBrowser({
     loadFixtures(league);
   }
 
-  // Fetch standings + results on mount (re-entering the tab) and whenever the
-  // selected league changes, so fresh cron-synced data appears without a click.
   useEffect(() => {
     if (selectedLeague) loadLeagueData(selectedLeague);
   }, [selectedLeague]);
@@ -324,7 +315,6 @@ export default function TeamsBrowser({
       ) : (
         <EmptyState
           title="No leagues imported yet"
-          text="League tables come from the sync command. Run “python manage.py sync_leagues”, then refresh."
           action={<Button onClick={onRetryLeagues}>Refresh</Button>}
         />
       )}
