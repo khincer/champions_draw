@@ -38,9 +38,12 @@ COPY --from=build /app .
 # (local docker compose), so it stays aligned with the ${PORT:-8000} bind below.
 EXPOSE 8000
 
-# Shell form on purpose: ${PORT:-8000} must expand at container start. Railway
-# injects $PORT; local compose leaves it unset and gets 8000. The whole startup
-# sequence lives here because Railway ignores railway.json's startCommand and
-# builds this Dockerfile instead. --noinput keeps migrate/collectstatic from
-# blocking on a prompt in a non-interactive container.
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py bootstrap_season && python manage.py collectstatic --noinput && gunicorn champions_draw.wsgi:application --bind 0.0.0.0:${PORT:-8000}"]
+# Every service built from this image runs the same CMD, because Railway
+# honours the Dockerfile CMD and ignores each service's startCommand. The
+# role is chosen at runtime by SERVICE_ROLE inside docker-entrypoint.sh --
+# that script is the single source of truth for startup order and is NOT
+# dead code: deleting it reverts all three services to running the web
+# sequence. It ships via the build stage's `COPY . .` above, so no extra COPY
+# is needed; we invoke it with `sh` so it runs even when the copied file has no
+# exec bit (a Windows checkout does not guarantee one in git).
+CMD ["sh", "/app/docker-entrypoint.sh"]
