@@ -19,11 +19,11 @@ set -e
 
 case "${SERVICE_ROLE:-}" in
   cron-leagues)
-    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_league_fixtures, sync_promiedos_fixtures"
-    # Order matters: sync_league_fixtures refuses to run without League rows,
-    # so sync_leagues must succeed first (set -e aborts otherwise).
+    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_promiedos_fixtures"
+    # Standings and season-level CONMEBOL data only. Both change slowly, so this
+    # stays a daily job. Fixtures and results moved to cron-results because they
+    # change constantly: group these by change rate, not by the word "league".
     python manage.py sync_leagues
-    python manage.py sync_league_fixtures
     # CONMEBOL (Libertadores / Sudamericana), a different source from the
     # football-data leagues above: Promiedos carries the current season when
     # API-Football's free plan blocks it, and needs no API key. Without this the
@@ -35,8 +35,15 @@ case "${SERVICE_ROLE:-}" in
     python manage.py sync_promiedos_fixtures --competition sud
     ;;
   cron-results)
-    echo "[entrypoint] SERVICE_ROLE=cron-results -> sync_real_fixture_results --source promiedos"
+    echo "[entrypoint] SERVICE_ROLE=cron-results -> sync_real_fixture_results, sync_league_fixtures"
+    # Results and fixtures, in that order. sync_real_fixture_results is seconds
+    # and feeds the live product; sync_league_fixtures is minutes (nine leagues
+    # with sleeps and rate-limit retries), so it must not delay the fast one if
+    # the tick turns out to be short.
+    # sync_league_fixtures needs League rows, which cron-leagues' daily
+    # sync_leagues creates -- run cron-leagues once after a fresh database.
     python manage.py sync_real_fixture_results --source promiedos
+    python manage.py sync_league_fixtures
     ;;
   *)
     echo "[entrypoint] SERVICE_ROLE='${SERVICE_ROLE:-}' (unset/other) -> web: migrate, bootstrap_season, collectstatic, gunicorn"
