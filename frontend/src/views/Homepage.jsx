@@ -4,7 +4,7 @@ import Crest from '../components/Crest';
 import Button from '../components/Button';
 import SegmentControl from '../components/SegmentControl';
 import { EmptyState, ErrorState, LiveRegion, Skeleton } from '../components/States';
-import { getPlayerName } from '../predictionStorage';
+import { getPlayerName } from '../lib/predictionStorage';
 import { inHomeRange, shortDay, shortTime } from '../lib/format';
 
 /* Home composition (Design.md §7.2, task 3.3): greeting + live hub + quick

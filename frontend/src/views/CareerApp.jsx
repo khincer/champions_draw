@@ -15,14 +15,14 @@ import {
 import Crest from '../components/Crest';
 import Metric from '../components/Metric';
 import SegmentControl from '../components/SegmentControl';
-import clubData from '../careerClubs.json';
+import clubData from '../assets/careerClubs.json';
 import {
   applyCareerChoice,
   createCareer,
   isCareerState,
   POSITIONS,
   summarizeCareer,
-} from '../careerEngine.mjs';
+} from '../lib/careerEngine.mjs';
 
 export const CAREER_STORAGE_KEY = 'champions_draw_career_v1';
 

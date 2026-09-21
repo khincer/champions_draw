@@ -6,7 +6,7 @@ import {
   createCareer,
   isCareerState,
   summarizeCareer,
-} from './careerEngine.mjs';
+} from '../lib/careerEngine.mjs';
 
 const countries = [
   ['GB', 'England'],

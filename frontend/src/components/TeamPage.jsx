@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { ArrowLeft, RefreshCw } from 'lucide-preact';
-import Button from '../components/Button';
-import Crest from '../components/Crest';
-import LeagueFixtureRow from '../components/LeagueFixtureRow';
-import StandingsTable from '../components/StandingsTable';
-import { EmptyState, ErrorState, Skeleton } from '../components/States';
+import Button from './Button';
+import Crest from './Crest';
+import LeagueFixtureRow from './LeagueFixtureRow';
+import StandingsTable from './StandingsTable';
+import { EmptyState, ErrorState, Skeleton } from './States';
 import { apiFetch } from '../lib/api';
 import { normTeamName } from '../lib/teams';
 

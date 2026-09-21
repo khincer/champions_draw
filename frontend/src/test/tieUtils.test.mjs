@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { pairPlayoffTies, computeAgg, formatAggregate } from './tieUtils.js';
+import { pairPlayoffTies, computeAgg, formatAggregate } from '../lib/tieUtils.js';
 
 function matchup(overrides = {}) {
   return {

@@ -58,6 +58,6 @@ jobs:
       - name: Run node --test suites
         run: >-
           node --test
-          frontend/src/tieUtils.test.mjs
-          frontend/src/careerEngine.test.mjs
-          frontend/src/lib/reconcile.test.mjs
+          frontend/src/test/tieUtils.test.mjs
+          frontend/src/test/careerEngine.test.mjs
+          frontend/src/test/reconcile.test.mjs

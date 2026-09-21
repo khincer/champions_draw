@@ -1,8 +1,8 @@
 import { Home, Plane } from 'lucide-preact';
-import Crest from './components/Crest';
-import { StateMessage } from './components/States';
+import Crest from './Crest';
+import { StateMessage } from './States';
 import ScoreInput from './ScoreInput';
-import { computeAgg } from './tieUtils';
+import { computeAgg } from '../lib/tieUtils';
 
 function LegRow({ label, homeTeam, awayTeam, homeGoals, awayGoals, homeField, awayField, matchupIdx, onScoreChange }) {
   return (

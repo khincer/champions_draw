@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import FixtureRow from '../components/FixtureRow';
 import SegmentControl from '../components/SegmentControl';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
-import ScoreInput from '../ScoreInput';
-import { setPlayerName as persistPlayerName } from '../predictionStorage';
+import ScoreInput from '../components/ScoreInput';
+import { setPlayerName as persistPlayerName } from '../lib/predictionStorage';
 
 const SYNC_DELAY_MS = 1200;
 const VERDICT_LABEL = { exact: 'Exact', outcome: 'Outcome', miss: 'Miss' };

@@ -9,8 +9,8 @@ import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import { apiFetch } from '../lib/api';
 import { shortTime } from '../lib/format';
 import { toMiniRow } from '../lib/teams';
-import { formatAggregate, pairPlayoffTies } from '../tieUtils';
-import TeamPage from './TeamPage';
+import { formatAggregate, pairPlayoffTies } from '../lib/tieUtils';
+import TeamPage from '../components/TeamPage';
 
 /* League browser: the league grid, one league page (standings + fixtures with
    the group|playoffs toggle) and the team page it swaps in. Moved out of

@@ -3,15 +3,15 @@ import Button from '../components/Button';
 import FixtureRow from '../components/FixtureRow';
 import StandingsTable from '../components/StandingsTable';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
-import ScoreInput from '../ScoreInput';
+import ScoreInput from '../components/ScoreInput';
 import { groupBy } from '../lib/groupBy';
 import {
   loadRealLocal,
   saveRealLocal,
   setPlayerName as persistPlayerName,
-} from '../predictionStorage';
-import { computeStandings } from '../standingsCalc';
-import { buildPredictionsImage } from '../sharePredictionsImage';
+} from '../lib/predictionStorage';
+import { computeStandings } from '../lib/standingsCalc';
+import { buildPredictionsImage } from '../lib/sharePredictionsImage';
 
 const SYNC_DELAY_MS = 1200;
 const LIVE_POLL_MS = 30000;

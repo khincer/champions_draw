@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import Button from './components/Button';
-import SegmentControl from './components/SegmentControl';
-import StandingsTable from './components/StandingsTable';
-import MatchdayScoreBoard from './MatchdayScoreBoard';
-import PlayoffBracket from './PlayoffBracket';
-import KnockoutBracket from './KnockoutBracket';
-import { loadLocal, saveLocal } from './predictionStorage';
-import { useReconciliation } from './lib/useReconciliation';
-import { computeStandings, defenseNorm, eliminationBoost, expectedGoals, teamStrength } from './standingsCalc';
-import { predictMatch } from './matchOdds';
-import { ErrorState, Skeleton } from './components/States';
+import Button from '../components/Button';
+import SegmentControl from '../components/SegmentControl';
+import StandingsTable from '../components/StandingsTable';
+import MatchdayScoreBoard from '../components/MatchdayScoreBoard';
+import PlayoffBracket from '../components/PlayoffBracket';
+import KnockoutBracket from '../components/KnockoutBracket';
+import { loadLocal, saveLocal } from '../lib/predictionStorage';
+import { useReconciliation } from '../lib/useReconciliation';
+import { computeStandings, defenseNorm, eliminationBoost, expectedGoals, teamStrength } from '../lib/standingsCalc';
+import { predictMatch } from '../lib/matchOdds';
+import { ErrorState, Skeleton } from '../components/States';
 
 const SUB_TABS = [
   ['scores', 'Score Matches'],

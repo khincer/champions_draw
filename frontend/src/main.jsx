@@ -2,7 +2,7 @@ import { render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import './styles.css';
 import CareerApp, { hasSavedCareer } from './views/CareerApp';
-import PredictionApp from './PredictionApp';
+import PredictionApp from './views/PredictionApp';
 import DrawAnimationStage from './views/DrawAnimationStage';
 import Homepage from './views/Homepage';
 import InteractiveDraft from './views/InteractiveDraft';
@@ -24,7 +24,7 @@ import AppFooter from './components/shell/AppFooter';
 import SiteNav from './components/shell/SiteNav';
 import ViewTabs from './components/shell/ViewTabs';
 import WorkspaceHeader from './components/shell/WorkspaceHeader';
-import { clearLocal, loadLocal } from './predictionStorage';
+import { clearLocal, loadLocal } from './lib/predictionStorage';
 import { apiFetch } from './lib/api';
 import { inHomeRange } from './lib/format';
 import { groupBy } from './lib/groupBy';
@@ -375,16 +375,6 @@ function App() {
           </section>
         )}
 
-        {view === 'career' && (
-          <section className="workspace" aria-label="Career mode">
-            <CareerApp
-              defaultName={playerName}
-              seasonTeams={seasonState?.teams || []}
-              onCareerAvailabilityChange={setCareerAvailable}
-            />
-            <AppFooter />
-          </section>
-        )}
 
         {view === 'real' && (
           <RealDrawView
