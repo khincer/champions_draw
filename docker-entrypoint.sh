@@ -19,8 +19,8 @@ set -e
 
 case "${SERVICE_ROLE:-}" in
   cron-leagues)
-    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_promiedos_fixtures"
-    # Standings and season-level CONMEBOL data only. Both change slowly, so this
+    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_promiedos_fixtures, sync_match_history"
+    # Standings and season-level data only. All of it changes slowly, so this
     # stays a daily job. Fixtures and results moved to cron-results because they
     # change constantly: group these by change rate, not by the word "league".
     python manage.py sync_leagues
@@ -33,6 +33,13 @@ case "${SERVICE_ROLE:-}" in
     # value, so both run.
     python manage.py sync_promiedos_fixtures --competition lib
     python manage.py sync_promiedos_fixtures --competition sud
+    # Rule 6 (no third consecutive season with the same home team in a pairing)
+    # reads SeasonMatchupHistory for the two seasons before the active one. If
+    # nothing populates that table the constraint is silently a no-op, so this
+    # must run: it is the only writer. Runs last because it maps API team names
+    # onto Team rows, which the syncs above create. --seasons is derived from
+    # the active season, so it stays correct as seasons roll forward.
+    python manage.py sync_match_history
     ;;
   cron-results)
     echo "[entrypoint] SERVICE_ROLE=cron-results -> sync_real_fixture_results, sync_league_fixtures"

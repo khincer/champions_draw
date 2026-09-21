@@ -15,7 +15,7 @@ import json
 
 from django.core.management.base import BaseCommand
 
-from draw.models import SeasonMatchupHistory, Team
+from draw.models import Season, SeasonMatchupHistory, Team
 
 
 API_BASE = 'https://api.football-data.org/v4'
@@ -28,8 +28,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             '--seasons',
-            required=True,
-            help='Comma-separated season names, e.g. "2024-25,2025-26".',
+            help=(
+                'Comma-separated season names, e.g. "2024-25,2025-26". Defaults to '
+                'the two seasons immediately before the active one, which is exactly '
+                'the window Rule 6 consults, so this can run on a schedule without '
+                'hardcoding years that go stale.'
+            ),
         )
         parser.add_argument(
             '--dry-run',
@@ -37,23 +41,42 @@ class Command(BaseCommand):
             help='Fetch and display without writing to the database.',
         )
 
+    def default_seasons(self):
+        """The two seasons before the active one -- exactly what Rule 6 reads."""
+        from draw.services.draw import previous_season_names
+
+        active = Season.objects.filter(is_active=True).order_by('-name').first()
+        if not active:
+            return []
+        return previous_season_names(active.name) or []
+
     def handle(self, *args, **options):
         api_key = os.getenv('API_FOOTBALL_DATA_KEY', '')
         if not api_key:
             self.stderr.write(self.style.ERROR('API_FOOTBALL_DATA_KEY not set in environment.'))
             return
 
-        seasons = [s.strip() for s in options['seasons'].split(',') if s.strip()]
+        seasons = [s.strip() for s in (options['seasons'] or '').split(',') if s.strip()]
+        if not seasons:
+            seasons = self.default_seasons()
+            if not seasons:
+                self.stderr.write(self.style.ERROR(
+                    'No --seasons given and no active season to derive them from. '
+                    'Pass --seasons explicitly, e.g. --seasons "2024-25,2025-26".'
+                ))
+                return
+            self.stdout.write(f'No --seasons given; using the prior two of the active season: {", ".join(seasons)}')
+
         dry_run = options['dry_run']
-        team_by_name = {name_lower: team for name_lower, team in Team.objects.all().values('name')}
+        team_by_name = {team.name.lower(): team for team in Team.objects.all()}
 
         total_created = 0
         for season_name in seasons:
             total_created += self.sync_season(season_name, api_key, team_by_name, dry_run)
 
+        label = 'would record ' if dry_run else 'recorded '
         self.stdout.write(self.style.SUCCESS(
-            f'Done. {("would record " if dry_run else "recorded ")}{total_created} "
-            f"directed crosses across {len(seasons)} season(s).'
+            f'Done. {label}{total_created} directed crosses across {len(seasons)} season(s).'
         ))
 
     def sync_season(self, season_name, api_key, team_by_name, dry_run):

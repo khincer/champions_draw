@@ -621,6 +621,61 @@ class Rule6Tests(TestCase):
 	def test_previous_season_names_map_to_rule_six(self):
 		self.assertEqual(previous_season_names('2026-27'), ['2025-26', '2024-25'])
 
+	def test_sync_match_history_derives_seasons_from_the_active_season(self):
+		"""--seasons must default to the exact window Rule 6 reads.
+
+		That is what lets the command run on a schedule instead of being handed
+		hardcoded years that silently go stale as seasons roll forward.
+		"""
+		from draw.management.commands.sync_match_history import Command
+
+		self.assertEqual(Command().default_seasons(), ['2025-26', '2024-25'])
+		# Must agree with the solver's own notion of the window, or the two drift.
+		self.assertEqual(Command().default_seasons(), previous_season_names(self.season.name))
+
+	def test_sync_match_history_derives_nothing_without_an_active_season(self):
+		Season.objects.update(is_active=False)
+		from draw.management.commands.sync_match_history import Command
+
+		self.assertEqual(Command().default_seasons(), [])
+
+	def test_sync_match_history_writes_crosses_for_the_league_phase_only(self):
+		"""Runs the real handle() against a stubbed fetch.
+
+		Guards the name->Team lookup (it was built by unpacking .values('name')
+		into two names, which raised before anything was written) and the
+		matchday 1..8 filter.
+		"""
+		import os
+		from unittest.mock import patch
+
+		from draw.management.commands.sync_match_history import Command
+
+		home = self.entries[0].team
+		away = self.entries[1].team
+		payload = {
+			'matches': [
+				{'matchday': 3, 'homeTeam': {'name': home.name}, 'awayTeam': {'name': away.name}},
+				# Outside the league phase: must be ignored.
+				{'matchday': 12, 'homeTeam': {'name': away.name}, 'awayTeam': {'name': home.name}},
+			]
+		}
+
+		with patch.dict(os.environ, {'API_FOOTBALL_DATA_KEY': 'test-key'}), \
+				patch.object(Command, 'fetch', return_value=payload):
+			Command().handle(seasons='2025-26', dry_run=False)
+
+		self.assertTrue(
+			SeasonMatchupHistory.objects.filter(
+				season_name='2025-26', home_team=home, away_team=away
+			).exists()
+		)
+		self.assertFalse(
+			SeasonMatchupHistory.objects.filter(
+				season_name='2025-26', home_team=away, away_team=home
+			).exists()
+		)
+
 	def test_compute_forbidden_directions_blocks_repeated_home_pairing(self):
 		home = self.entries[0]
 		away = self.entries[1]
