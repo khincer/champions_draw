@@ -428,6 +428,14 @@ class Command(BaseCommand):
 
         updates, unmatched = match_results(data, matches)
 
+        # One batched read instead of a SELECT per update before each upsert.
+        existing_by_id = {
+            r.fixture_id: r
+            for r in RealFixtureResult.objects.filter(
+                fixture_id__in=[fixture_ids[u['index']] for u in updates]
+            )
+        }
+
         updated = 0
         already = 0
         for u in updates:
@@ -435,7 +443,7 @@ class Command(BaseCommand):
             fid = fixture_ids[u['index']]
             new_home = int(u['home_goals'])
             new_away = int(u['away_goals'])
-            existing = RealFixtureResult.objects.filter(fixture_id=fid).first()
+            existing = existing_by_id.get(fid)
             if (
                 existing is not None
                 and existing.home_goals == new_home

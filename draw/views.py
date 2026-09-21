@@ -3,6 +3,7 @@ import time
 from collections import Counter, defaultdict
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -304,9 +305,7 @@ def _load_real_fixtures(season: Season) -> list:
 	prediction sync and the fixtures endpoint agree on ids, teams, and the
 	closed computation.
 	"""
-	fixtures_path = Path(__file__).resolve().parent / 'data' / 'ucl_league_phase_real_fixtures_2026_27.json'
-	with open(fixtures_path, 'r', encoding='utf-8') as f:
-		data = json.load(f)
+	data = _real_fixtures_json()
 
 	# Live scores come from the DB (Railway's filesystem is ephemeral and not
 	# shared across services); the JSON above is only the static calendar.
@@ -368,6 +367,16 @@ def _load_real_fixtures(season: Season) -> list:
 		})
 
 	return matchups
+
+
+@lru_cache(maxsize=1)
+def _real_fixtures_json():
+	# Checked-in static calendar, never rewritten at runtime: parse once per
+	# process instead of on every poll (real-fixtures, live-scores, homepage
+	# each hit this every 30s per viewer).
+	fixtures_path = Path(__file__).resolve().parent / 'data' / 'ucl_league_phase_real_fixtures_2026_27.json'
+	with open(fixtures_path, 'r', encoding='utf-8') as f:
+		return json.load(f)
 
 
 class RealSeasonFixturesAPIView(APIView):

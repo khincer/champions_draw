@@ -62,7 +62,6 @@ npm run dev                         # Vite on :5173, proxies /api -> :8001
 - `frontend/src/ScoreInput.jsx` — reusable goal score input
 - `frontend/src/predictionStorage.js` — localStorage + backend sync
 - `frontend/src/standingsCalc.js` — client-side standings calculation
-- `build_seed_input.py` — standalone script to fetch team data from API-Football (requires `API_FOOTBALL_KEY`)
 
 ## Prediction System
 
@@ -131,4 +130,4 @@ Broad Read/Glob/Grep exploration before this CodeGraph check is explicitly disco
 
 ## Deployment
 
-Railway via Nixpacks + `Procfile`. The Procfile runs migrations, import_seed_input, collectstatic, then gunicorn. Requires `DJANGO_SECRET_KEY`, `DATABASE_URL` (auto from Railway Postgres), and `DJANGO_ALLOWED_HOSTS`.
+Railway via the root `Dockerfile` (auto-detected) + `docker-entrypoint.sh`, which branches on `SERVICE_ROLE`: web runs migrations, `bootstrap_season`, collectstatic, then gunicorn; `cron-leagues`/`cron-results` run their sync commands and exit. Requires `DJANGO_SECRET_KEY`, `DATABASE_URL` (auto from Railway Postgres), and `DJANGO_ALLOWED_HOSTS`.

@@ -21,6 +21,9 @@ db.sqlite3
 /data/
 staticfiles/
 media/
+# Vite build output. The Dockerfile regenerates it (npm run build) and
+# collectstatic picks it up, so the committed copy only ever went stale.
+static/ui/
 
 # Local tooling artifacts
 .codegraph/
@@ -37,4 +40,3 @@ test_probe_*.py
 .pytest_cache/
 htmlcov/
 qa-*.png
-.env

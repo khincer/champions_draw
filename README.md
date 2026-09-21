@@ -297,7 +297,7 @@ The container installs requirements, runs migrations, and serves the app on port
 
 ## Railway deployment
 
-This project is ready for Railway using Nixpacks and the checked-in `Procfile`.
+This project deploys to Railway from the checked-in `Dockerfile` (auto-detected).
 
 1. Create a Railway project from this GitHub repo.
 2. Add a PostgreSQL database service.
@@ -313,11 +313,10 @@ Railway provides `DATABASE_URL` when the PostgreSQL service is connected. The ap
 `RAILWAY_PUBLIC_DOMAIN`, and production settings allow Railway-generated `*.up.railway.app`
 domains by default. Set `DJANGO_ALLOWED_HOSTS` explicitly if you attach a custom domain.
 
-The start command in `Procfile` runs migrations, collects static files, and starts Gunicorn:
-
-```text
-python manage.py migrate && python manage.py collectstatic --noinput && gunicorn champions_draw.wsgi:application --bind 0.0.0.0:${PORT:-8000}
-```
+The Dockerfile `CMD` runs `docker-entrypoint.sh`, which branches on `SERVICE_ROLE`: the web
+role runs migrations, bootstraps the season (`bootstrap_season`), collects static files, and
+starts Gunicorn; `cron-leagues`/`cron-results` run their sync commands and exit (see
+`docker-entrypoint.sh` and `.github/RAILWAY_DEPLOY.md`).
 
 After the first deploy, import and seed the checked-in data from a Railway shell:
 

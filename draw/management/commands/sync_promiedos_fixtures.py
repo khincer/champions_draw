@@ -11,10 +11,9 @@ command's pattern):
   2. Read the game filters dynamically (opaque keys like 102_69_4_1).
   3. GET https://api.promiedos.com.ar/league/games/<leagueId>/<filterKey>
      per filter, ~200ms apart.
-  4. Upsert Season / Association / Team / SeasonTeam / SeasonMatchup the
-     same way sync_conmebol_fixtures does, including its reverse-leg
-     workaround (QuerySet.update() skips full_clean; new reverse legs go
-     through bulk_create(ignore_conflicts=True)).
+  4. Upsert Season / Association / Team / SeasonTeam / SeasonMatchup, including
+     the reverse-leg workaround (QuerySet.update() skips full_clean; new reverse
+     legs go through bulk_create(ignore_conflicts=True)).
 """
 import json
 import re
@@ -28,7 +27,7 @@ from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from draw.management.commands.sync_conmebol_fixtures import (
+from draw.services.conmebol_naming import (
     COUNTRY_NAMES,
     TEAM_COUNTRY_BY_NAME,
     normalize_text,

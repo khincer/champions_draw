@@ -39,12 +39,6 @@ if not SECRET_KEY:
         raise RuntimeError('DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=false.')
     SECRET_KEY = 'local-dev-secret'
 
-API_URL = os.getenv('API_FOOTBALL_BASE_URL', os.getenv('API_URL', 'https://v3.football.api-sports.io'))
-API_KEY = os.getenv('API_FOOTBALL_KEY', os.getenv('API_KEY', ''))
-TIMEOUT = int(os.getenv('API_FOOTBALL_TIMEOUT', os.getenv('TIMEOUT', '10')))  # seconds
-LEAGUE_ID = int(os.getenv('API_FOOTBALL_LEAGUE_ID', os.getenv('LEAGUE_ID', '2')))  # UEFA Champions League
-
-
 def split_env_list(name: str) -> list[str]:
     return [
         value.strip()

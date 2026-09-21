@@ -27,10 +27,10 @@ case "${SERVICE_ROLE:-}" in
     # CONMEBOL (Libertadores / Sudamericana), a different source from the
     # football-data leagues above: Promiedos carries the current season when
     # API-Football's free plan blocks it, and needs no API key. Without this the
-    # homepage's CONMEBOL block has nothing to render -- neither
-    # sync_conmebol_fixtures nor sync_promiedos_fixtures was ever scheduled, so
-    # production has never had a Libertadores or Sudamericana season at all.
-    # --competition is required and accepts one value, so both run.
+    # homepage's CONMEBOL block has nothing to render -- nothing ever scheduled
+    # these syncs, so production had no Libertadores or Sudamericana season at
+    # all until they were run by hand. --competition is required and accepts one
+    # value, so both run.
     python manage.py sync_promiedos_fixtures --competition lib
     python manage.py sync_promiedos_fixtures --competition sud
     ;;
