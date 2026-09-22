@@ -5,7 +5,8 @@ import Button from '../components/Button';
 import SegmentControl from '../components/SegmentControl';
 import { EmptyState, ErrorState, LiveRegion, Skeleton } from '../components/States';
 import { getPlayerName } from '../lib/predictionStorage';
-import { inHomeRange, shortDay, shortTime } from '../lib/format';
+import { inHomeRange } from '../lib/format';
+import { useI18n } from '../i18n';
 
 
 
@@ -16,6 +17,7 @@ const QUICK_ACTIONS = [
 ];
 
 function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef }) {
+  const { formatDay, formatTime } = useI18n();
   const result = match.result;
   const eligible = result || (match.kickoff && new Date(match.kickoff) <= new Date());
   const status = result ? 'finished' : match.closed ? 'live' : 'upcoming';
@@ -28,7 +30,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
       <header className="home-game-card-header">
         <div>
           <p className="hub-eyebrow">{match.competition || 'Champions League'}</p>
-          <p className="hub-date">{shortDay(match.kickoff)}</p>
+          <p className="hub-date">{formatDay(match.kickoff)}</p>
         </div>
         <span className={`hub-status ${status === 'finished' ? 'hub-final' : status === 'live' ? 'hub-live' : 'hub-upcoming'}`}>
           {status === 'live' && <span className="live-dot" aria-hidden="true" />}
@@ -55,7 +57,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
               <span>{liveScore.away_goals}</span>
             </p>
           ) : (
-            <p className="hub-kickoff">{shortTime(match.kickoff)}</p>
+            <p className="hub-kickoff">{formatTime(match.kickoff)}</p>
           )}
           <p className="hub-score-caption">{status === 'finished' ? 'Result' : status === 'live' ? 'Live' : 'Kickoff'}</p>
         </div>
@@ -86,6 +88,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
 }
 
 export default function Homepage({ matches, matchesStatus, matchesError, onRetryMatches, liveScores, liveScoresError, onOpenMatch, onNavigate, playerName, seasonId, detailReturnFocusRef }) {
+  const { formatDay } = useI18n();
   const [competition, setCompetition] = useState('all');
 
   
@@ -225,7 +228,7 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
                 <div key={label} className="homepage-day-section">
                   <div className="match-section-title">
                     <CalendarDays size={16} />
-                    {label} &middot; {shortDay(dayMatches[0].kickoff)}
+                    {label} &middot; {formatDay(dayMatches[0].kickoff)}
                   </div>
                   {dayMatches.map((m) => <HomeMatchCard key={m.id} match={m} liveScore={liveScores[m.id]} onOpenMatch={onOpenMatch} seasonId={seasonId} detailReturnFocusRef={detailReturnFocusRef} />)}
                 </div>

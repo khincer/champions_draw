@@ -1,6 +1,6 @@
 import { Check, History, Loader, X } from 'lucide-preact';
 import { StateMessage } from '../components/States';
-import { shortDate } from '../lib/format';
+import { useI18n } from '../i18n';
 
 const STATUS_CUE = {
   completed: { Icon: Check, label: 'Completed' },
@@ -14,6 +14,7 @@ function cueFor(status) {
 }
 
 export default function PlayersRuns({ draws }) {
+  const { formatDate } = useI18n();
   return (
     <section className="history-list">
       {draws.length ? (
@@ -28,7 +29,7 @@ export default function PlayersRuns({ draws }) {
               <span className="sr-only">{label}</span>
               <div>
                 <strong>{draw.player_name || 'Guest player'}</strong>
-                <span>{draw.draw_seed} · {draw.method} - {draw.status} - {draw.matchups_created} fixtures - {shortDate(draw.completed_at)}</span>
+                <span>{draw.draw_seed} · {draw.method} - {draw.status} - {draw.matchups_created} fixtures - {formatDate(draw.completed_at)}</span>
                 {draw.error_message && <em>{draw.error_message}</em>}
               </div>
             </article>
