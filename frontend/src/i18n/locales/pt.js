@@ -56,6 +56,7 @@ export default {
   'nav.views': 'Visualizações',
   'nav.workspace': 'Área de trabalho',
 
+  'settings.darkTheme': 'Tema escuro',
   'settings.language': 'Idioma',
 
   'shell.drawRanFixtures': {
@@ -64,6 +65,7 @@ export default {
   },
   'shell.footer': 'Simulador de sorteio não oficial para palpites de torcedores.',
   'shell.interactiveStarted': '{{player}} iniciou um sorteio interativo — escolha os times pote a pote.',
+  'shell.leaguesTitle': 'Ligas',
   'shell.liveScoresUnavailable': 'Resultados ao vivo indisponíveis — nova tentativa a cada 30 segundos; mostrando os últimos resultados conhecidos.',
   'shell.loadingPredictionLab': 'Carregando laboratório de palpites',
   'shell.loadingSeasonData': 'Carregando dados da temporada',

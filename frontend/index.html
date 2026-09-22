@@ -21,6 +21,29 @@
         }
         document.documentElement.setAttribute('data-theme', theme);
         document.documentElement.style.colorScheme = theme;
+
+        /* Locale resolution mirrors frontend/src/i18n/detect.js, which this
+           inline script cannot import. The bootstrap-sync test keeps these
+           literals, this fallback and the resolved outcome equal to
+           SUPPORTED_LOCALES / resolveLocale. Set before paint so `lang` is
+           never briefly wrong. */
+        var supported = ['en', 'es', 'pt', 'fr'];
+        var stored = null;
+        try {
+          stored = window.localStorage.getItem('champions_draw_locale');
+        } catch (error) {
+        }
+        var locale = 'en';
+        var tags = [stored].concat(navigator.languages || []);
+        for (var i = 0; i < tags.length; i += 1) {
+          if (typeof tags[i] !== 'string') continue;
+          var base = tags[i].trim().toLowerCase().split(/[-_]/)[0];
+          if (supported.indexOf(base) !== -1) {
+            locale = base;
+            break;
+          }
+        }
+        document.documentElement.lang = locale;
       })();
     </script>
   </head>

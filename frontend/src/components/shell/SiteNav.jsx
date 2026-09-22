@@ -1,10 +1,14 @@
 import { Home, LayoutGrid, Swords, Target, Trophy, UserRound } from 'lucide-preact';
 import championsLeagueLogoUrl from '../../assets/uefa-champions-league-logo.svg';
+import LanguageMenu from '../LanguageMenu';
+import { LOCALE_OPTIONS, useI18n } from '../../i18n';
 import ThemeToggle from './ThemeToggle';
 
 export default function SiteNav({ view, setView, setActiveTab }) {
+  const { t, locale, setLocale } = useI18n();
+
   return (
-    <nav className="site-nav" aria-label="Primary">
+    <nav className="site-nav" aria-label={t('a11y.primaryNav')}>
       <div className="site-nav-logo">
         <img src={championsLeagueLogoUrl} alt="Champions League" />
       </div>
@@ -15,17 +19,17 @@ export default function SiteNav({ view, setView, setActiveTab }) {
           onClick={() => setView('home')}
         >
           <Home size={18} />
-          Home
+          {t('nav.home')}
         </button>
 
-        <div className="site-nav-section">Official</div>
+        <div className="site-nav-section">{t('nav.official')}</div>
         <button
           className={`site-nav-link ${view === 'real' ? 'active' : ''}`}
           aria-current={view === 'real' ? 'page' : undefined}
           onClick={() => setView('real')}
         >
           <Swords size={18} />
-          Real Draw
+          {t('nav.realDraw')}
         </button>
         <button
           className={`site-nav-link ${view === 'picks' ? 'active' : ''}`}
@@ -33,30 +37,36 @@ export default function SiteNav({ view, setView, setActiveTab }) {
           onClick={() => setView('picks')}
         >
           <Target size={18} />
-          Match Picks
+          {t('nav.matchPicks')}
         </button>
 
-        <div className="site-nav-section">Simulators</div>
+        <div className="site-nav-section">{t('nav.simulators')}</div>
         <button
           className={`site-nav-link ${view === 'workspace' ? 'active' : ''}`}
           aria-current={view === 'workspace' ? 'page' : undefined}
           onClick={() => { setView('workspace'); setActiveTab('simulate'); }}
         >
           <Trophy size={18} />
-          Draw Simulator
+          {t('nav.drawSimulator')}
         </button>
 
-        <div className="site-nav-section">Browse</div>
+        <div className="site-nav-section">{t('nav.browse')}</div>
         <button
           className={`site-nav-link ${view === 'teams' ? 'active' : ''}`}
           aria-current={view === 'teams' ? 'page' : undefined}
           onClick={() => setView('teams')}
         >
           <LayoutGrid size={18} />
-          Leagues
+          {t('nav.leagues')}
         </button>
       </div>
       <div className="site-nav-footer">
+        <LanguageMenu
+          items={LOCALE_OPTIONS}
+          value={locale}
+          onChange={setLocale}
+          label={t('settings.language')}
+        />
         <ThemeToggle />
       </div>
     </nav>

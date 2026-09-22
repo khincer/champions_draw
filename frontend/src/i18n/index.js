@@ -14,6 +14,13 @@ import pt from './locales/pt.js';
 
 export { SUPPORTED_LOCALES };
 
+/* Endonyms are locale-invariant proper nouns, so they carry no catalogue entry
+   and need no per-item lang attribute. Derived from SUPPORTED_LOCALES so the
+   selector's options cannot drift from the resolution set. */
+const LOCALE_LABELS = { en: 'English', es: 'Español', pt: 'Português', fr: 'Français' };
+
+export const LOCALE_OPTIONS = SUPPORTED_LOCALES.map((key) => ({ key, label: LOCALE_LABELS[key] }));
+
 export const LOCALE_KEY = 'champions_draw_locale';
 
 const CATALOGS = { en, es, pt, fr };

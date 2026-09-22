@@ -1801,7 +1801,79 @@ select:focus,
 .site-nav-link:hover { background: var(--sidebar-hover); color: var(--sidebar-text); }
 .site-nav-link.active { color: var(--sidebar-text); background: var(--tint-green-14); font-weight: 600; }
 .site-nav-link.active::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; background: var(--green-primary); border-radius: 0 var(--radius-3) var(--radius-3) 0; }
-.site-nav-footer { border-top: 1px solid var(--sidebar-hover); padding: 8px 0 0; }
+.site-nav-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); border-top: 1px solid var(--sidebar-hover); padding: var(--space-2) var(--space-5); }
+/* Language dropdown, shared by both mounts. Generic rules only — no
+   per-language selector. The trigger shows the flag alone and carries the
+   current endonym in its accessible name; every option shows the flag AND its
+   native endonym, so nothing relies on a flag alone. */
+.language-menu { position: relative; }
+.language-menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.language-menu-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.language-menu-flag { flex: 0 0 auto; width: 18px; height: 12px; border-radius: 2px; }
+.language-menu-list {
+  position: absolute;
+  z-index: var(--z-50);
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  /* The flag-only trigger is ~44px wide, so a list that matched it would clip
+     the endonyms. 160px fits the longest ("Português") and still ends 60px
+     inside the fixed 240px rail. */
+  min-width: 160px;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--sh-3);
+}
+.language-menu-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+}
+.language-menu-option:hover { background: var(--surface-soft); }
+.language-menu-option.active { background: var(--surface-soft); }
+.language-menu-option[aria-selected="true"] { font-weight: 700; }
+.language-menu-option:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+
+/* Rail footer mount: language and theme sit side by side in a row, so both
+   controls size to their content — `.site-nav-link` is width:100% everywhere
+   else in the rail, and the trigger is width:100% in the drawer. The rail is
+   always dark navy in both themes, so the trigger borrows the sidebar tokens.
+   The list opens upward because the footer sits at the bottom of the fixed
+   rail. */
+.site-nav-footer .language-menu { margin: 0; }
+.site-nav-footer .language-menu-trigger {
+  width: auto;
+  border-color: var(--sidebar-hover);
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+}
+.site-nav-footer .language-menu-list { top: auto; bottom: calc(100% + var(--space-1)); }
+.site-nav-footer .site-nav-link { width: auto; }
 
 /* Main layout — the sidebar offset must match `.site-nav`'s 240px rail. */
 .app-layout { display: flex; min-height: 100vh; }
@@ -1898,6 +1970,15 @@ select:focus,
   right: var(--space-3);
   height: 3px;
   border-radius: 0 0 var(--radius-3) var(--radius-3);
+}
+
+/* A long translation degrades to an ellipsis instead of overflowing the bar.
+   Generic — never per-language. */
+.mobile-nav-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-nav-item.active .mobile-nav-label {

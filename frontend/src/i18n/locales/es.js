@@ -56,6 +56,7 @@ export default {
   'nav.views': 'Vistas',
   'nav.workspace': 'Espacio de trabajo',
 
+  'settings.darkTheme': 'Tema oscuro',
   'settings.language': 'Idioma',
 
   'shell.drawRanFixtures': {
@@ -64,6 +65,7 @@ export default {
   },
   'shell.footer': 'Simulador de sorteo no oficial para pronósticos de aficionados.',
   'shell.interactiveStarted': '{{player}} inició un sorteo interactivo: elige equipos bombo a bombo.',
+  'shell.leaguesTitle': 'Ligas',
   'shell.liveScoresUnavailable': 'Resultados en vivo no disponibles. Se reintentará cada 30 segundos; se muestran los últimos resultados conocidos.',
   'shell.loadingPredictionLab': 'Cargando laboratorio de pronósticos',
   'shell.loadingSeasonData': 'Cargando datos de la temporada',
