@@ -67,11 +67,7 @@ jobs:
         run: npm run build
 
       - name: Run node --test suites
-        run: >-
-          node --test
-          frontend/src/test/tieUtils.test.mjs
-          frontend/src/test/careerEngine.test.mjs
-          frontend/src/test/reconcile.test.mjs
+        run: node --test
 
       - name: Upload built UI
         uses: actions/upload-artifact@v4
