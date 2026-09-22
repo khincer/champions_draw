@@ -7,7 +7,7 @@ import SegmentControl from '../components/SegmentControl';
 import StandingsTable from '../components/StandingsTable';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import { apiFetch } from '../lib/api';
-import { shortTime } from '../lib/format';
+import { useI18n } from '../i18n';
 import { toMiniRow } from '../lib/teams';
 import { formatAggregate, pairPlayoffTies } from '../lib/tieUtils';
 import TeamPage from '../components/TeamPage';
@@ -52,6 +52,7 @@ function GroupStandingsTables({ rows, onOpenTeam }) {
 /* Read-only playoff tie in the league Playoffs view: the aggregate line plus
    its legs, paired client-side by pairPlayoffTies (LPV-4). No score editing. */
 function PlayoffTieCard({ tie }) {
+  const { formatTime } = useI18n();
   const { legs, aggregate } = tie;
   return (
     <section className="playoff-tie-card" aria-label="Playoff tie">
@@ -73,7 +74,7 @@ function PlayoffTieCard({ tie }) {
               <Crest team={m.away_team} size="sm" />
               <Plane size={12} className="playoff-venue-icon" />
             </div>
-            <span className="tie-kickoff">{shortTime(m.kickoff)}</span>
+            <span className="tie-kickoff">{formatTime(m.kickoff)}</span>
           </div>
         ))}
       </div>

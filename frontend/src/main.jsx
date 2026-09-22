@@ -28,8 +28,28 @@ import { clearLocal, loadLocal } from './lib/predictionStorage';
 import { apiFetch } from './lib/api';
 import { inHomeRange } from './lib/format';
 import { groupBy } from './lib/groupBy';
+import { I18nProvider } from './i18n';
 
 const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
+
+/* Guarded exactly like lib/theme.js: a blocked read yields the default, a
+   blocked write degrades to session-only. The mount must survive blocked
+   storage rather than throwing inside a state initializer. */
+function readStoredPlayerName() {
+  try {
+    return window.localStorage.getItem(PLAYER_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function writeStoredPlayerName(name) {
+  try {
+    window.localStorage.setItem(PLAYER_STORAGE_KEY, name);
+  } catch {
+    // Storage unavailable (private mode) — the name still applies for this session.
+  }
+}
 
 /* ─── App ─── */
 
@@ -57,7 +77,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedTeamId, setSelectedTeamId] = useState(null);
   const [teamDetailId, setTeamDetailId] = useState(null);
-  const [playerName, setPlayerName] = useState(() => localStorage.getItem(PLAYER_STORAGE_KEY) || '');
+  const [playerName, setPlayerName] = useState(readStoredPlayerName);
   const [drawSeed, setDrawSeed] = useState('prediction-1');
   const [drawMethod, setDrawMethod] = useState('sat');
   const [interactiveState, setInteractiveState] = useState(null);
@@ -232,7 +252,7 @@ function App() {
       const season = seasons.find((s) => String(s.id) === String(selectedSeasonId));
       const seed = season ? season.name : `prediction-${Date.now()}`;
       const normalizedPlayer = playerName.trim() || 'Guest player';
-      localStorage.setItem(PLAYER_STORAGE_KEY, normalizedPlayer);
+      writeStoredPlayerName(normalizedPlayer);
       setPlayerName(normalizedPlayer);
       setDrawSeed(seed);
 
@@ -519,4 +539,9 @@ function App() {
   );
 }
 
-render(<App />, document.getElementById('app'));
+render(
+  <I18nProvider>
+    <App />
+  </I18nProvider>,
+  document.getElementById('app'),
+);
