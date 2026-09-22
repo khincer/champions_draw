@@ -1,10 +1,7 @@
 import json
-import time
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
 
 import django
 from django.shortcuts import get_object_or_404
@@ -15,26 +12,29 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .management.commands.sync_real_fixture_results import (
-    PROMIEDOS_URL,
-    fetch,
-    fixture_id as real_fixture_id,
-    parse_promiedos_live,
-    resolve,
+	parse_promiedos_live,
+	resolve,
 )
 
 from .models import (
-	InteractiveDrawPick,
 	League,
 	LeagueMatch,
 	LeagueMatchPrediction,
 	LeagueStanding,
 	Prediction,
 	RealFixturePrediction,
-	RealFixtureResult,
 	Season,
 	SeasonDraw,
 	SeasonMatchup,
 	SeasonTeam,
+)
+from .selectors import (
+	active_season,
+	fetch_promiedos_live_html,
+	get_season_matchups,
+	interactive_state,
+	league_fixture_state,
+	load_real_fixtures,
 )
 from .serializers import (
 	CompactSeasonMatchupSerializer,
@@ -43,10 +43,10 @@ from .serializers import (
 	SeasonMatchupSerializer,
 	SeasonSerializer,
 	SeasonTeamSerializer,
-	_normalize_team_name,
+	serialize_league_match,
 )
 from .services.draw import DrawError, generate_season_draw
-from .services.interactive_draw import current_pot, pick_team, start_or_resume
+from .services.interactive_draw import pick_team, start_or_resume
 from .services.match_details import (
 	build_header,
 	build_league_header,
@@ -67,7 +67,7 @@ def get_requested_or_active_season(request) -> Season:
 	if season_name:
 		return get_object_or_404(Season, name=season_name)
 
-	season = Season.objects.filter(is_active=True).order_by('-name').first()
+	season = active_season()
 	if season is None:
 		raise NotFound('No active season found. Provide ?season=<season-name>.')
 
@@ -155,11 +155,6 @@ class SeasonDrawAPIView(APIView):
 		method = str(request.data.get('method', 'sat'))
 		reset = parse_bool(request.data.get('reset', False))
 
-		# Cleanup all prediction data for this season on every fresh simulation.
-		# Cascade deletes wipe MatchPrediction/PlayoffPrediction/KnockoutPrediction
-		# via the FK to Prediction.  Matches are only wiped by the draw services
-		# themselves, so placing this here covers both the interactive and SAT
-		# paths in a single call site.
 		if reset:
 			Prediction.objects.filter(season=season).delete()
 
@@ -173,7 +168,7 @@ class SeasonDrawAPIView(APIView):
 				)
 			except DrawError as exc:
 				return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-			return Response(_interactive_state(season, draw), status=status.HTTP_200_OK)
+			return Response(interactive_state(season, draw), status=status.HTTP_200_OK)
 
 		try:
 			summary = generate_season_draw(
@@ -223,32 +218,9 @@ class InteractivePickAPIView(APIView):
 		except (DrawError, ValueError) as exc:
 			return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-		payload = _interactive_state(season, result.draw)
+		payload = interactive_state(season, result.draw)
 		payload['auto_finalized'] = result.auto_finalized
 		return Response(payload, status=status.HTTP_200_OK)
-
-
-def _interactive_state(season: Season, draw: SeasonDraw) -> dict:
-	"""State payload the manual draw UI needs: draw, teams, provisional
-	matchups, picks in order, and the pot currently on the clock."""
-	entries = list(
-		SeasonTeam.objects.select_related('season', 'team', 'team__association')
-		.filter(season=season)
-		.order_by('pot', 'seeding_position', 'team__name')
-	)
-	matchups = list(get_season_matchups(season))
-	picks = list(
-		InteractiveDrawPick.objects.filter(draw=draw)
-		.order_by('pick_order')
-		.values('season_team_id', 'pick_order')
-	)
-	return {
-		'draw': SeasonDrawSerializer(draw).data,
-		'teams': CompactSeasonTeamSerializer(entries, many=True).data,
-		'matchups': CompactSeasonMatchupSerializer(matchups, many=True).data,
-		'picks': picks,
-		'current_pot': current_pot(draw),
-	}
 
 
 class SeasonMatchupListAPIView(generics.ListAPIView):
@@ -297,85 +269,11 @@ class UiSeasonStateAPIView(APIView):
 		)
 
 
-def _load_real_fixtures(season: Season) -> list:
-	"""Read the real league-phase fixtures joined to SeasonTeam entries.
-
-	Returns the same payload shape RealSeasonFixturesAPIView serves, so
-	prediction sync and the fixtures endpoint agree on ids, teams, and the
-	closed computation.
-	"""
-	fixtures_path = Path(__file__).resolve().parent / 'data' / 'ucl_league_phase_real_fixtures_2026_27.json'
-	with open(fixtures_path, 'r', encoding='utf-8') as f:
-		data = json.load(f)
-
-	# Live scores come from the DB (Railway's filesystem is ephemeral and not
-	# shared across services); the JSON above is only the static calendar.
-	db_results = {
-		row.fixture_id: {'home_goals': row.home_goals, 'away_goals': row.away_goals}
-		for row in RealFixtureResult.objects.all()
-	}
-
-	entries = SeasonTeam.objects.select_related('team', 'team__association').filter(season=season)
-	team_map = {}
-	for entry in entries:
-		team_map[_normalize_team_name(entry.team.name)] = entry
-		team_map[entry.team.name] = entry
-
-	matchups = []
-	matchday_idx = defaultdict(int)
-	for fixture in data['fixtures']:
-		md = fixture['matchday']
-		matchday_idx[md] += 1
-		idx = matchday_idx[md]
-		fid = real_fixture_id(md, idx)
-
-		home_name = fixture['home']
-		away_name = fixture['away']
-		home_entry = team_map.get(home_name) or team_map.get(_normalize_team_name(home_name))
-		away_entry = team_map.get(away_name) or team_map.get(_normalize_team_name(away_name))
-
-		if home_entry is None:
-			raise NotFound(f'Team not found in season: {home_name}')
-		if away_entry is None:
-			raise NotFound(f'Team not found in season: {away_name}')
-
-		# Fixtures close 10 minutes before kickoff. Kickoff is a naive
-		# Europe/Paris wall-time string from the seed JSON.
-		kickoff_utc = (
-			datetime.fromisoformat(fixture['kickoff'])
-			.replace(tzinfo=ZoneInfo('Europe/Paris'))
-			.astimezone(timezone.utc)
-		)
-		closed = datetime.now(timezone.utc) >= (kickoff_utc - timedelta(minutes=10))
-
-		matchups.append({
-			'id': fid,
-			'home_team': CompactSeasonTeamSerializer(home_entry).data,
-			'away_team': CompactSeasonTeamSerializer(away_entry).data,
-			'home_entry': home_entry,
-			'away_entry': away_entry,
-			'matchday': md,
-			'home_goals': None,
-			'away_goals': None,
-			'status': 'SCHEDULED',
-			# Serve the kickoff as an absolute UTC instant so the client can
-			# format it in the user's local timezone (naive strings would be
-			# misread as local wall time).
-			'kickoff': kickoff_utc.isoformat().replace('+00:00', 'Z'),
-			# DB result wins; the JSON's static result is the fallback.
-			'result': db_results.get(fid) or fixture.get('result'),
-			'closed': closed,
-		})
-
-	return matchups
-
-
 class RealSeasonFixturesAPIView(APIView):
 	def get(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
-		matchups = _load_real_fixtures(season)
+		matchups = load_real_fixtures(season)
 
-		# Strip the ORM entry refs before serializing the payload.
 		for m in matchups:
 			m.pop('home_entry', None)
 			m.pop('away_entry', None)
@@ -387,7 +285,6 @@ class RealSeasonFixturesAPIView(APIView):
 
 
 class RealPredictionSyncAPIView(APIView):
-	"""Read/write RealFixturePrediction rows keyed by fixture id (`real-{md}-{idx}`)."""
 
 	def get(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
@@ -399,7 +296,7 @@ class RealPredictionSyncAPIView(APIView):
 		if prediction is None:
 			return Response({'player_name': player_name, 'predictions': []}, status=status.HTTP_200_OK)
 
-		fixture_by_teams = {(m['home_entry'].id, m['away_entry'].id): m for m in _load_real_fixtures(season)}
+		fixture_by_teams = {(m['home_entry'].id, m['away_entry'].id): m for m in load_real_fixtures(season)}
 		rows = RealFixturePrediction.objects.filter(prediction=prediction)
 		predictions = []
 		for row in rows:
@@ -421,7 +318,7 @@ class RealPredictionSyncAPIView(APIView):
 			return Response({'detail': 'player_name is required'}, status=status.HTTP_400_BAD_REQUEST)
 
 		predictions_data = request.data.get('predictions', [])
-		fixtures = _load_real_fixtures(season)
+		fixtures = load_real_fixtures(season)
 		fixture_by_id = {m['id']: m for m in fixtures}
 
 		closed_ids = []
@@ -432,7 +329,6 @@ class RealPredictionSyncAPIView(APIView):
 			if fixture['closed']:
 				closed_ids.append(fixture['id'])
 
-		# All-or-nothing: reject the whole batch if any fixture is closed.
 		if closed_ids:
 			return Response(
 				{'detail': 'Prediction closed for some fixtures', 'closed': closed_ids},
@@ -463,32 +359,11 @@ class RealPredictionSyncAPIView(APIView):
 		return Response({'synced': synced}, status=status.HTTP_200_OK)
 
 
-# Short TTL so several viewers polling every 30s don't each hit promiedos; a
-# 15s cache caps upstream traffic at ~4 fetches/min regardless of audience.
-_PROMIEDOS_LIVE_CACHE = {'at': 0.0, 'html': None}
-
-
-def _fetch_promiedos_live_html():
-	now = time.monotonic()
-	cached = _PROMIEDOS_LIVE_CACHE
-	if cached['html'] is None or now - cached['at'] > 15:
-		cached['html'] = fetch(PROMIEDOS_URL, source='Promiedos')
-		cached['at'] = now
-	return cached['html']
-
-
 class LiveScoresAPIView(APIView):
-	"""Current in-play scores for the real fixtures, labeled by fixture id.
-
-	Polled by the frontend every 30s while a matchday is in progress. Nothing
-	is persisted here: final results keep flowing through the fixtures JSON.
-	A promiedos outage returns 502 with an empty payload, so the UI simply
-	keeps showing 'Awaiting result' rows instead of failing.
-	"""
 
 	def get(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
-		matchups = _load_real_fixtures(season)
+		matchups = load_real_fixtures(season)
 
 		fixture_id_by_pair = {}
 		for m in matchups:
@@ -496,7 +371,7 @@ class LiveScoresAPIView(APIView):
 			fixture_id_by_pair.setdefault(key, m['id'])
 
 		try:
-			live_games = parse_promiedos_live(_fetch_promiedos_live_html())
+			live_games = parse_promiedos_live(fetch_promiedos_live_html())
 		except (RuntimeError, ValueError, KeyError, IndexError, json.JSONDecodeError) as exc:
 			return Response({'live': {}, 'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
@@ -514,12 +389,11 @@ class LiveScoresAPIView(APIView):
 
 
 class MatchDetailsAPIView(APIView):
-	"""Match detail: header from own fixtures, detail from football-data listing."""
 
 	def get(self, request, pk, fixture_id):
 		season = get_object_or_404(Season, pk=pk)
 		now = datetime.now(timezone.utc)
-		fixtures = _load_real_fixtures(season)
+		fixtures = load_real_fixtures(season)
 
 		fixture = None
 		for f in fixtures:
@@ -529,7 +403,6 @@ class MatchDetailsAPIView(APIView):
 		if fixture is None:
 			raise NotFound(f'Fixture not found: {fixture_id}')
 
-		# Eligibility: must have a result OR kickoff has passed
 		result = fixture.get('result')
 		kickoff_dt = datetime.fromisoformat(fixture['kickoff'].replace('Z', '+00:00'))
 		if result is None and now < kickoff_dt:
@@ -582,9 +455,6 @@ class LeagueMatchDetailsAPIView(APIView):
 		if match is None:
 			raise NotFound(f'Fixture not found: {match_id}')
 
-		# Eligibility mirrors the UCL route: a finished match, or one whose
-		# kickoff has passed. Football-data marks a league match finished with
-		# status == 'FINISHED'.
 		now = datetime.now(timezone.utc)
 		if match.status != 'FINISHED' and (match.kickoff is None or now < match.kickoff):
 			raise NotFound('Fixture not yet eligible for details')
@@ -621,22 +491,6 @@ class LeagueMatchDetailsAPIView(APIView):
 			'timeline': None,
 			'lineups': None,
 		}, status=status.HTTP_200_OK)
-
-
-def get_season_matchups(season: Season):
-	return (
-		SeasonMatchup.objects.select_related(
-			'season',
-			'home_team__season',
-			'home_team__team',
-			'home_team__team__association',
-			'away_team__season',
-			'away_team__team',
-			'away_team__team__association',
-		)
-		.filter(season=season)
-		.order_by('matchday', 'home_team__team__name', 'away_team__team__name')
-	)
 
 
 def parse_bool(value) -> bool:
@@ -694,7 +548,6 @@ class LeagueListAPIView(generics.ListAPIView):
 		return Response(data)
 
 
-# --- Season group standings (CONMEBOL) ---
 
 
 class SeasonGroupStandingsAPIView(APIView):
@@ -716,7 +569,6 @@ class SeasonGroupStandingsAPIView(APIView):
 			.filter(season=season, matchday__isnull=False)
 		)
 
-		# Union-find over SeasonTeam ids; each connected component is a group.
 		parent = {}
 
 		def find(node):
@@ -845,20 +697,6 @@ class LeagueFixtureListAPIView(APIView):
 		})
 
 
-# football-data reports these before a ball is kicked. Anything else (FINISHED,
-# IN_PLAY, POSTPONED, …) is not open for a new pick.
-PREDICTABLE_LEAGUE_STATUSES = {'SCHEDULED', 'TIMED'}
-
-
-def _league_fixture_state(match, now):
-	"""'open' | 'closed' | 'unscheduled' for prediction writes."""
-	if match.kickoff is None:
-		return 'unscheduled'
-	if match.status not in PREDICTABLE_LEAGUE_STATUSES or match.kickoff <= now:
-		return 'closed'
-	return 'open'
-
-
 def _clean_goals(value):
 	"""A non-negative int or None; ValueError on anything else (bad score)."""
 	if value is None or value == '':
@@ -873,33 +711,6 @@ def _clean_goals(value):
 	if number < 0:
 		raise ValueError('Goals must be a non-negative integer')
 	return number
-
-
-def _serialize_league_match(match, prediction, now):
-	"""A league fixture plus the player's pick and the real result if played."""
-	return {
-		'id': match.match_id,
-		'home_name': match.home_name,
-		'away_name': match.away_name,
-		'home_short': match.home_short,
-		'away_short': match.away_short,
-		'home_crest': match.home_crest,
-		'away_crest': match.away_crest,
-		'kickoff': match.kickoff.isoformat() if match.kickoff else None,
-		'status': match.status,
-		'matchday': match.matchday,
-		'result': (
-			{'home_goals': match.home_goals, 'away_goals': match.away_goals}
-			if match.home_goals is not None and match.away_goals is not None
-			else None
-		),
-		'closed': _league_fixture_state(match, now) != 'open',
-		'prediction': (
-			{'home_goals': prediction.home_goals, 'away_goals': prediction.away_goals}
-			if prediction is not None
-			else None
-		),
-	}
 
 
 class LeagueMatchPredictionAPIView(APIView):
@@ -938,9 +749,9 @@ class LeagueMatchPredictionAPIView(APIView):
 		return Response({
 			'league': {'id': league.id, 'code': league.code, 'name': league.name, 'emblem_url': league.emblem_url},
 			'player_name': player_name,
-			'finished': [_serialize_league_match(m, by_match_id.get(m.match_id), now) for m in finished],
-			'inPlay': [_serialize_league_match(m, by_match_id.get(m.match_id), now) for m in in_play],
-			'upcoming': [_serialize_league_match(m, by_match_id.get(m.match_id), now) for m in upcoming],
+			'finished': [serialize_league_match(m, by_match_id.get(m.match_id), now) for m in finished],
+			'inPlay': [serialize_league_match(m, by_match_id.get(m.match_id), now) for m in in_play],
+			'upcoming': [serialize_league_match(m, by_match_id.get(m.match_id), now) for m in upcoming],
 		})
 
 	def put(self, request, league_id):
@@ -965,7 +776,7 @@ class LeagueMatchPredictionAPIView(APIView):
 			match = by_match_id.get(match_id)
 			if match is None:
 				return Response({'detail': f'Unknown fixture id: {match_id}'}, status=status.HTTP_400_BAD_REQUEST)
-			state = _league_fixture_state(match, now)
+			state = league_fixture_state(match, now)
 			if state == 'unscheduled':
 				unscheduled_ids.append(match_id)
 			elif state == 'closed':
@@ -1025,7 +836,7 @@ class HomepageMatchesAPIView(APIView):
 			else:
 				ucl_season = Season.objects.filter(competition='UCL').order_by('-name').first()
 			if ucl_season is not None:
-				for f in _load_real_fixtures(ucl_season):
+				for f in load_real_fixtures(ucl_season):
 					rows.append({
 						'id': f['id'],
 						'season_id': ucl_season.id,
@@ -1073,18 +884,7 @@ class HomepageMatchesAPIView(APIView):
 					'closed': m.status == 'FINISHED',
 					'status': m.status,
 				})
-		# Real-league fixtures (the same data that powers the Leagues tab).
-		# LeagueMatch is flat, so the nested home_team/away_team objects the
-		# homepage cards expect are built here (Crest reads logo_url). Like the
-		# UCL block above, this is best-effort: a failure must not drop the UCL
-		# or CONMEBOL rows already collected.
 		try:
-			# CL is deliberately excluded. The UCL block above already serves the
-			# Champions League from the checked-in official fixture list, which is
-			# the richer source (full league phase with matchdays). Including the
-			# football-data CL rows as well produced a second, differently-named
-			# "UEFA Champions League" pill beside the "Champions League" one, and
-			# would duplicate fixtures once the two sources overlap.
 			active_leagues = list(League.objects.filter(is_active=True).exclude(code='CL'))
 			if active_leagues:
 				league_matches = list(
@@ -1094,8 +894,6 @@ class HomepageMatchesAPIView(APIView):
 				for m in league_matches:
 					rows.append({
 						'id': f'lm-{m.match_id}',
-						# LeagueMatch has no Season FK; the league id addresses the
-						# league-scoped match-detail route. season_id stays None.
 						'season_id': None,
 						'league_id': m.league_id,
 						'competition': m.league.name,
@@ -1122,8 +920,6 @@ class HomepageMatchesAPIView(APIView):
 						'status': m.status,
 					})
 		except Exception:
-			# League fixture loading is best-effort; the UCL and CONMEBOL rows
-			# collected above must survive any failure here.
 			pass
 		rows.sort(key=lambda r: r['kickoff'] or '')
 		return Response({'matchups': rows})

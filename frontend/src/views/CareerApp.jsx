@@ -10,29 +10,20 @@ import {
   Trophy,
 } from 'lucide-preact';
 
-// Shared primitives (task 5.3): one crest renderer, one segment control, one
-// metric card. This view keeps no local copy of any of them.
 import Crest from '../components/Crest';
 import Metric from '../components/Metric';
 import SegmentControl from '../components/SegmentControl';
-import clubData from '../careerClubs.json';
+import clubData from '../assets/careerClubs.json';
 import {
   applyCareerChoice,
   createCareer,
   isCareerState,
   POSITIONS,
   summarizeCareer,
-} from '../careerEngine.mjs';
+} from '../lib/careerEngine.mjs';
 
 export const CAREER_STORAGE_KEY = 'champions_draw_career_v1';
 
-/* Cross-view draft memory (task 5.4). `App` gates career on `view === 'career'`,
-   so navigating away unmounts this view and takes its local state with it. The
-   builder flag and the half-filled draft therefore live in module scope: a trip
-   to another view and back must not reset an in-progress identity build.
-   Module memory is deliberately not persistence — no storage key is involved,
-   `champions_draw_career_v1` is still written only when a career is committed,
-   and losing the draft on a page reload is intended. */
 const builderMemory = { open: false, draft: null };
 
 const EMPTY_IDENTITY = {

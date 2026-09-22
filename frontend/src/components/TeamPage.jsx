@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { ArrowLeft, RefreshCw } from 'lucide-preact';
-import Button from '../components/Button';
-import Crest from '../components/Crest';
-import LeagueFixtureRow from '../components/LeagueFixtureRow';
-import StandingsTable from '../components/StandingsTable';
-import { EmptyState, ErrorState, Skeleton } from '../components/States';
+import Button from './Button';
+import Crest from './Crest';
+import LeagueFixtureRow from './LeagueFixtureRow';
+import StandingsTable from './StandingsTable';
+import { EmptyState, ErrorState, Skeleton } from './States';
 import { apiFetch } from '../lib/api';
 import { normTeamName } from '../lib/teams';
 
@@ -14,9 +14,6 @@ export default function TeamPage({
 }) {
   const [ucl, setUcl] = useState(null);
   const [uclReq, setUclReq] = useState({ status: 'idle', error: '' });
-  /* A response from a league the user already left must not overwrite the
-     current panel, so each request carries a token and only the newest one
-     writes state. */
   const uclTokenRef = useRef(0);
   const uclLeague = (league && league.code === 'CL') ? null : (leagues || []).find((l) => l.code === 'CL');
 
@@ -209,13 +206,13 @@ export default function TeamPage({
           <div className="panel-card">
             <h3 className="panel-title">Honours</h3>
             <p className="muted small">
-              Trophy history is not synced yet. Add API-Football sync (key already in .env) to populate it.
+              Trophy history is not synced yet.
             </p>
           </div>
           <div className="panel-card">
             <h3 className="panel-title">Squad</h3>
             <p className="muted small">
-              Player data is not synced yet. Add API-Football sync (key already in .env) to populate it.
+              Player data not synced yet.
             </p>
           </div>
         </aside>

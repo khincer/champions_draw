@@ -1,8 +1,8 @@
-import FixtureRow from './components/FixtureRow';
-import Button from './components/Button';
+import FixtureRow from './FixtureRow';
+import Button from './Button';
 import ScoreInput from './ScoreInput';
-import { groupBy } from './lib/groupBy';
-import { predictMatch } from './matchOdds';
+import { groupBy } from '../lib/groupBy';
+import { predictMatch } from '../lib/matchOdds';
 
 export default function MatchdayScoreBoard({
   matchups,

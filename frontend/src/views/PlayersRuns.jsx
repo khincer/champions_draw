@@ -2,9 +2,6 @@ import { Check, History, Loader, X } from 'lucide-preact';
 import { StateMessage } from '../components/States';
 import { shortDate } from '../lib/format';
 
-/* Status marker + its cue (Design.md §2, §7.7). The icon inside the marker
-   states the status, so the marker is still readable without colour; the
-   visually hidden label names it for assistive tech. */
 const STATUS_CUE = {
   completed: { Icon: Check, label: 'Completed' },
   failed: { Icon: X, label: 'Failed' },

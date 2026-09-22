@@ -4,30 +4,17 @@ import Crest from '../components/Crest';
 import Button from '../components/Button';
 import SegmentControl from '../components/SegmentControl';
 import { EmptyState, ErrorState, LiveRegion, Skeleton } from '../components/States';
-import { getPlayerName } from '../predictionStorage';
+import { getPlayerName } from '../lib/predictionStorage';
 import { inHomeRange, shortDay, shortTime } from '../lib/format';
 
-/* Home composition (Design.md §7.2, task 3.3): greeting + live hub + quick
-   actions. No charts and no recent-draw section — the maintainer confirmed that
-   scope. The hub content (today/yesterday plus the latest-results strip) was
-   moved out of `main.jsx` verbatim; `HomeMatchCard` stays local because nothing
-   else renders it.
 
-   The competition filter narrows the feed `App` already fetches; no endpoint or
-   payload changed. The shortcuts mirror `SiteNav`; `App` owns the view state and
-   passes its switch down as `onNavigate`, so this view never holds navigation
-   state of its own. */
 
 const QUICK_ACTIONS = [
   { key: 'real', label: 'Real draw', icon: Swords },
   { key: 'workspace', label: 'Draw simulator', icon: Trophy },
-  { key: 'career', label: 'Career mode', icon: UserRound },
   { key: 'teams', label: 'Leagues', icon: LayoutGrid },
 ];
 
-/* The card itself is not a control: its opener is the real button inside the
-   footer, so the card carries no `tabIndex`. The opener names the fixture it
-   opens instead of a bare "View match details". */
 function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef }) {
   const result = match.result;
   const eligible = result || (match.kickoff && new Date(match.kickoff) <= new Date());
@@ -101,8 +88,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
 export default function Homepage({ matches, matchesStatus, matchesError, onRetryMatches, liveScores, liveScoresError, onOpenMatch, onNavigate, playerName, seasonId, detailReturnFocusRef }) {
   const [competition, setCompetition] = useState('all');
 
-  /* One pill per competition in the feed, remembering the first emblem a row
-     carries so a mix of null and set emblems still yields an icon. */
+  
   const competitions = useMemo(() => {
     const byName = new Map();
     for (const match of matches) {
@@ -159,7 +145,6 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
       visibleMatches
         .filter((m) => m.result)
         .sort((a, b) => (b.kickoff || '').localeCompare(a.kickoff || ''))
-        // ponytail: hardcoded cap of 6 cards; raise when the homepage routinely shows more fresh results
         .slice(0, 6),
     [visibleMatches],
   );
@@ -170,21 +155,20 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
     <div className="homepage">
       <header className="home-intro">
         <p className="home-greeting">{name ? `Welcome back, ${name}` : 'Welcome'}</p>
-        <p className="home-intro-sub">Today's results, live scores and shortcuts in one place.</p>
+        <section className="home-quick-actions" aria-label="Quick actions">
+        {QUICK_ACTIONS.map(({ key, label, icon: Icon }) => (
+          <Button key={key} variant="secondary" onClick={() => onNavigate(key)}>
+            <Icon size={16} aria-hidden="true" />
+            {label}
+          </Button>
+        ))}
+      </section>
       </header>
 
-      {/* The hub's live region (task 4.2). Mounted once for the life of the view:
-          a poll tick rewrites its text and nothing else, so there is no
-          per-tick announcement and no node churn. The slot reserves a line so a
-          failure appearing or clearing never shifts the page under a scrolled
-          reader, and a failure lands here instead of the page error bar. */}
       <div className="home-live-slot">
         <LiveRegion message={liveScoresError} tone={liveScoresError ? 'error' : 'info'} />
       </div>
 
-      {/* A refresh failure is not the live poll (task 4.1): the cards already on
-          screen stay, and this names what failed with a retry that re-issues
-          only the matches feed. The page never enters its page-error state. */}
       {matchesStatus === 'success' && matchesError ? (
         <ErrorState
           title="Matches could not refresh"
@@ -194,18 +178,9 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
         />
       ) : null}
 
-      <section className="home-quick-actions" aria-label="Quick actions">
-        {QUICK_ACTIONS.map(({ key, label, icon: Icon }) => (
-          <Button key={key} variant="secondary" onClick={() => onNavigate(key)}>
-            <Icon size={16} aria-hidden="true" />
-            {label}
-          </Button>
-        ))}
-      </section>
+      
 
       <div className="homepage-matches">
-        {/* Competition filter (above the results strip). It narrows the results
-            and today/yesterday sections; "All" restores the whole feed. */}
         {matchesStatus === 'success' && filterItems.length > 1 ? (
           <SegmentControl
             items={filterItems}

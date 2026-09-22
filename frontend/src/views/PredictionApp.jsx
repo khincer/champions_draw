@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import Button from './components/Button';
-import SegmentControl from './components/SegmentControl';
-import StandingsTable from './components/StandingsTable';
-import MatchdayScoreBoard from './MatchdayScoreBoard';
-import PlayoffBracket from './PlayoffBracket';
-import KnockoutBracket from './KnockoutBracket';
-import { loadLocal, saveLocal } from './predictionStorage';
-import { useReconciliation } from './lib/useReconciliation';
-import { computeStandings, defenseNorm, eliminationBoost, expectedGoals, teamStrength } from './standingsCalc';
-import { predictMatch } from './matchOdds';
-import { ErrorState, Skeleton } from './components/States';
+import Button from '../components/Button';
+import SegmentControl from '../components/SegmentControl';
+import StandingsTable from '../components/StandingsTable';
+import MatchdayScoreBoard from '../components/MatchdayScoreBoard';
+import PlayoffBracket from '../components/PlayoffBracket';
+import KnockoutBracket from '../components/KnockoutBracket';
+import { loadLocal, saveLocal } from '../lib/predictionStorage';
+import { useReconciliation } from '../lib/useReconciliation';
+import { computeStandings, defenseNorm, eliminationBoost, expectedGoals, teamStrength } from '../lib/standingsCalc';
+import { predictMatch } from '../lib/matchOdds';
+import { ErrorState, Skeleton } from '../components/States';
 
 const SUB_TABS = [
   ['scores', 'Score Matches'],
@@ -18,9 +18,7 @@ const SUB_TABS = [
   ['bracket', 'Bracket'],
 ];
 
-/* The manual save and the 30s auto-sync post the same data to the same endpoint,
-   so both failures read the same and name the same retry — Save Matchday
-   (task 4.3's copy, kept verbatim; task 4.1 removed the auto-sync's silence). */
+
 function saveFailureCopy(err) {
   return `Save failed: ${err.message}. Your scores are still here — use Save Matchday to retry.`;
 }
@@ -43,19 +41,11 @@ export default function PredictionApp({
   const [savingMatchday, setSavingMatchday] = useState(false);
   const [savingPlayoffs, setSavingPlayoffs] = useState(false);
   const [savingKnockout, setSavingKnockout] = useState(false);
-  /* Bumped only after a successful bulk sync (`/sync/` or `/playoffs/sync/`).
-     Reconciliation's post-sync trigger rides on it; edits never touch it. */
   const [syncRevision, setSyncRevision] = useState(0);
-  /* `{ kind, message }` — the kind picks the retry, so a failed write can only
-     ever re-issue the write that failed (US:no-silent-failure). */
   const [error, setError] = useState(null);
   const [createStatus, setCreateStatus] = useState('idle');
   const [createError, setCreateError] = useState('');
   const syncTimer = useRef(null);
-  /* One writer at a time (task 4.3): the manual save and the 30s auto-sync post
-     the same sync endpoint, so whichever is in flight blocks the other. A ref,
-     not state, because the interval callback's closure is rebuilt on each render
-     and must not read a stale in-flight flag. */
   const writeInFlight = useRef(false);
 
   // Restore matchday from localStorage
@@ -82,9 +72,6 @@ export default function PredictionApp({
     [localData.matchPredictions],
   );
 
-  // Only count predictions for currently existing matchups.
-  // When a new draw is generated with reset=true, matchup IDs change
-  // and old localStorage entries must be excluded from standings.
   const validPredictions = useMemo(() => {
     const filtered = {};
     for (const [id, pred] of Object.entries(matchPredictions)) {
@@ -95,7 +82,6 @@ export default function PredictionApp({
     return filtered;
   }, [matchPredictions, validMatchupIds]);
 
-  // Save current matchday to localStorage
   const persistMatchday = useCallback((md) => {
     try {
       localStorage.setItem(STORAGE_STATE_KEY, JSON.stringify({ matchday: md }));
@@ -107,9 +93,6 @@ export default function PredictionApp({
     persistMatchday(md);
   }, [persistMatchday]);
 
-  // Create/get remote prediction on mount. Its own three states: the sheet
-  // cannot save anything without this record, so pending and failed are shown
-  // instead of an inert grid (US:four-state-contract).
   const createPrediction = useCallback(async () => {
     if (!seasonId || !playerName) return;
     setCreateStatus('loading');
@@ -185,8 +168,6 @@ export default function PredictionApp({
       }
       setError(null);
     } catch (e) {
-      /* Not silent (task 4.1): the auto-sync writes the same scores as the
-         manual save, so it reports the same failure and the same retry. */
       setError({ kind: 'matchday', message: saveFailureCopy(e) });
     } finally {
       writeInFlight.current = false;
@@ -222,9 +203,6 @@ export default function PredictionApp({
         persistMatchday(next);
       }
     } catch (e) {
-      /* Nothing was cleared: the scores are still in the inputs and the Save
-         control is still there, so the copy says both — what failed, what is
-         safe, and how to retry (Design.md §10–§11). */
       setError({ kind: 'matchday', message: saveFailureCopy(e) });
     } finally {
       writeInFlight.current = false;
@@ -260,8 +238,6 @@ export default function PredictionApp({
     });
   }, [matchups, seasonId, playerName, latestDrawSeed]);
 
-  // Fill only unscored fixtures with the modal scoreline of the joint Poisson
-  // model. Unlike Randomize, Predict never overwrites a manual pick.
   const handlePredictMatchday = useCallback((matchday) => {
     const md = String(matchday);
     const byMatchday = {};
@@ -566,9 +542,6 @@ export default function PredictionApp({
     );
   }, [knockoutBracket, localData.knockoutPredictions]);
 
-  /* Observe-only confirmation (tasks 6.3/6.4): GET-only, 30s per surface, silent
-     to users. None of these returned values is rendered, so reconciliation can
-     never gate or delay the surfaces. */
   const predictionId = remotePrediction?.id;
   useReconciliation('standings', { predictionId, clientValue: standings, revision: syncRevision });
   useReconciliation('playoffs', { predictionId, clientValue: playoffMatchups, revision: syncRevision });
@@ -723,7 +696,6 @@ export default function PredictionApp({
     if (!remotePrediction || !knockoutComplete) return;
     setSavingKnockout(true);
     try {
-      // Knockout scores are local-only by design; only the completion flag is synced.
       await apiFetch(`/predictions/${remotePrediction.id}/`, {
         method: 'PATCH',
         body: JSON.stringify({ is_knockout_complete: true }),
@@ -739,8 +711,6 @@ export default function PredictionApp({
     }
   }, [remotePrediction, knockoutComplete]);
 
-  /* Pending and failed create own the whole tab; retry re-issues only the POST
-     that failed. The skeleton keeps the sheet's settled dimensions. */
   if (createStatus === 'loading') {
     return (
       <div className="prediction-app">
@@ -762,7 +732,6 @@ export default function PredictionApp({
     );
   }
 
-  /* A failed write is retried by its own writer — never by re-issuing the others. */
   const writeError = error && {
     matchday: { title: 'Predictions could not be saved', retry: handleSaveMatchday, retryLabel: 'Save Matchday' },
     playoffs: { title: 'Playoff predictions could not be saved', retry: handleSavePlayoffs, retryLabel: 'Save Playoffs' },
@@ -934,8 +903,6 @@ function randomGoals(team, opponent, ctx = null) {
   return Math.min(samplePoisson(lambda), maxGoalsFor);
 }
 
-// Knuth's exact Poisson sampler; expectedGoals clamps lambda to [0.15, 5.5],
-// and the 0..6 clamp is the same ceiling the old shifted-array had.
 function samplePoisson(lambda) {
   const L = Math.exp(-lambda);
   let k = 0;

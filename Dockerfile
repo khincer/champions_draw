@@ -33,11 +33,6 @@ COPY --from=build /usr/local/lib/python3.13/site-packages /usr/local/lib/python3
 COPY --from=build /usr/local/bin/gunicorn /usr/local/bin/gunicorn
 COPY --from=build /app .
 
-# Informational only: Docker never binds this, and Railway routes to its own
-# dynamic $PORT. 8000 documents the fallback the CMD uses when $PORT is unset
-# (local docker compose), so it stays aligned with the ${PORT:-8000} bind below.
-EXPOSE 8000
-
 # Every service built from this image runs the same CMD, because Railway
 # honours the Dockerfile CMD and ignores each service's startCommand. The
 # role is chosen at runtime by SERVICE_ROLE inside docker-entrypoint.sh --

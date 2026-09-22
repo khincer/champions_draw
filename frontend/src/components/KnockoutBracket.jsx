@@ -1,5 +1,5 @@
-import Crest from './components/Crest';
-import { StateMessage } from './components/States';
+import Crest from './Crest';
+import { StateMessage } from './States';
 import ScoreInput from './ScoreInput';
 
 const ROUND_LABELS = { R16: 'Round of 16', QF: 'Quarter-finals', SF: 'Semi-finals', F: 'Final' };

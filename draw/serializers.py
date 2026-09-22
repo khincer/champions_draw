@@ -209,3 +209,33 @@ class SeasonMatchupSerializer(serializers.ModelSerializer):
             'status',
             'kickoff',
         ]
+
+
+def serialize_league_match(match, prediction, now):
+    """A league fixture plus the player's pick and the real result if played."""
+    # Imported here (not at module level) because selectors imports this module.
+    from .selectors import league_fixture_state
+
+    return {
+        'id': match.match_id,
+        'home_name': match.home_name,
+        'away_name': match.away_name,
+        'home_short': match.home_short,
+        'away_short': match.away_short,
+        'home_crest': match.home_crest,
+        'away_crest': match.away_crest,
+        'kickoff': match.kickoff.isoformat() if match.kickoff else None,
+        'status': match.status,
+        'matchday': match.matchday,
+        'result': (
+            {'home_goals': match.home_goals, 'away_goals': match.away_goals}
+            if match.home_goals is not None and match.away_goals is not None
+            else None
+        ),
+        'closed': league_fixture_state(match, now) != 'open',
+        'prediction': (
+            {'home_goals': prediction.home_goals, 'away_goals': prediction.away_goals}
+            if prediction is not None
+            else None
+        ),
+    }

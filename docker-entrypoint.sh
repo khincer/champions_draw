@@ -19,20 +19,27 @@ set -e
 
 case "${SERVICE_ROLE:-}" in
   cron-leagues)
-    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_promiedos_fixtures"
-    # Standings and season-level CONMEBOL data only. Both change slowly, so this
+    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_promiedos_fixtures, sync_match_history"
+    # Standings and season-level data only. All of it changes slowly, so this
     # stays a daily job. Fixtures and results moved to cron-results because they
     # change constantly: group these by change rate, not by the word "league".
     python manage.py sync_leagues
     # CONMEBOL (Libertadores / Sudamericana), a different source from the
     # football-data leagues above: Promiedos carries the current season when
     # API-Football's free plan blocks it, and needs no API key. Without this the
-    # homepage's CONMEBOL block has nothing to render -- neither
-    # sync_conmebol_fixtures nor sync_promiedos_fixtures was ever scheduled, so
-    # production has never had a Libertadores or Sudamericana season at all.
-    # --competition is required and accepts one value, so both run.
+    # homepage's CONMEBOL block has nothing to render -- nothing ever scheduled
+    # these syncs, so production had no Libertadores or Sudamericana season at
+    # all until they were run by hand. --competition is required and accepts one
+    # value, so both run.
     python manage.py sync_promiedos_fixtures --competition lib
     python manage.py sync_promiedos_fixtures --competition sud
+    # Rule 6 (no third consecutive season with the same home team in a pairing)
+    # reads SeasonMatchupHistory for the two seasons before the active one. If
+    # nothing populates that table the constraint is silently a no-op, so this
+    # must run: it is the only writer. Runs last because it maps API team names
+    # onto Team rows, which the syncs above create. --seasons is derived from
+    # the active season, so it stays correct as seasons roll forward.
+    python manage.py sync_match_history
     ;;
   cron-results)
     echo "[entrypoint] SERVICE_ROLE=cron-results -> sync_real_fixture_results, sync_league_fixtures"

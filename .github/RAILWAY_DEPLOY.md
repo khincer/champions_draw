@@ -21,53 +21,32 @@ over the JSON's static fallback at request time.
 
 ## Builder and start command
 
-The repo has both a root `Dockerfile` (whose `CMD` is gunicorn only) and a
-`Procfile`. Railway auto-detects a root Dockerfile in preference to Nixpacks, so
-without explicit config the deploy-time steps (`migrate`, seed import,
-`collectstatic`) would be skipped.
+Railway auto-detects the root `Dockerfile` and builds it for every service
+(confirmed live: build logs show the Dockerfile stages, builder is Railpack).
+There is no `railway.json` and no `Procfile` — the Dockerfile `CMD` runs
+`docker-entrypoint.sh`, which branches on the `SERVICE_ROLE` variable:
 
-`railway.json` pins the ambiguity:
+| `SERVICE_ROLE` | Startup |
+|---|---|
+| unset / other (web) | `migrate` → `bootstrap_season` → `collectstatic` → gunicorn |
+| `cron-leagues` | `sync_leagues` → `sync_league_fixtures` → `sync_promiedos_fixtures --competition lib` → `--competition sud` |
+| `cron-results` | `sync_real_fixture_results --source promiedos` |
 
-```json
-{
-  "build": { "builder": "NIXPACKS" },
-  "deploy": { "startCommand": "..." }
-}
-```
+Set `SERVICE_ROLE=cron-leagues` / `cron-results` on those services; leave it
+unset on web.
 
-Nixpacks is pinned because it is the setup documented in `AGENTS.md` and because
-the root `Dockerfile` is intentionally incomplete for deploy (its `CMD` omits
-`migrate`, the seed import and `collectstatic`). The `startCommand` is the same
-command as the `web:` line in `Procfile`, so the two stay interchangeable. The
-`Dockerfile` is left as a local/dev convenience and is not the deploy builder.
+The seed import is conditional and pinned inside the `bootstrap_season`
+management command:
 
-The start command, in order:
-
-```sh
-python manage.py migrate
-# bootstrap the 2026-27 season only when it does not exist yet; then pin the
-# intended active season. Runs import + seeding on a fresh DB, no-ops on redeploy.
-python manage.py shell -c "from django.core.management import call_command; from draw.models import Season; call_command('import_seed_input','draw/data/ucl_league_phase_seed_input_2026_27.json','--seed') if not Season.objects.filter(name='2026-27').exists() else None; Season.objects.exclude(name='2026-27').update(is_active=False); Season.objects.filter(name='2026-27').update(is_active=True)"
-python manage.py collectstatic --noinput
-gunicorn champions_draw.wsgi:application --bind 0.0.0.0:${PORT:-8000}
-```
-
-Why the seed import is conditional and pinned:
-
-- The old `Procfile` ran `import_seed_input ... --set-active --seed` on every
-  deploy. That deactivated every other season and forced `2025-26` active, while
-  the app serves `2026-27` fixtures. Every redeploy flipped the active season
-  back, recomputed seeding positions and deleted `SeasonTeam` rows absent from
-  the seed file.
-- Import runs **only when `2026-27` does not exist**, so a fresh database still
-  bootstraps (import + seeding), while a redeploy never re-imports, never
-  recomputes seeding and never prunes entries.
+- The command imports the seed file **only when the season does not exist yet**,
+  so a fresh database still bootstraps (import + seeding), while a redeploy
+  never re-imports, never recomputes seeding and never prunes entries.
 - The active season is then set explicitly (`2026-27`), which fixes databases
   that were flipped to `2025-26` by earlier deploys. Change the season name in
-  both places when the served season advances.
+  `draw/management/commands/bootstrap_season.py` when the served season advances.
 
-The frontend build (`static/ui/`) is produced by the Nixpacks Node provider from
-`package.json`'s `build` script; `collectstatic` then gathers it.
+The frontend build (`static/ui/`) is produced inside the Dockerfile's build
+stage; `collectstatic` then gathers it at build time.
 
 ## Environment variables
 

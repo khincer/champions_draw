@@ -1,6 +1,5 @@
 import FixtureRow from './FixtureRow';
 
-/* Draw-board fixture line: crest + short name + association code on each side. */
 export default function BoardFixtureRows({ fixture }) {
   return (
     <FixtureRow

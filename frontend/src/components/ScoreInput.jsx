@@ -1,7 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks';
 
-/* `label` carries the accessible name for the input. Every call site passes one
-   so no score field is left unnamed (A11Y:labelled-controls). */
 export default function ScoreInput({ value, onChange, disabled, animateOnChange, label }) {
   const ref = useRef(null);
   const prevValue = useRef(value);

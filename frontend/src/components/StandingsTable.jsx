@@ -1,21 +1,5 @@
 import Crest from './Crest';
 
-/* Single standings table (UC:single-standings-table).
-   Owns the qualified / playoffs / eliminated logic once. Ordering is never
-   touched here — rows render in the order the caller computed them, and every
-   number keeps the `??` fallback chain the hand-written tables used so both
-   payload shapes (flat `{played, wins, draws, losses}` and football-data
-   `{playedGames, won, draw, lost, team: {...}}`) resolve to the same values.
-
-   Three class dialects are preserved from the tables this replaces
-   (`standings` = league/team pages, `league` = league-phase table, `sidebar` =
-   prediction sidebar) so no stylesheet rule had to be retuned. Header cells
-   keep the classes they carry today — only `standings` styles its own headers.
-
-   `playedHeader` defaults to `P` because four of the five replaced tables
-   (`TeamPage`, `GroupStandingsTables`, the league page and the real-draw
-   standings) labelled the column `P`; only the prediction league table
-   labelled it `Pld`, so that one call site passes it explicitly. */
 const BANDS = {
   qualified: { mark: '▲', text: 'Qualified', league: 'row-qualified', sidebar: 'r-qual' },
   playoffs: { mark: '◆', text: 'Playoffs', league: 'row-playoffs', sidebar: 'r-play' },

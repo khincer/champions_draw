@@ -44,7 +44,6 @@ export default function SimulationPanel({
         <label className="seed-input">
           <span>Draw method</span>
           <select value={drawMethod} onChange={(event) => setDrawMethod(event.currentTarget.value)}>
-            <option value="sat">SAT (uniform)</option>
             <option value="sequential">Sequential (UEFA-style)</option>
             <option value="interactive">Interactive (pick by pick)</option>
           </select>

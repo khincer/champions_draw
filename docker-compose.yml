@@ -13,15 +13,24 @@ services:
       DJANGO_SETTINGS_MODULE: champions_draw.settings
       DJANGO_DEBUG: "1"
     volumes:
+      # Bind the source so edits reload. Without this the code is whatever the
+      # image was built with, and every change needs a rebuild.
+      - .:/app
+      # Keep the image's node_modules: the bind mount above would otherwise
+      # expose the host's Windows builds, which break vite/esbuild.
+      - /app/node_modules
       - db_data:/app/data
       - fixtures_data:/app/draw/data
+    # package.json pins `vite --host 127.0.0.1` -- correct for host-only dev but
+    # unreachable through a published container port. The extra flag below is
+    # the last --host, so it wins and Vite binds all interfaces in the container.
     command: >
       sh -c "python manage.py migrate &&
       python manage.py import_seed_input draw/data/ucl_league_phase_seed_input_2025_26.json --set-active --seed &&
       python manage.py import_seed_input draw/data/ucl_league_phase_seed_input_2026_27.json --seed &&
       npm run build &&
       python manage.py runserver 0.0.0.0:8001 &
-      npm run dev"
+      npm run dev -- --host 0.0.0.0"
 
   cron:
     build:
@@ -33,6 +42,9 @@ services:
       PYTHONUNBUFFERED: "1"
       DJANGO_SETTINGS_MODULE: champions_draw.settings
     volumes:
+      # Same bind mount as web: the cron runs management commands, so it must
+      # see the current code rather than the code baked into the image.
+      - .:/app
       - db_data:/app/data
       - fixtures_data:/app/draw/data
     command: >

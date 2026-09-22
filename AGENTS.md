@@ -54,15 +54,13 @@ npm run dev                         # Vite on :5173, proxies /api -> :8001
 - `draw/predictions_views.py` — API views for prediction flow
 - `draw/predictions_serializers.py` — serializers for prediction models
 - `frontend/` — Preact SPA, root is `frontend/src/main.jsx`
-- `frontend/src/PredictionApp.jsx` — main prediction orchestrator
-- `frontend/src/MatchdayScoreBoard.jsx` — league phase score input grid
-- `frontend/src/LeagueTable.jsx` — live standings table
-- `frontend/src/PlayoffBracket.jsx` — two-legged playoff tie inputs
-- `frontend/src/KnockoutBracket.jsx` — R16 through Final bracket
-- `frontend/src/ScoreInput.jsx` — reusable goal score input
-- `frontend/src/predictionStorage.js` — localStorage + backend sync
-- `frontend/src/standingsCalc.js` — client-side standings calculation
-- `build_seed_input.py` — standalone script to fetch team data from API-Football (requires `API_FOOTBALL_KEY`)
+- `frontend/src/views/PredictionApp.jsx` — main prediction orchestrator
+- `frontend/src/components/MatchdayScoreBoard.jsx` — league phase score input grid
+- `frontend/src/components/PlayoffBracket.jsx` — two-legged playoff tie inputs
+- `frontend/src/components/KnockoutBracket.jsx` — R16 through Final bracket
+- `frontend/src/components/ScoreInput.jsx` — reusable goal score input
+- `frontend/src/lib/predictionStorage.js` — localStorage + backend sync
+- `frontend/src/lib/standingsCalc.js` — client-side standings calculation
 
 ## Prediction System
 
@@ -131,4 +129,4 @@ Broad Read/Glob/Grep exploration before this CodeGraph check is explicitly disco
 
 ## Deployment
 
-Railway via Nixpacks + `Procfile`. The Procfile runs migrations, import_seed_input, collectstatic, then gunicorn. Requires `DJANGO_SECRET_KEY`, `DATABASE_URL` (auto from Railway Postgres), and `DJANGO_ALLOWED_HOSTS`.
+Railway via the root `Dockerfile` (auto-detected) + `docker-entrypoint.sh`, which branches on `SERVICE_ROLE`: web runs migrations, `bootstrap_season`, collectstatic, then gunicorn; `cron-leagues`/`cron-results` run their sync commands and exit. Requires `DJANGO_SECRET_KEY`, `DATABASE_URL` (auto from Railway Postgres), and `DJANGO_ALLOWED_HOSTS`.

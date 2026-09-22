@@ -1,6 +1,3 @@
-/* Metric card (Design.md §7.2): one dominant number, a short label, optional
-   supporting text and an optional trend. A trend always carries text (and
-   optionally an icon), never color alone. */
 export default function Metric({ label, value, support, trend, icon: Icon }) {
   const TrendIcon = trend?.icon;
 

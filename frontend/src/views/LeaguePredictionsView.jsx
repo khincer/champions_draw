@@ -2,14 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import FixtureRow from '../components/FixtureRow';
 import SegmentControl from '../components/SegmentControl';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
-import ScoreInput from '../ScoreInput';
-import { setPlayerName as persistPlayerName } from '../predictionStorage';
+import ScoreInput from '../components/ScoreInput';
+import { setPlayerName as persistPlayerName } from '../lib/predictionStorage';
 
 const SYNC_DELAY_MS = 1200;
 const VERDICT_LABEL = { exact: 'Exact', outcome: 'Outcome', miss: 'Miss' };
 
-// Per-league, per-player pick store, following the predictionStorage key
-// convention. The shape is { [match_id]: {home_goals, away_goals} }.
 const LEAGUE_STORAGE_PREFIX = 'champions_draw_league_prediction_';
 
 function loadLeaguePredLocal(leagueId, playerName) {
@@ -42,8 +40,6 @@ function formatKickoff(value) {
   }).format(new Date(value));
 }
 
-/* The API flattens teams into home_name / away_name fields; FixtureRow expects
-   the shared team shape. */
 function sideTeam(match, side) {
   return {
     name: match[`${side}_name`],
@@ -77,8 +73,6 @@ export default function LeaguePredictionsView({
   setPlayerName,
   apiFetch,
 }) {
-  // Only real League rows are pickable; CONMEBOL "season-…" entries have no
-  // LeagueMatch rows.
   const leagueOptions = useMemo(
     () => (leagues || []).filter((league) => typeof league.id === 'number'),
     [leagues],
@@ -130,8 +124,6 @@ export default function LeaguePredictionsView({
     dataRef.current = data;
   }, [data]);
 
-  // Pull saved picks once per player/league; local (possibly unsaved) values
-  // win for ids already present.
   useEffect(() => {
     const name = (playerName || '').trim();
     if (!leagueId || !name) return undefined;
@@ -157,15 +149,10 @@ export default function LeaguePredictionsView({
         });
       })
       .catch(() => {
-        // Backend unavailable: localStorage stays the source of truth.
       });
     return () => { cancelled = true; };
   }, [leagueId, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* Only open fixtures go in a PUT: a batch that includes any closed fixture is
-     rejected whole, and the merged remote picks include finished matches.
-     `inPlay` is deliberately not scanned — those fixtures have kicked off, are
-     always `closed`, and must never enter a submit. */
   function openEntries(predictions) {
     const fixtures = dataRef.current;
     const open = new Set(
@@ -297,9 +284,6 @@ export default function LeaguePredictionsView({
     );
   }
 
-  /* Kicked off but not final: the pick must stay visible, but the row is
-     read-only — the backend rejects any batch containing a fixture that has
-     kicked off, so these are never editable or submitted. */
   function renderInPlayRow(match) {
     const pred = preds[match.id];
     const pick = pickSummary(pred);
@@ -402,7 +386,6 @@ export default function LeaguePredictionsView({
                       <strong id="picks-upcoming-heading">
                         {selectedLeague ? `${selectedLeague.name}: upcoming` : 'Upcoming'}
                       </strong>
-                      {/* One stable node: the sync's states swap text, never remount. */}
                       <span role="status">
                         {(playerName || '').trim()
                           ? syncStatus === 'saving'

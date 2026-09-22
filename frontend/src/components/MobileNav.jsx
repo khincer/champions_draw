@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Home, LayoutGrid, Menu, Swords, Target, Trophy, UserRound, X } from 'lucide-preact';
 
-/* Mobile navigation (Design.md §5.2): a fixed bottom bar carrying the five
-   top-level views plus a `<dialog>` drawer that adds the six workspace
-   sections. Which mode is active is decided by the single 920px media query in
-   styles.css — this component never reads a media query to decide what to
-   render, so crossing the threshold cannot remount a view. */
 const VIEWS = [
   { key: 'home', label: 'Home', Icon: Home },
   { key: 'teams', label: 'Leagues', Icon: LayoutGrid },
@@ -24,9 +19,6 @@ export default function MobileNav({ view, onSelectView, overlayOpen, tabs }) {
     dialogRef.current?.close();
   }
 
-  /* Crossing up over the shell threshold force-closes the drawer. The threshold
-     lives in CSS only: ask the desktop rail whether mobile mode already ended
-     instead of hardcoding 920 here — and touch no view/tab state. */
   useEffect(() => {
     if (!open) return undefined;
     const onResize = () => {
@@ -37,8 +29,6 @@ export default function MobileNav({ view, onSelectView, overlayOpen, tabs }) {
     return () => window.removeEventListener('resize', onResize);
   }, [open]);
 
-  /* The match-detail overlay owns focus while it is open, so the drawer must
-     never sit in front of it. */
   useEffect(() => {
     if (overlayOpen && dialogRef.current?.open) close();
   }, [overlayOpen]);

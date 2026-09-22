@@ -1,26 +1,5 @@
 import Crest, { TeamBadge } from './Crest';
 
-/* Single fixture/match row (Design.md §7.5).
-   Replaces five hand-rolled rows: the league fixture line (`mini`), the draw
-   board row, the team-page fixture row (`team`) and the two prediction rows
-   (`row` with a `score-row` class). Competition, kickoff, both crests, the
-   score-or-time centre and the status text all live here; every number uses
-   tabular figures via the `.score-group` / `.fixture-mini-score` rules.
-
-   Status is never color-only: the status cell always carries text, and
-   `statusTone` only adds the existing live/waiting emphasis on top.
-
-   The kickoff reaches the row as `date`/`time` (`mini`) or `statusTitle`, and
-   the competition slot exists as `competition` (§7.5). No current adopter
-   passes it — the five replaced rows all sat under a parent card header that
-   already named the competition — so the slot stays opt-in and renders nothing
-   until a caller supplies it.
-
-   Shells are the ones the replaced rows already used, so no stylesheet rule
-   had to be retuned:
-   - `row`  → `.fixture-row` (+ `score-row`), [status] home centre away
-   - `mini` → `.fixture-mini`, date home/centre/away time
-   - `team` → `.team-fixture-row` (flex), [leading] home centre away [trailing] */
 function Side({ team, align, badge, layout, nameMode }) {
   const full = team?.name || '';
   const short = team?.short_name || full;

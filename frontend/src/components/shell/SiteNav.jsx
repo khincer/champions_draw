@@ -45,14 +45,6 @@ export default function SiteNav({ view, setView, setActiveTab }) {
           <Trophy size={18} />
           Draw Simulator
         </button>
-        <button
-          className={`site-nav-link ${view === 'career' ? 'active' : ''}`}
-          aria-current={view === 'career' ? 'page' : undefined}
-          onClick={() => setView('career')}
-        >
-          <UserRound size={18} />
-          Career Mode
-        </button>
 
         <div className="site-nav-section">Browse</div>
         <button
