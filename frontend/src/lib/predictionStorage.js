@@ -34,7 +34,11 @@ export function loadLocal(seasonId, playerName, currentDrawSeed) {
 }
 
 export function clearLocal(seasonId, playerName) {
-  localStorage.removeItem(getStorageKey(seasonId, playerName));
+  try {
+    localStorage.removeItem(getStorageKey(seasonId, playerName));
+  } catch {
+    // Storage unavailable (private mode) — nothing was persisted to clear.
+  }
 }
 
 function getDefaultState() {
@@ -48,11 +52,19 @@ function getDefaultState() {
 }
 
 export function getPlayerName() {
-  return localStorage.getItem(PLAYER_KEY) || '';
+  try {
+    return localStorage.getItem(PLAYER_KEY) || '';
+  } catch {
+    return '';
+  }
 }
 
 export function setPlayerName(name) {
-  localStorage.setItem(PLAYER_KEY, name);
+  try {
+    localStorage.setItem(PLAYER_KEY, name);
+  } catch {
+    // Storage unavailable (private mode) — the name still applies for this session.
+  }
 }
 
 // Real-draw predictions live under their own stable key so simulated-draw
