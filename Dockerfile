@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY frontend/ frontend/
-COPY vite.config.js ./
+COPY vite.config.mjs ./
 RUN npm run build
 
 COPY . .
