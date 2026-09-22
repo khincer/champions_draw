@@ -57,6 +57,7 @@ export default {
   'nav.views': 'Views',
   'nav.workspace': 'Workspace',
 
+  'settings.darkTheme': 'Dark theme',
   'settings.language': 'Language',
 
   'shell.drawRanFixtures': {
@@ -65,6 +66,7 @@ export default {
   },
   'shell.footer': 'Unofficial draw simulator for fan predictions.',
   'shell.interactiveStarted': '{{player}} started an interactive draw — pick teams pot by pot.',
+  'shell.leaguesTitle': 'Leagues',
   'shell.liveScoresUnavailable': 'Live scores unavailable — retrying every 30 seconds; showing the last known scores.',
   'shell.loadingPredictionLab': 'Loading prediction lab',
   'shell.loadingSeasonData': 'Loading season data',

@@ -1,16 +1,22 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Home, LayoutGrid, Menu, Swords, Target, Trophy, UserRound, X } from 'lucide-preact';
+import LanguageMenu from './LanguageMenu';
+import { LOCALE_OPTIONS, useI18n } from '../i18n';
 
+/* Module-level config holds KEYS, never translated copy: a t() call here would
+   be frozen at module load. 'Career' has no key on purpose — career mode is
+   omitted from the catalogues, so its label stays literal. */
 const VIEWS = [
-  { key: 'home', label: 'Home', Icon: Home },
-  { key: 'teams', label: 'Leagues', Icon: LayoutGrid },
+  { key: 'home', labelKey: 'nav.home', Icon: Home },
+  { key: 'teams', labelKey: 'nav.leagues', Icon: LayoutGrid },
   { key: 'career', label: 'Career', Icon: UserRound },
-  { key: 'real', label: 'Real', Icon: Swords },
-  { key: 'picks', label: 'Picks', Icon: Target },
-  { key: 'workspace', label: 'Simulator', Icon: Trophy },
+  { key: 'real', labelKey: 'nav.real', Icon: Swords },
+  { key: 'picks', labelKey: 'nav.picks', Icon: Target },
+  { key: 'workspace', labelKey: 'nav.simulator', Icon: Trophy },
 ];
 
 export default function MobileNav({ view, onSelectView, overlayOpen, tabs }) {
+  const { t, locale, setLocale } = useI18n();
   const dialogRef = useRef(null);
   const triggerRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -38,7 +44,7 @@ export default function MobileNav({ view, onSelectView, overlayOpen, tabs }) {
     triggerRef.current?.focus();
   }
 
-  function renderItem({ key, label, Icon }) {
+  function renderItem({ key, labelKey, label, Icon }) {
     const current = view === key;
     return (
       <button
@@ -52,7 +58,7 @@ export default function MobileNav({ view, onSelectView, overlayOpen, tabs }) {
         }}
       >
         <Icon size={20} aria-hidden="true" />
-        <span className="mobile-nav-label">{label}</span>
+        <span className="mobile-nav-label">{labelKey ? t(labelKey) : label}</span>
       </button>
     );
   }
@@ -60,7 +66,7 @@ export default function MobileNav({ view, onSelectView, overlayOpen, tabs }) {
   return (
     <>
       <div className="mobile-nav">
-        <nav className="mobile-nav-bar" aria-label="Primary">
+        <nav className="mobile-nav-bar" aria-label={t('a11y.primaryNav')}>
           {VIEWS.map(renderItem)}
         </nav>
         <button
@@ -76,33 +82,41 @@ export default function MobileNav({ view, onSelectView, overlayOpen, tabs }) {
           }}
         >
           <Menu size={20} aria-hidden="true" />
-          <span className="mobile-nav-label">Menu</span>
+          <span className="mobile-nav-label">{t('nav.menu')}</span>
         </button>
       </div>
 
       <dialog
         ref={dialogRef}
         className="mobile-nav-drawer"
-        aria-label="Navigation"
+        aria-label={t('nav.navigation')}
         onClose={handleClose}
       >
         <div className="mobile-nav-drawer-head">
-          <p className="mobile-nav-drawer-title">Navigation</p>
+          <p className="mobile-nav-drawer-title">{t('nav.navigation')}</p>
           <button
             type="button"
             className="mobile-nav-close"
-            aria-label="Close navigation"
+            aria-label={t('nav.closeNavigation')}
             onClick={close}
           >
             <X size={20} aria-hidden="true" />
           </button>
         </div>
-        <div className="mobile-nav-drawer-views" role="group" aria-label="Views">
+        <div className="mobile-nav-drawer-views" role="group" aria-label={t('nav.views')}>
           {VIEWS.map(renderItem)}
+        </div>
+        <div className="mobile-nav-drawer-section">
+          <LanguageMenu
+            items={LOCALE_OPTIONS}
+            value={locale}
+            onChange={setLocale}
+            label={t('settings.language')}
+          />
         </div>
         {tabs && (
           <div className="mobile-nav-drawer-section">
-            <p className="mobile-nav-drawer-title">Workspace</p>
+            <p className="mobile-nav-drawer-title">{t('nav.workspace')}</p>
             {tabs}
           </div>
         )}

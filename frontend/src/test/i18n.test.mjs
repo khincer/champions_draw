@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { resolveLocale, SUPPORTED_LOCALES } from '../i18n/detect.js';
@@ -228,4 +229,102 @@ test('no catalogue value renders as a raw key pattern', () => {
       }
     }
   }
+});
+
+
+/* Pre-paint bootstrap (index.html). The inline classic script cannot import
+   the ESM module, so it deliberately duplicates the resolution rule. These
+   tests read that file and hold the duplicate to detect.js — a literal check
+   for the declared set and fallback, and a behavioural check that runs the
+   real inline script against a stub DOM and compares it with resolveLocale. */
+
+const INDEX_HTML = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+
+function inlineScript(html) {
+  const match = html.match(/<script>([\s\S]*?)<\/script>/);
+  assert.ok(match, 'index.html declares no inline <script> block');
+  return match[1];
+}
+
+/* Runs the real inline script the way the browser does before first paint and
+   returns the `lang` it set. Nothing here is re-implemented: the source is the
+   shipped file. */
+function bootstrapLang({ storedLocale = null, languages, language } = {}) {
+  const entries = new Map();
+  if (storedLocale !== null) entries.set('champions_draw_locale', storedLocale);
+  const documentElement = {
+    style: {},
+    setAttribute(name, value) { this[name] = value; },
+  };
+  const stubWindow = {
+    localStorage: { getItem: (key) => (entries.has(key) ? entries.get(key) : null) },
+  };
+  new Function('window', 'document', 'navigator', inlineScript(INDEX_HTML))(
+    stubWindow,
+    { documentElement },
+    { languages, language },
+  );
+  return documentElement.lang;
+}
+
+test('the bootstrap declares exactly SUPPORTED_LOCALES and the detect.js fallback', () => {
+  const source = inlineScript(INDEX_HTML);
+  const literals = source.match(/var supported = (\[[^\]]*\]);/);
+  assert.ok(literals, 'the bootstrap declares no supported-locale array');
+  /* The array is single-quoted source, not JSON. */
+  const declared = new Function(`return ${literals[1]};`)();
+  assert.deepEqual(declared, SUPPORTED_LOCALES);
+
+  const fallback = source.match(/var locale = '([^']+)';/);
+  assert.ok(fallback, 'the bootstrap declares no fallback locale');
+  assert.equal(fallback[1], resolveLocale(null, null), 'fallback differs from detect.js');
+});
+
+test('the bootstrap strips the region exactly like detect.js does', () => {
+  assert.match(inlineScript(INDEX_HTML), /split\(\/\[-_\]\/\)/, 'region-strip rule not found');
+  assert.equal(bootstrapLang({ storedLocale: 'pt-BR' }), 'pt');
+  assert.equal(bootstrapLang({ storedLocale: 'es_NI' }), 'es');
+});
+
+test('the bootstrap resolves the locale exactly as resolveLocale does', () => {
+  const cases = [
+    ['fr', ['es-NI']],
+    ['pt', ['es-NI', 'fr']],
+    [null, ['es-NI']],
+    [null, ['es_NI']],
+    [null, ['pt-BR']],
+    [null, ['fr-CA']],
+    [null, ['en-US']],
+    [null, ['de-DE']],
+    [null, ['it-IT']],
+    [null, ['de-DE', 'pt-BR', 'en']],
+    [null, []],
+    [null, null],
+    ['', ['es']],
+    ['de-DE', ['pt-BR']],
+    ['ES', ['de-DE']],
+    ['  fr  ', []],
+    ['pt-br', []],
+    ['de-DE', null],
+  ];
+
+  for (const [storedLocale, browser] of cases) {
+    const expected = resolveLocale(storedLocale, browser);
+    const actual = bootstrapLang({ storedLocale, languages: browser });
+    assert.equal(
+      actual,
+      expected,
+      `bootstrap diverged for stored=${JSON.stringify(storedLocale)} browser=${JSON.stringify(browser)}`,
+    );
+    assert.ok(SUPPORTED_LOCALES.includes(actual), `bootstrap emitted a non-canonical locale ${actual}`);
+  }
+});
+
+test('the bootstrap reads navigator.languages only, exactly like the provider', () => {
+  /* A browser exposing `language` but not `languages` must not pre-paint a
+     locale the provider will resolve differently — that is a wrong-lang flash. */
+  const actual = bootstrapLang({ language: 'es-ES' });
+  assert.equal(actual, resolveLocale(null, undefined));
+  assert.equal(actual, 'en');
+  assert.equal(bootstrapLang({ language: 'es-ES', languages: ['fr-CA'] }), 'fr');
 });

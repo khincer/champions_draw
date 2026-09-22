@@ -57,6 +57,7 @@ export default {
   'nav.views': 'Vues',
   'nav.workspace': 'Espace de travail',
 
+  'settings.darkTheme': 'Thème sombre',
   'settings.language': 'Langue',
 
   'shell.drawRanFixtures': {
@@ -65,6 +66,7 @@ export default {
   },
   'shell.footer': 'Simulateur de tirage non officiel pour les pronostics des supporters.',
   'shell.interactiveStarted': '{{player}} a lancé un tirage interactif — choisissez les équipes chapeau par chapeau.',
+  'shell.leaguesTitle': 'Ligues',
   'shell.liveScoresUnavailable': 'Scores en direct indisponibles — nouvelle tentative toutes les 30 secondes ; affichage des derniers scores connus.',
   'shell.loadingPredictionLab': 'Chargement du laboratoire de pronostics',
   'shell.loadingSeasonData': 'Chargement des données de la saison',

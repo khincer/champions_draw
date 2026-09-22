@@ -28,7 +28,7 @@ import { clearLocal, loadLocal } from './lib/predictionStorage';
 import { apiFetch } from './lib/api';
 import { inHomeRange } from './lib/format';
 import { groupBy } from './lib/groupBy';
-import { I18nProvider } from './i18n';
+import { I18nProvider, useI18n } from './i18n';
 
 const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
 
@@ -51,9 +51,21 @@ function writeStoredPlayerName(name) {
   }
 }
 
+/* Failures carry a stable machine code (lib/api.js) and the shell notices name
+   their own catalogue key. Resolving either one at render time keeps the copy
+   in step with the active locale; an unrecognised code falls back to the
+   generic message, so a failure can never surface a raw key or backend text. */
+function errorText(t, value) {
+  if (!value) return '';
+  const key = value.includes('.') ? value : `errors.${value}`;
+  const text = t(key);
+  return text === key ? t('errors.unknown') : text;
+}
+
 /* ─── App ─── */
 
 function App() {
+  const { t } = useI18n();
   const [view, setView] = useState('home');
   const [homeMatches, setHomeMatches] = useState([]);
   const [homeMatchesStatus, setHomeMatchesStatus] = useState('idle');
@@ -137,7 +149,7 @@ function App() {
         setLiveScores(data.live || {});
         setLiveScoresError('');
       } catch {
-        setLiveScoresError('Live scores unavailable — retrying every 30 seconds; showing the last known scores.');
+        setLiveScoresError('shell.liveScoresUnavailable');
       }
     };
     pollLive();
@@ -189,7 +201,7 @@ function App() {
       const activeSeason = seasonPayload[0];
       if (activeSeason) setSelectedSeasonId(String(activeSeason.id));
     } catch (err) {
-      setError(err.message);
+      setError(err.code);
     } finally {
       setLoading(false);
     }
@@ -206,7 +218,7 @@ function App() {
       setHomeMatchesError('');
     } catch (err) {
       setHomeMatchesStatus(hadCards ? 'success' : 'error');
-      setHomeMatchesError(err.message);
+      setHomeMatchesError(err.code);
     }
   }
 
@@ -218,7 +230,7 @@ function App() {
       setLeaguesStatus('success');
     } catch (err) {
       setLeaguesStatus('error');
-      setLeaguesError(err.message);
+      setLeaguesError(err.code);
     }
   }
 
@@ -236,7 +248,7 @@ function App() {
       return payload;
     } catch (err) {
       setSeasonStateStatus('error');
-      setSeasonStateError(err.message);
+      setSeasonStateError(err.code);
       return null;
     }
   }
@@ -274,12 +286,19 @@ function App() {
       if (drawMethod === 'interactive') {
         setDrawAnimation({ isActive: false, phase: 'idle', revealedCount: 0 });
         setInteractiveState(payload);
-        setNotice(`${normalizedPlayer} started an interactive draw — pick teams pot by pot.`);
+        setNotice({ key: 'shell.interactiveStarted', params: { player: normalizedPlayer } });
         await loadSeasonState(selectedSeasonId);
         return;
       }
 
-      setNotice(`${normalizedPlayer} ran ${payload.summary.draw_seed} with ${payload.summary.total_matchups} fixtures.`);
+      setNotice({
+        key: 'shell.drawRanFixtures',
+        params: {
+          player: normalizedPlayer,
+          seed: payload.summary.draw_seed,
+          count: payload.summary.total_matchups,
+        },
+      });
       await loadSeasonState(selectedSeasonId);
       window.setTimeout(() => {
         setDrawAnimation({ isActive: true, phase: 'fixtures', revealedCount: 0 });
@@ -287,7 +306,7 @@ function App() {
     } catch (err) {
       /* The failure stays on the simulation panel and names itself, with the
          retry re-issuing only the draw POST. */
-      setDrawError(err.message);
+      setDrawError(err.code);
       setDrawAnimation({ isActive: false, phase: 'idle', revealedCount: 0 });
       await loadSeasonState(selectedSeasonId);
     } finally {
@@ -326,19 +345,19 @@ function App() {
 
   return (
     <div className="app-layout">
-      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <a className="skip-link" href="#main-content">{t('a11y.skipToMainContent')}</a>
       <SiteNav view={view} setView={setView} setActiveTab={setActiveTab} />
-      <main className="app-main" id="main-content" aria-label="Main content" tabIndex={-1}>
+      <main className="app-main" id="main-content" aria-label={t('a11y.mainContent')} tabIndex={-1}>
         <div hidden={!!matchDetail}>
         {view === 'home' && (
           <section className="workspace">
             <Homepage
               matches={homeMatches}
               matchesStatus={homeMatchesStatus}
-              matchesError={homeMatchesError}
+              matchesError={errorText(t, homeMatchesError)}
               onRetryMatches={loadRealMatches}
               liveScores={liveScores}
-              liveScoresError={liveScoresError}
+              liveScoresError={errorText(t, liveScoresError)}
               onOpenMatch={openMatch}
               onNavigate={selectView}
               playerName={playerName}
@@ -351,11 +370,11 @@ function App() {
 
         {view === 'teams' && (
           <section className="workspace">
-            <h1 className="view-heading">Leagues</h1>
+            <h1 className="view-heading">{t('shell.leaguesTitle')}</h1>
             <TeamsBrowser
               leagues={leagues}
               leaguesStatus={leaguesStatus}
-              leaguesError={leaguesError}
+              leaguesError={errorText(t, leaguesError)}
               onRetryLeagues={loadLeagues}
               selectedLeague={selectedLeague}
               leagueStandings={leagueStandings}
@@ -387,7 +406,7 @@ function App() {
           <LeaguePredictionsView
             leagues={leagues}
             leaguesStatus={leaguesStatus}
-            leaguesError={leaguesError}
+            leaguesError={errorText(t, leaguesError)}
             onRetryLeagues={loadLeagues}
             playerName={playerName}
             setPlayerName={setPlayerName}
@@ -397,32 +416,34 @@ function App() {
 
         {view === 'workspace' && (
           <section className="workspace">
-            <h1 className="view-heading">Draw workspace</h1>
+            <h1 className="view-heading">{t('shell.workspaceTitle')}</h1>
             {loading ? (
-              <Skeleton rows={6} label="Loading prediction lab" />
+              <Skeleton rows={6} label={t('shell.loadingPredictionLab')} />
             ) : !seasons.length ? (
               error ? (
-                <ErrorState title="Seasons could not load" detail={error} onRetry={loadInitialData} />
+                <ErrorState title={t('states.seasonsLoadFailed')} detail={errorText(t, error)} onRetry={loadInitialData} />
               ) : (
                 <EmptyState
-                  title="No seasons imported yet"
-                  text="Import the seed input, then refresh to load the workspace."
-                  action={<Button onClick={loadInitialData}>Refresh</Button>}
+                  title={t('states.noSeasons')}
+                  text={t('states.noSeasonsText')}
+                  action={<Button onClick={loadInitialData}>{t('states.refresh')}</Button>}
                 />
               )
             ) : (
               <>
                 <WorkspaceHeader activeTab={activeTab} setActiveTab={setActiveTab} />
-                {(error || notice) && <MessageBar error={error} notice={notice} />}
+                {(error || notice) && (
+                  <MessageBar error={errorText(t, error)} notice={notice ? t(notice.key, notice.params) : ''} />
+                )}
 
                 {seasonStateStatus === 'loading' || seasonStateStatus === 'idle' ? (
-                  <Skeleton rows={6} label="Loading season data" />
+                  <Skeleton rows={6} label={t('shell.loadingSeasonData')} />
                 ) : seasonStateStatus === 'error' ? (
                   <ErrorState
-                    title="Season data could not load"
-                    detail={seasonStateError}
+                    title={t('states.seasonDataLoadFailed')}
+                    detail={errorText(t, seasonStateError)}
                     onRetry={() => loadSeasonState(selectedSeasonId)}
-                    retryLabel="Retry season data"
+                    retryLabel={t('states.retrySeasonData')}
                   />
                 ) : (
                   <>
@@ -430,10 +451,10 @@ function App() {
                   <>
                     {drawError ? (
                       <ErrorState
-                        title="The draw could not be generated"
-                        detail={drawError}
+                        title={t('states.drawFailed')}
+                        detail={errorText(t, drawError)}
                         onRetry={() => generateDraw()}
-                        retryLabel="Retry draw"
+                        retryLabel={t('states.retryDraw')}
                       />
                     ) : null}
                     <SimulationPanel

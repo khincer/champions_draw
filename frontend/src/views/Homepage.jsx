@@ -10,22 +10,28 @@ import { useI18n } from '../i18n';
 
 
 
+/* Module-level config holds KEYS, never translated copy: a t() call here would
+   be frozen at module load and could never react to a locale change. */
 const QUICK_ACTIONS = [
-  { key: 'real', label: 'Real draw', icon: Swords },
-  { key: 'workspace', label: 'Draw simulator', icon: Trophy },
-  { key: 'teams', label: 'Leagues', icon: LayoutGrid },
+  { key: 'real', labelKey: 'home.realDraw', icon: Swords },
+  { key: 'workspace', labelKey: 'home.drawSimulator', icon: Trophy },
+  { key: 'teams', labelKey: 'home.leagues', icon: LayoutGrid },
 ];
 
+/* The bucket keys are literal object keys; only the rendered label is
+   translated. Translating the key itself would break the lookup. */
+const BUCKET_LABELS = { Today: 'home.today', Yesterday: 'home.yesterday' };
+
 function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef }) {
-  const { formatDay, formatTime } = useI18n();
+  const { t, formatDay, formatTime } = useI18n();
   const result = match.result;
   const eligible = result || (match.kickoff && new Date(match.kickoff) <= new Date());
   const status = result ? 'finished' : match.closed ? 'live' : 'upcoming';
-  const statusLabel = result ? 'Final' : match.closed ? 'Live' : 'Kickoff';
+  const statusLabel = t(result ? 'home.final' : match.closed ? 'home.live' : 'home.kickoff');
   return (
     <article
       className="home-game-card"
-      aria-label={`${match.home_team.name} versus ${match.away_team.name}`}
+      aria-label={t('home.versus', { home: match.home_team.name, away: match.away_team.name })}
     >
       <header className="home-game-card-header">
         <div>
@@ -59,7 +65,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
           ) : (
             <p className="hub-kickoff">{formatTime(match.kickoff)}</p>
           )}
-          <p className="hub-score-caption">{status === 'finished' ? 'Result' : status === 'live' ? 'Live' : 'Kickoff'}</p>
+          <p className="hub-score-caption">{t(status === 'finished' ? 'home.result' : status === 'live' ? 'home.live' : 'home.kickoff')}</p>
         </div>
         <div className="hub-team">
           <Crest team={match.away_team} size="md" />
@@ -68,12 +74,12 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
         </div>
       </div>
       <footer className="home-game-card-footer">
-        <span>Matchday {match.matchday}</span>
+        <span>{t('home.matchday', { number: match.matchday })}</span>
         {match.openable && eligible ? (
           <button
             className="hub-open-match"
             type="button"
-            aria-label={`View match details: ${match.home_team.name} versus ${match.away_team.name}`}
+            aria-label={t('home.viewMatchDetails', { home: match.home_team.name, away: match.away_team.name })}
             ref={detailReturnFocusRef}
             onClick={() => onOpenMatch(match.id, match.season_id || seasonId, match.league_id)}
           >
@@ -88,7 +94,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
 }
 
 export default function Homepage({ matches, matchesStatus, matchesError, onRetryMatches, liveScores, liveScoresError, onOpenMatch, onNavigate, playerName, seasonId, detailReturnFocusRef }) {
-  const { formatDay } = useI18n();
+  const { t, formatDay } = useI18n();
   const [competition, setCompetition] = useState('all');
 
   
@@ -112,7 +118,7 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
 
   const filterItems = useMemo(
     () => [
-      { key: 'all', label: 'All' },
+      { key: 'all', label: t('home.all') },
       ...competitions.map(([name, emblem]) => ({
         key: name,
         label: (
@@ -123,7 +129,7 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
         ),
       })),
     ],
-    [competitions],
+    [competitions, t],
   );
 
   const inRange = useMemo(
@@ -157,12 +163,12 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
   return (
     <div className="homepage">
       <header className="home-intro">
-        <p className="home-greeting">{name ? `Welcome back, ${name}` : 'Welcome'}</p>
-        <section className="home-quick-actions" aria-label="Quick actions">
-        {QUICK_ACTIONS.map(({ key, label, icon: Icon }) => (
+        <p className="home-greeting">{name ? t('home.welcomeBack', { name }) : t('home.welcome')}</p>
+        <section className="home-quick-actions" aria-label={t('a11y.quickActions')}>
+        {QUICK_ACTIONS.map(({ key, labelKey, icon: Icon }) => (
           <Button key={key} variant="secondary" onClick={() => onNavigate(key)}>
             <Icon size={16} aria-hidden="true" />
-            {label}
+            {t(labelKey)}
           </Button>
         ))}
       </section>
@@ -174,10 +180,10 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
 
       {matchesStatus === 'success' && matchesError ? (
         <ErrorState
-          title="Matches could not refresh"
+          title={t('home.matchesRefreshFailed')}
           detail={matchesError}
           onRetry={onRetryMatches}
-          retryLabel="Retry refresh"
+          retryLabel={t('home.retryRefresh')}
         />
       ) : null}
 
@@ -190,24 +196,24 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
             value={competition}
             onChange={setCompetition}
             className="segment-control homepage-filter"
-            label="Filter by competition"
+            label={t('home.filterByCompetition')}
           />
         ) : null}
         {matchesStatus === 'loading' || matchesStatus === 'idle' ? (
-          <Skeleton rows={1} label="Loading matches" variant="card" />
+          <Skeleton rows={1} label={t('a11y.loadingMatches')} variant="card" />
         ) : matchesStatus === 'error' ? (
           <ErrorState
-            title="Today's matches could not load"
+            title={t('home.todayLoadFailed')}
             detail={matchesError}
             onRetry={onRetryMatches}
           />
         ) : inRange.length ? (
           <>
             {latestResults.length > 0 && (
-              <section role="region" aria-label="Latest results" className="homepage-results">
+              <section role="region" aria-label={t('a11y.latestResults')} className="homepage-results">
                 <div className="match-section-title">
                   <History size={16} />
-                  Latest results
+                  {t('home.latestResults')}
                 </div>
                 <div className="homepage-carousel">
                   {latestResults.map((m) => (
@@ -228,7 +234,7 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
                 <div key={label} className="homepage-day-section">
                   <div className="match-section-title">
                     <CalendarDays size={16} />
-                    {label} &middot; {formatDay(dayMatches[0].kickoff)}
+                    {t(BUCKET_LABELS[label])} &middot; {formatDay(dayMatches[0].kickoff)}
                   </div>
                   {dayMatches.map((m) => <HomeMatchCard key={m.id} match={m} liveScore={liveScores[m.id]} onOpenMatch={onOpenMatch} seasonId={seasonId} detailReturnFocusRef={detailReturnFocusRef} />)}
                 </div>
@@ -237,9 +243,9 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
           </>
         ) : (
           <EmptyState
-            title="No matches today"
-            text="Today and yesterday games appear here with live results as they happen. Refresh to check again."
-            action={<Button variant="secondary" onClick={onRetryMatches}>Refresh</Button>}
+            title={t('home.noMatchesTitle')}
+            text={t('home.noMatchesText')}
+            action={<Button variant="secondary" onClick={onRetryMatches}>{t('states.refresh')}</Button>}
           />
         )}
       </div>
