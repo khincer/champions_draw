@@ -155,6 +155,14 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
     <div className="homepage">
       <header className="home-intro">
         <p className="home-greeting">{name ? `Welcome back, ${name}` : 'Welcome'}</p>
+        <section className="home-quick-actions" aria-label="Quick actions">
+        {QUICK_ACTIONS.map(({ key, label, icon: Icon }) => (
+          <Button key={key} variant="secondary" onClick={() => onNavigate(key)}>
+            <Icon size={16} aria-hidden="true" />
+            {label}
+          </Button>
+        ))}
+      </section>
       </header>
 
       <div className="home-live-slot">
@@ -170,14 +178,7 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
         />
       ) : null}
 
-      <section className="home-quick-actions" aria-label="Quick actions">
-        {QUICK_ACTIONS.map(({ key, label, icon: Icon }) => (
-          <Button key={key} variant="secondary" onClick={() => onNavigate(key)}>
-            <Icon size={16} aria-hidden="true" />
-            {label}
-          </Button>
-        ))}
-      </section>
+      
 
       <div className="homepage-matches">
         {matchesStatus === 'success' && filterItems.length > 1 ? (

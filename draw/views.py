@@ -155,11 +155,6 @@ class SeasonDrawAPIView(APIView):
 		method = str(request.data.get('method', 'sat'))
 		reset = parse_bool(request.data.get('reset', False))
 
-		# Cleanup all prediction data for this season on every fresh simulation.
-		# Cascade deletes wipe MatchPrediction/PlayoffPrediction/KnockoutPrediction
-		# via the FK to Prediction.  Matches are only wiped by the draw services
-		# themselves, so placing this here covers both the interactive and SAT
-		# paths in a single call site.
 		if reset:
 			Prediction.objects.filter(season=season).delete()
 
@@ -279,7 +274,6 @@ class RealSeasonFixturesAPIView(APIView):
 		season = get_object_or_404(Season, pk=pk)
 		matchups = load_real_fixtures(season)
 
-		# Strip the ORM entry refs before serializing the payload.
 		for m in matchups:
 			m.pop('home_entry', None)
 			m.pop('away_entry', None)
@@ -291,7 +285,6 @@ class RealSeasonFixturesAPIView(APIView):
 
 
 class RealPredictionSyncAPIView(APIView):
-	"""Read/write RealFixturePrediction rows keyed by fixture id (`real-{md}-{idx}`)."""
 
 	def get(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
@@ -336,7 +329,6 @@ class RealPredictionSyncAPIView(APIView):
 			if fixture['closed']:
 				closed_ids.append(fixture['id'])
 
-		# All-or-nothing: reject the whole batch if any fixture is closed.
 		if closed_ids:
 			return Response(
 				{'detail': 'Prediction closed for some fixtures', 'closed': closed_ids},
@@ -368,13 +360,6 @@ class RealPredictionSyncAPIView(APIView):
 
 
 class LiveScoresAPIView(APIView):
-	"""Current in-play scores for the real fixtures, labeled by fixture id.
-
-	Polled by the frontend every 30s while a matchday is in progress. Nothing
-	is persisted here: final results keep flowing through the fixtures JSON.
-	A promiedos outage returns 502 with an empty payload, so the UI simply
-	keeps showing 'Awaiting result' rows instead of failing.
-	"""
 
 	def get(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
@@ -404,7 +389,6 @@ class LiveScoresAPIView(APIView):
 
 
 class MatchDetailsAPIView(APIView):
-	"""Match detail: header from own fixtures, detail from football-data listing."""
 
 	def get(self, request, pk, fixture_id):
 		season = get_object_or_404(Season, pk=pk)
@@ -419,7 +403,6 @@ class MatchDetailsAPIView(APIView):
 		if fixture is None:
 			raise NotFound(f'Fixture not found: {fixture_id}')
 
-		# Eligibility: must have a result OR kickoff has passed
 		result = fixture.get('result')
 		kickoff_dt = datetime.fromisoformat(fixture['kickoff'].replace('Z', '+00:00'))
 		if result is None and now < kickoff_dt:
@@ -472,9 +455,6 @@ class LeagueMatchDetailsAPIView(APIView):
 		if match is None:
 			raise NotFound(f'Fixture not found: {match_id}')
 
-		# Eligibility mirrors the UCL route: a finished match, or one whose
-		# kickoff has passed. Football-data marks a league match finished with
-		# status == 'FINISHED'.
 		now = datetime.now(timezone.utc)
 		if match.status != 'FINISHED' and (match.kickoff is None or now < match.kickoff):
 			raise NotFound('Fixture not yet eligible for details')
@@ -568,7 +548,6 @@ class LeagueListAPIView(generics.ListAPIView):
 		return Response(data)
 
 
-# --- Season group standings (CONMEBOL) ---
 
 
 class SeasonGroupStandingsAPIView(APIView):
@@ -590,7 +569,6 @@ class SeasonGroupStandingsAPIView(APIView):
 			.filter(season=season, matchday__isnull=False)
 		)
 
-		# Union-find over SeasonTeam ids; each connected component is a group.
 		parent = {}
 
 		def find(node):
@@ -906,18 +884,7 @@ class HomepageMatchesAPIView(APIView):
 					'closed': m.status == 'FINISHED',
 					'status': m.status,
 				})
-		# Real-league fixtures (the same data that powers the Leagues tab).
-		# LeagueMatch is flat, so the nested home_team/away_team objects the
-		# homepage cards expect are built here (Crest reads logo_url). Like the
-		# UCL block above, this is best-effort: a failure must not drop the UCL
-		# or CONMEBOL rows already collected.
 		try:
-			# CL is deliberately excluded. The UCL block above already serves the
-			# Champions League from the checked-in official fixture list, which is
-			# the richer source (full league phase with matchdays). Including the
-			# football-data CL rows as well produced a second, differently-named
-			# "UEFA Champions League" pill beside the "Champions League" one, and
-			# would duplicate fixtures once the two sources overlap.
 			active_leagues = list(League.objects.filter(is_active=True).exclude(code='CL'))
 			if active_leagues:
 				league_matches = list(
@@ -927,8 +894,6 @@ class HomepageMatchesAPIView(APIView):
 				for m in league_matches:
 					rows.append({
 						'id': f'lm-{m.match_id}',
-						# LeagueMatch has no Season FK; the league id addresses the
-						# league-scoped match-detail route. season_id stays None.
 						'season_id': None,
 						'league_id': m.league_id,
 						'competition': m.league.name,
@@ -955,8 +920,6 @@ class HomepageMatchesAPIView(APIView):
 						'status': m.status,
 					})
 		except Exception:
-			# League fixture loading is best-effort; the UCL and CONMEBOL rows
-			# collected above must survive any failure here.
 			pass
 		rows.sort(key=lambda r: r['kickoff'] or '')
 		return Response({'matchups': rows})

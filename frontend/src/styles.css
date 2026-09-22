@@ -2024,10 +2024,10 @@ select:focus,
 /* Home composition: greeting + metric cards + quick actions + live hub.
    `.homepage` owns the page padding; `.homepage-matches` keeps only its grid. */
 .homepage { display: grid; gap: 26px; padding: 24px; max-width: 100%; }
-.home-intro { display: grid; gap: var(--space-1); }
+.home-intro { display: grid; gap: var(--space-1); grid-template-columns: 1fr 1fr;}
 .home-greeting { font-size: var(--font-h2); font-weight: var(--fw-bold); color: var(--ink); }
 .home-intro-sub { color: var(--muted); font-size: var(--font-small); }
-.home-quick-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.home-quick-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: end;}
 
 /* Homepage matches. Each of these is a grid/flex item whose default
    `min-width: auto` would size it to the carousel's content (6 x 280px cards)
