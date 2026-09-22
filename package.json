@@ -1,9 +1,10 @@
 {
+  "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.mjs --host 127.0.0.1",
     "build": "vite build --config vite.config.mjs",
     "preview": "vite preview --config vite.config.mjs --host 127.0.0.1",
-    "test:career": "node --test frontend/src/test/careerEngine.test.mjs"
+    "test": "node --test"
   },
   "dependencies": {
     "@preact/preset-vite": "^2.10.2",
