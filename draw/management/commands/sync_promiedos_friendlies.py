@@ -57,8 +57,8 @@ class Command(PromiedosFixturesCommand):
         parser.add_argument(
             '--days-back',
             type=int,
-            default=3,
-            help='Days before today to refresh (default: 3); catches recently played games.',
+            default=7,
+            help='Days before today to refresh (default: 7); catches recently played games.',
         )
         parser.add_argument(
             '--days-ahead',

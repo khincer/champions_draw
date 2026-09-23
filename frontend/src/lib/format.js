@@ -31,12 +31,12 @@ export function formatNumber(value, locale) {
   return new Intl.NumberFormat(locale).format(value);
 }
 
-// Kickoff falls within [yesterday 00:00, tomorrow 00:00) in local time.
+// Kickoff falls within [yesterday 00:00, day after tomorrow 00:00) in local time.
 export function inHomeRange(matchup) {
   const kickoff = matchup.kickoff ? new Date(matchup.kickoff) : null;
   if (!kickoff) return false;
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
   return kickoff >= start && kickoff < end;
 }

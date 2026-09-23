@@ -49,6 +49,7 @@ export const KEYS = [
   'home.retryRefresh',
   'home.today',
   'home.todayLoadFailed',
+  'home.tomorrow',
   'home.versus',
   'home.viewMatchDetails',
   'home.welcome',

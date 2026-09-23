@@ -28,7 +28,7 @@ class Command(BaseCommand):
             help='League codes to sync (default: all tracked).',
         )
         parser.add_argument('--days-back', type=int, default=14)
-        parser.add_argument('--days-ahead', type=int, default=21)
+        parser.add_argument('--days-ahead', type=int, default=30)
         parser.add_argument('--dry-run', action='store_true')
 
     def _api_get(self, path, api_key, retries=3):
