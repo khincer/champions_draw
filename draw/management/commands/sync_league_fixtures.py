@@ -9,9 +9,11 @@ from datetime import datetime, timedelta
 import json
 
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from django.utils import timezone
 
 from draw.models import League, LeagueMatch
+from draw.services.result_history import record_result_history
 
 API_BASE = 'https://api.football-data.org/v4'
 TRACKED_LEAGUES = ['PL', 'PD', 'BL1', 'SA', 'FL1', 'CL', 'EL', 'PPL', 'DED']
@@ -85,43 +87,67 @@ class Command(BaseCommand):
                 continue
             time.sleep(10)  # free tier: 10 req/min
 
-            for match in data.get('matches', []):
-                home = match.get('homeTeam', {}) or {}
-                away = match.get('awayTeam', {}) or {}
-                score = match.get('score', {}) or {}
-                ft = score.get('fullTime') or {}
-                home_goals = ft.get('home') if ft.get('home') is not None else None
-                away_goals = ft.get('away') if ft.get('away') is not None else None
+            history_observations = []
+            with transaction.atomic():
+                for match in data.get('matches', []):
+                    home = match.get('homeTeam', {}) or {}
+                    away = match.get('awayTeam', {}) or {}
+                    score = match.get('score', {}) or {}
+                    ft = score.get('fullTime') or {}
+                    home_goals = ft.get('home') if ft.get('home') is not None else None
+                    away_goals = ft.get('away') if ft.get('away') is not None else None
 
-                defaults = {
-                    'league': league,
-                    'home_name': home.get('name') or home.get('shortName') or '?',
-                    'away_name': away.get('name') or away.get('shortName') or '?',
-                    'home_short': home.get('shortName', ''),
-                    'away_short': away.get('shortName', ''),
-                    'home_crest': home.get('crest', ''),
-                    'away_crest': away.get('crest', ''),
-                    'kickoff': self._parse_kickoff(match.get('utcDate')),
-                    'status': match.get('status', '') or 'SCHEDULED',
-                    'matchday': match.get('matchday'),
-                    'home_goals': home_goals,
-                    'away_goals': away_goals,
-                }
+                    defaults = {
+                        'league': league,
+                        'home_name': home.get('name') or home.get('shortName') or '?',
+                        'away_name': away.get('name') or away.get('shortName') or '?',
+                        'home_short': home.get('shortName', ''),
+                        'away_short': away.get('shortName', ''),
+                        'home_crest': home.get('crest', ''),
+                        'away_crest': away.get('crest', ''),
+                        'kickoff': self._parse_kickoff(match.get('utcDate')),
+                        'status': match.get('status', '') or 'SCHEDULED',
+                        'matchday': match.get('matchday'),
+                        'home_goals': home_goals,
+                        'away_goals': away_goals,
+                    }
 
-                if dry_run:
-                    self.stdout.write(
-                        f'  [{match.get("status")}] {defaults["home_name"]} vs {defaults["away_name"]}'
-                        f' ({defaults["kickoff"] and defaults["kickoff"].strftime("%Y-%m-%d %H:%M")})'
+                    if dry_run:
+                        self.stdout.write(
+                            f'  [{match.get("status")}] {defaults["home_name"]} vs {defaults["away_name"]}'
+                            f' ({defaults["kickoff"] and defaults["kickoff"].strftime("%Y-%m-%d %H:%M")})'
+                        )
+                        continue
+
+                    # Offered for every match that reaches the upsert, not only
+                    # changed ones: record_result_history dedupes against each
+                    # subject's latest *history* row. --dry-run never gets here,
+                    # so it collects nothing.
+                    history_observations.append({
+                        'subject': str(match.get('id')),
+                        'home_label': defaults['home_name'],
+                        'away_label': defaults['away_name'],
+                        'home_goals': home_goals,
+                        'away_goals': away_goals,
+                        'status': defaults['status'],
+                    })
+
+                    obj, was_created = LeagueMatch.objects.update_or_create(
+                        match_id=match.get('id'),
+                        defaults=defaults,
                     )
-                    continue
+                    if was_created:
+                        created += 1
+                    else:
+                        updated += 1
 
-                obj, was_created = LeagueMatch.objects.update_or_create(
-                    match_id=match.get('id'),
-                    defaults=defaults,
+                # Flushed in the same transaction as the live upserts, so a
+                # league's writes and its history commit together.
+                record_result_history(
+                    history_observations,
+                    source='football-data-league',
+                    competition=league.code,
+                    season_name='',
                 )
-                if was_created:
-                    created += 1
-                else:
-                    updated += 1
 
         self.stdout.write(self.style.SUCCESS(f'\nDone: {created} created, {updated} updated.'))

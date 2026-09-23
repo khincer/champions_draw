@@ -9,8 +9,9 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -3040,5 +3041,132 @@ class ResultHistoryTests(TestCase):
 				.values_list('home_goals', 'away_goals')
 			),
 			[(1, 1), (3, 1)],
+		)
+
+
+class LeagueFixturesHistoryTests(TestCase):
+	"""The football-data league writer appends history alongside its upsert.
+
+	Offline: the network boundary (``Command._api_get``) and the 10 s
+	rate-limit sleep are patched. This command had no test class before, so the
+	stub is the minimum it needs: a ``League`` row, an ``API_FOOTBALL_DATA_KEY``
+	and a matches payload.
+	"""
+
+	MODULE = 'draw.management.commands.sync_league_fixtures'
+
+	def setUp(self):
+		self.league = League.objects.create(name='Premier League', code='PL', country='England')
+
+	def _payload(self, matches):
+		return {'matches': [
+			{
+				'id': match_id,
+				'homeTeam': {'name': home, 'shortName': home[:3]},
+				'awayTeam': {'name': away, 'shortName': away[:3]},
+				'score': {'fullTime': {'home': home_goals, 'away': away_goals}},
+				'status': 'FINISHED',
+				'utcDate': '2026-09-20T14:00:00Z',
+				'matchday': 5,
+			}
+			for match_id, home, away, home_goals, away_goals in matches
+		]}
+
+	def _run(self, matches, *, dry_run=False):
+		args = ['sync_league_fixtures', '--codes', 'PL']
+		if dry_run:
+			args.append('--dry-run')
+		with mock.patch(f'{self.MODULE}.Command._api_get', return_value=self._payload(matches)), \
+				mock.patch(f'{self.MODULE}.time.sleep'), \
+				mock.patch.dict('os.environ', {'API_FOOTBALL_DATA_KEY': 'test'}):
+			call_command(*args)
+
+	def _history(self):
+		return ResultHistory.objects.filter(source='football-data-league')
+
+	def test_changed_score_appends_history_keyed_by_match_id(self):
+		self._run([(555, 'Arsenal', 'Chelsea', 2, 1)])
+
+		self._run([(555, 'Arsenal', 'Chelsea', 3, 1)])
+
+		rows = self._history().filter(subject='555')
+		self.assertEqual(rows.count(), 2)
+		self.assertEqual(
+			set(rows.values_list('home_goals', 'away_goals')),
+			{(2, 1), (3, 1)},
+		)
+		row = rows.order_by('id').first()
+		self.assertEqual((row.competition, row.season_name), ('PL', ''))
+		self.assertEqual((row.home_label, row.away_label), ('Arsenal', 'Chelsea'))
+
+	def test_unchanged_rerun_appends_nothing(self):
+		self._run([(555, 'Arsenal', 'Chelsea', 2, 1)])
+
+		self._run([(555, 'Arsenal', 'Chelsea', 2, 1)])
+
+		self.assertEqual(
+			list(self._history().filter(subject='555').values_list('home_goals', 'away_goals')),
+			[(2, 1)],
+		)
+
+	def test_dry_run_writes_no_history(self):
+		self._run([(555, 'Arsenal', 'Chelsea', 2, 1)])
+
+		self._run([(555, 'Arsenal', 'Chelsea', 3, 1)], dry_run=True)
+
+		self.assertEqual(
+			list(self._history().filter(subject='555').values_list('home_goals', 'away_goals')),
+			[(2, 1)],
+		)
+
+	def _history_query_count(self, ctx):
+		table = ResultHistory._meta.db_table
+		return sum(1 for query in ctx.captured_queries if table in query['sql'])
+
+	def test_history_queries_do_not_scale_with_fixture_count(self):
+		"""R7/S7a: history is one bounded prefetch per league, never a query per row.
+
+		The assertion is on the history-related queries alone (those touching
+		``ResultHistory``): one prefetch plus one bulk insert, the same for one
+		fixture and for three. Absolute totals cannot show this — the per-fixture
+		upsert queries and the transaction savepoints scale with N.
+		"""
+		with CaptureQueriesContext(connection) as one:
+			self._run([(801, 'A', 'B', 1, 0)])
+		with CaptureQueriesContext(connection) as three:
+			self._run([(811, 'A', 'B', 1, 0), (812, 'C', 'D', 2, 0), (813, 'E', 'F', 3, 0)])
+
+		self.assertEqual(self._history_query_count(one), 2)
+		self.assertEqual(self._history_query_count(three), 2)
+
+	def test_sync_leagues_appends_no_history_rows(self):
+		"""R5/S5b: standings are not results, so sync_leagues emits no history."""
+		LeagueStanding.objects.create(
+			league=self.league, season_year=2026, position=1, team_name='Arsenal',
+			played=9, won=7, draw=1, lost=1, goals_for=18, goals_against=6,
+			goal_difference=12, points=22,
+		)
+		competition = {
+			'emblem': 'https://crests.football-data.org/PL.png',
+			'plan': 'TIER_ONE',
+			'currentSeason': {'startDate': '2026-08-01'},
+		}
+		standings = {'standings': [{'type': 'TOTAL', 'table': [{
+			'position': 1, 'team': {'name': 'Arsenal', 'crest': ''},
+			'playedGames': 10, 'won': 8, 'draw': 1, 'lost': 1,
+			'goalsFor': 20, 'goalsAgainst': 5, 'goalDifference': 15, 'points': 25,
+		}]}]}
+
+		with mock.patch(
+			'draw.management.commands.sync_leagues.Command._api_get',
+			side_effect=[competition, standings],
+		), mock.patch('draw.management.commands.sync_leagues.time.sleep'), \
+				mock.patch.dict('os.environ', {'API_FOOTBALL_DATA_KEY': 'test'}):
+			call_command('sync_leagues', '--league', 'PL')
+
+		self.assertEqual(ResultHistory.objects.count(), 0)
+		self.assertEqual(
+			LeagueStanding.objects.get(league=self.league, season_year=2026).points,
+			25,
 		)
 
