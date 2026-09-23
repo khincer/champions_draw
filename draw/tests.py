@@ -2684,6 +2684,76 @@ class PromiedosFriendliesSyncTests(TestCase):
 		self.assertEqual(SeasonMatchup.objects.count(), 1)
 		self.assertEqual(SeasonMatchup.objects.get().external_id, 'promiedos:g1')
 
+	def test_year_boundary_buckets_by_fetch_day_not_kickoff(self):
+		from draw.management.commands import sync_promiedos_friendlies as friendlies
+
+		in_season = self._game(
+			'g-new', self._team('t1', 'Argentina', 'ba'), self._team('t2', 'Inglaterra', 'b')
+		)
+		out_of_season = self._game(
+			'g-old', self._team('t3', 'Brasil', 'bb'), self._team('t4', 'Uruguay', 'bc')
+		)
+
+		def responder(url):
+			# today=2026-01-01 with days_back=1 straddles the year boundary.
+			if url.endswith('/31-12-2025'):
+				return self._payload([out_of_season])
+			return self._payload([in_season])
+
+		with mock.patch.object(friendlies, 'date') as mock_date:
+			mock_date.today.return_value = datetime(2026, 1, 1).date()
+			out, err = self._run(responder, days_back=1, days_ahead=0, season=2026)
+
+		# Both games kick off in 2026; only the one *fetched* on an in-season
+		# day is imported, so the bucket is the fetch day, not the kickoff.
+		self.assertTrue(Season.objects.filter(name='Friendlies 2026').exists())
+		self.assertEqual(SeasonMatchup.objects.count(), 1)
+		self.assertEqual(SeasonMatchup.objects.get().external_id, 'promiedos:g-new')
+		self.assertFalse(
+			SeasonMatchup.objects.filter(external_id='promiedos:g-old').exists()
+		)
+
+		self.assertIn('Skipped 1 friendlies outside 2026', out)
+		self.assertIn('1 outside season', out)
+
+	def test_leagues_without_fha_league_writes_nothing(self):
+		# `leagues` is present and populated, but none is the friendlies league.
+		# Distinct from the empty-list case: the run must still write nothing
+		# and stay successful.
+		other_league = {
+			'id': 'not-fha',
+			'games': [
+				self._game('g9', self._team('t9', 'Portugal', 'bb'), self._team('t8', 'Suiza', 'bf')),
+			],
+		}
+		out, err = self._run(lambda url: {'leagues': [other_league]})
+
+		self.assertEqual(Season.objects.count(), 0)
+		self.assertEqual(SeasonMatchup.objects.count(), 0)
+		self.assertIn('imported 0', out + err)
+
+	def test_national_team_association_name_is_its_code_and_has_no_domestic(self):
+		games = [self._game(
+			'g1', self._team('t1', 'Inglaterra', 'b'), self._team('t2', 'Argentina', 'ba')
+		)]
+		self._run(lambda url: self._payload(games))
+
+		# COUNTRY_NAMES only carries the 10 CONMEBOL codes, so a friendlies
+		# nation's Association is named after its 3-letter code.
+		england = Association.objects.get(code='ENG')
+		self.assertEqual(england.name, 'ENG')
+
+		# get_domestic keys on association.name against league.country. A league
+		# country spelled the human way must not match the code, so the national
+		# team serialises to domestic=None even when a same-named standing row
+		# exists (were the name 'England', this row would match).
+		league = League.objects.create(code='PL', name='Premier League', country='England')
+		LeagueStanding.objects.create(
+			league=league, season_year=2026, position=1, team_name='Inglaterra',
+		)
+		entry = SeasonTeam.objects.get(team__name='Inglaterra')
+		self.assertIsNone(CompactSeasonTeamSerializer(entry).data['domestic'])
+
 
 class FriendliesUnresolvedNationTests(TestCase):
 	"""Resolution misses skip loudly but never fail the run (spec R10)."""
@@ -2747,6 +2817,28 @@ class FriendliesUnresolvedNationTests(TestCase):
 		self.assertIn('skipped 1', combined)
 		self.assertEqual(SeasonMatchup.objects.count(), 1)
 		self.assertEqual(SeasonMatchup.objects.get().external_id, 'promiedos:g1')
+
+	def test_two_unresolved_teams_sharing_country_id_are_both_named(self):
+		# Both teams are unresolvable and share one country_id (None, the
+		# realistic shape). The tracker is keyed by (country_id, name); a
+		# country_id-only key collapses the pair into a single entry, so unlike
+		# the zzz/yyy test above this case discriminates that fix: the old
+		# implementation would print only one of the names (dict) or none of
+		# them (set of ids), and the count would be 1, not 2.
+		games = [self._game(
+			'g1',
+			self._team('t1', 'Futbolandia', None),
+			self._team('t2', 'Otrolandia', None),
+		)]
+
+		out, err = self._run(games)
+
+		self.assertIn('Futbolandia', err)
+		self.assertIn('Otrolandia', err)
+		self.assertIn('Unresolved nation codes (2)', err)
+		self.assertIn('skipped 1', err)
+		self.assertIn('imported 0', err)
+		self.assertEqual(SeasonMatchup.objects.count(), 0)
 
 
 class FriendliesNeverSeededTests(TestCase):
