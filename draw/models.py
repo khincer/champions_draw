@@ -7,6 +7,7 @@ class CompetitionChoices(models.TextChoices):
 	LIBERTADORES = 'LIB', 'Copa Libertadores'
 	SUDAMERICANA = 'SUD', 'Copa Sudamericana'
 	FRIENDLIES = 'FRN', 'International Friendlies'
+	NATIONS_LEAGUE = 'UNL', 'UEFA Nations League'
 
 
 class QualifiedViaChoices(models.TextChoices):
@@ -226,6 +227,37 @@ class SeasonMatchupHistory(models.Model):
 
     def __str__(self) -> str:
         return f'{self.season_name}: {self.home_team.name} vs {self.away_team.name}'
+
+
+class ResultHistory(models.Model):
+    """An append-only observation of one fixture's score and status.
+
+    Deliberately has no foreign key and no unique constraint. An FK would
+    cascade-delete or orphan history because ``sync_leagues`` deletes and
+    recreates its rows and ``SeasonMatchup`` is re-upserted in place;
+    uniqueness is the exact opposite of the requirement, since one subject
+    must accumulate rows over time. The logical key is ``(source, subject)``
+    and is enforced in code only.
+    """
+    source = models.CharField(max_length=20)
+    competition = models.CharField(max_length=10)
+    season_name = models.CharField(max_length=20, blank=True, default='')
+    subject = models.CharField(max_length=80)
+    home_label = models.CharField(max_length=100)
+    away_label = models.CharField(max_length=100)
+    home_goals = models.PositiveSmallIntegerField(null=True)
+    away_goals = models.PositiveSmallIntegerField(null=True)
+    status = models.CharField(max_length=20, blank=True, default='')
+    observed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-observed_at', '-id']
+        indexes = [
+            models.Index(fields=['source', 'subject'], name='rh_source_subject_idx'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.source}:{self.subject} {self.home_goals}-{self.away_goals}'
 
 
 class SeasonMatchup(models.Model):
