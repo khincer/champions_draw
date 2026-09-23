@@ -11,10 +11,11 @@ def record_result_history(observations, *, source, competition, season_name=''):
     collapse to the last one seen: a directed pair can recur across filters in
     a single run and the live row ends on the last value.
 
-    The comparison is against **history**, not the live row, so a flush that
-    was missed on one run is re-detected and appended on the next one. That
-    self-healing is load-bearing — it is what lets a non-atomic write site
-    stay non-atomic — not an incidental side effect.
+    The comparison is against **history**, not the live row. That is what lets a
+    caller which collects its observations **unconditionally** re-detect and
+    append a transition whose flush was missed: the next run re-offers the same
+    tuple, this helper sees history lacks it, and appends it. A caller that gates
+    collection on the live row does not get that property.
 
     Returns the number of rows appended.
 
@@ -29,10 +30,15 @@ def record_result_history(observations, *, source, competition, season_name=''):
     if not latest_by_subject:
         return 0
 
-    # One bounded prefetch: the latest history row id per subject. ``order_by()``
-    # clears Meta.ordering, which would otherwise leak into the GROUP BY and
-    # split one subject into a group per (observed_at, id). No DISTINCT ON —
-    # it is not portable to the SQLite test database.
+    # One bounded prefetch: the latest history row id per subject. The
+    # ``order_by()`` here is defensive hygiene, not a correctness requirement:
+    # on this Django version SQLCompiler.get_group_by already excludes
+    # ``Meta.ordering`` from the GROUP BY — it adds ordering expressions only
+    # when ``self._meta_ordering`` is unset, and the compiler sets that flag for
+    # ``Meta.ordering`` alone (an explicit ``order_by()`` leaves it unset, so an
+    # explicit ordering is the case that would leak). Kept so the aggregate
+    # stays correct if that compiler behaviour ever changes. No DISTINCT ON — it
+    # is not portable to the SQLite test database.
     latest_ids = (
         ResultHistory.objects
         .filter(source=source, subject__in=list(latest_by_subject))

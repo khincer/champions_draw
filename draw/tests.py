@@ -1996,6 +1996,87 @@ class SyncRealFixtureResultsTests(TestCase):
 		self.assertEqual((result.home_goals, result.away_goals), (3, 1))
 
 
+class RealFixtureHistoryTests(TestCase):
+	"""The UCL result writer appends history alongside its upsert.
+
+	Offline: the network boundary (``fetch``) is patched with a promiedos
+	payload, exactly as ``SyncRealFixtureResultsTests`` does.
+	"""
+
+	def _run(self, home_goals, away_goals, *, dry_run=False):
+		fixtures_path = (
+			Path(__file__).resolve().parent / 'data' / 'ucl_league_phase_real_fixtures_2026_27.json'
+		)
+		payload = {
+			'props': {'pageProps': {'data': {'games': {'filters': [
+				{'name': 'Partidos actuales', 'games': [
+					{'id': 'a', 'game_time_status_to_display': 'Final',
+					 'teams': [{'name': 'AEK Atenas', 'url_name': 'aek-athens'},
+					           {'name': 'LASK Linz', 'url_name': 'lask-linz'}],
+					 'scores': [home_goals, away_goals]},
+				]},
+			]}}},
+		}}
+		html_text = (
+			'<div id="root"></div>'
+			'<script id="__NEXT_DATA__" type="application/json">'
+			f'{json.dumps(payload)}'
+			'</script>'
+		)
+
+		with TemporaryDirectory() as tmp:
+			copied = Path(tmp) / 'fixtures.json'
+			copied.write_bytes(fixtures_path.read_bytes())
+			args = [
+				'sync_real_fixture_results',
+				'--source', 'promiedos',
+				'--fixtures-json', str(copied),
+			]
+			if dry_run:
+				args.append('--dry-run')
+			with mock.patch(
+				'draw.management.commands.sync_real_fixture_results.fetch',
+				return_value=html_text,
+			):
+				call_command(*args)
+
+	def _history(self):
+		return ResultHistory.objects.filter(source='promiedos', subject='real-1-1')
+
+	def test_changed_score_appends_two_history_rows(self):
+		self._run(3, 1)
+		self._run(2, 0)
+
+		self.assertEqual(self._history().count(), 2)
+		self.assertEqual(
+			set(self._history().values_list('home_goals', 'away_goals')),
+			{(3, 1), (2, 0)},
+		)
+		row = self._history().order_by('id').first()
+		self.assertEqual((row.competition, row.season_name), ('UCL', '2026-27'))
+
+	def test_unchanged_rerun_appends_nothing(self):
+		self._run(3, 1)
+
+		self._run(3, 1)
+
+		self.assertEqual(self._history().count(), 1)
+		self.assertEqual(
+			list(self._history().values_list('home_goals', 'away_goals')),
+			[(3, 1)],
+		)
+
+	def test_dry_run_writes_no_history(self):
+		self._run(3, 1)
+
+		self._run(2, 0, dry_run=True)
+
+		self.assertEqual(
+			list(self._history().values_list('home_goals', 'away_goals')),
+			[(3, 1)],
+		)
+
+
 class LeagueFixtureListAPITests(APITestCase):
     def setUp(self):
         self.league = League.objects.create(name='Premier League', code='PL', country='England')
@@ -2934,4 +3015,30 @@ class ResultHistoryTests(TestCase):
 		self.assertEqual(appended, 1)
 		row = ResultHistory.objects.get()
 		self.assertEqual((row.home_goals, row.away_goals), (3, 2))
+
+	def test_one_changed_subject_of_two_appends_only_that_row(self):
+		# Exercises the grouped prefetch's per-subject resolution together with
+		# the mixed append/skip branch: a regression that collapsed subject
+		# groups would still pass every single-subject test above.
+		self._observe([self._obs(subject='real-1-1', home_goals=2, away_goals=1)])
+		self._observe([self._obs(subject='real-1-2', home_goals=1, away_goals=1)])
+
+		appended = self._observe([
+			self._obs(subject='real-1-1', home_goals=2, away_goals=1),
+			self._obs(subject='real-1-2', home_goals=3, away_goals=1),
+		])
+
+		self.assertEqual(appended, 1)
+		self.assertEqual(ResultHistory.objects.count(), 3)
+		self.assertEqual(
+			ResultHistory.objects.filter(subject='real-1-1').count(), 1,
+		)
+		self.assertEqual(
+			list(
+				ResultHistory.objects.filter(subject='real-1-2')
+				.order_by('id')
+				.values_list('home_goals', 'away_goals')
+			),
+			[(1, 1), (3, 1)],
+		)
 
