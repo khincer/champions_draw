@@ -14,11 +14,12 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueMatch, LeagueMatchPrediction, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, RealFixturePrediction, RealFixtureResult, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
+from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueMatch, LeagueMatchPrediction, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, RealFixturePrediction, RealFixtureResult, ResultHistory, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
 from .serializers import CompactSeasonTeamSerializer
 from .services.draw import DrawError, compute_forbidden_directions, generate_season_draw, previous_season_names
 from .services.import_seed_input import import_seed_input_payload
 from .services.interactive_draw import assign_opponents_for_pick, current_pot, finalize, pick_team, start_or_resume
+from .services.result_history import record_result_history
 from .services.seeding import SeedingError, seed_season_entries
 
 
@@ -2855,4 +2856,82 @@ class FriendliesNeverSeededTests(TestCase):
 
 		with self.assertRaises(SeedingError):
 			seed_season_entries(season)
+
+
+class ResultHistoryTests(TestCase):
+	"""The append-only helper compares against history, never the live row."""
+
+	def _observe(self, observations, **overrides):
+		options = {'source': 'promiedos', 'competition': 'UCL', 'season_name': '2026-27'}
+		options.update(overrides)
+		return record_result_history(observations, **options)
+
+	def _obs(self, subject='real-1-1', home_goals=2, away_goals=1, status='FINISHED'):
+		return {
+			'subject': subject,
+			'home_label': 'Home',
+			'away_label': 'Away',
+			'home_goals': home_goals,
+			'away_goals': away_goals,
+			'status': status,
+		}
+
+	def test_first_observation_appends_one_row(self):
+		appended = self._observe([self._obs()])
+
+		self.assertEqual(appended, 1)
+		row = ResultHistory.objects.get()
+		self.assertEqual(row.source, 'promiedos')
+		self.assertEqual(row.competition, 'UCL')
+		self.assertEqual(row.season_name, '2026-27')
+		self.assertEqual(row.subject, 'real-1-1')
+		self.assertEqual(row.home_label, 'Home')
+		self.assertEqual(row.away_label, 'Away')
+		self.assertEqual((row.home_goals, row.away_goals, row.status), (2, 1, 'FINISHED'))
+
+	def test_unchanged_observation_appends_nothing(self):
+		self._observe([self._obs()])
+
+		appended = self._observe([self._obs()])
+
+		self.assertEqual(appended, 0)
+		self.assertEqual(ResultHistory.objects.count(), 1)
+
+	def test_second_change_appends_a_second_row_and_keeps_the_first(self):
+		self._observe([self._obs(home_goals=1, away_goals=0)])
+		self._observe([self._obs(home_goals=2, away_goals=1)])
+
+		self.assertEqual(ResultHistory.objects.count(), 2)
+		self.assertEqual(
+			set(ResultHistory.objects.values_list('home_goals', 'away_goals')),
+			{(1, 0), (2, 1)},
+		)
+
+	def test_status_only_change_appends(self):
+		self._observe([self._obs(home_goals=2, away_goals=1, status='IN_PLAY')])
+
+		appended = self._observe([self._obs(home_goals=2, away_goals=1, status='FINISHED')])
+
+		self.assertEqual(appended, 1)
+		self.assertEqual(ResultHistory.objects.count(), 2)
+
+	def test_same_subject_under_two_sources_stays_distinct(self):
+		self._observe([self._obs()], source='promiedos')
+		self._observe([self._obs()], source='football-data')
+
+		self.assertEqual(ResultHistory.objects.count(), 2)
+		self.assertEqual(
+			set(ResultHistory.objects.values_list('source', flat=True)),
+			{'promiedos', 'football-data'},
+		)
+
+	def test_last_observation_in_one_call_wins(self):
+		appended = self._observe([
+			self._obs(home_goals=0, away_goals=0),
+			self._obs(home_goals=3, away_goals=2),
+		])
+
+		self.assertEqual(appended, 1)
+		row = ResultHistory.objects.get()
+		self.assertEqual((row.home_goals, row.away_goals), (3, 2))
 
