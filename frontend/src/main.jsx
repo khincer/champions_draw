@@ -134,7 +134,13 @@ function App() {
     if (view !== 'home' || !selectedSeasonId) return undefined;
     loadRealMatches();
     const timer = window.setInterval(() => {
-      if (homeMatchesRef.current.some((m) => inHomeRange(m) && !m.result)) loadRealMatches();
+      /* Only a match that has already kicked off can be awaiting a result.
+         Tomorrow's fixtures are in range but never have one yet, so without the
+         kickoff guard this poll would fire around the clock. */
+      const now = Date.now();
+      if (homeMatchesRef.current.some(
+        (m) => inHomeRange(m) && m.kickoff && new Date(m.kickoff).getTime() <= now && !m.result,
+      )) loadRealMatches();
     }, 60_000);
     return () => window.clearInterval(timer);
   }, [view, selectedSeasonId]);

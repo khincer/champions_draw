@@ -20,7 +20,7 @@ const QUICK_ACTIONS = [
 
 /* The bucket keys are literal object keys; only the rendered label is
    translated. Translating the key itself would break the lookup. */
-const BUCKET_LABELS = { Today: 'home.today', Yesterday: 'home.yesterday' };
+const BUCKET_LABELS = { Tomorrow: 'home.tomorrow', Today: 'home.today', Yesterday: 'home.yesterday' };
 
 function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef }) {
   const { t, formatDay, formatTime } = useI18n();
@@ -137,15 +137,20 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
     [visibleMatches],
   );
 
+  /* Render order is Tomorrow, Today, Yesterday — deliberate, do not "fix" it.
+     Object.entries preserves this insertion order. */
   const groups = useMemo(() => {
-    const today = new Date().toDateString();
+    const now = new Date();
+    const today = now.toDateString();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString();
     return inRange.reduce(
       (acc, m) => {
-        const key = new Date(m.kickoff).toDateString() === today ? 'Today' : 'Yesterday';
+        const day = new Date(m.kickoff).toDateString();
+        const key = day === tomorrow ? 'Tomorrow' : day === today ? 'Today' : 'Yesterday';
         acc[key].push(m);
         return acc;
       },
-      { Today: [], Yesterday: [] },
+      { Tomorrow: [], Today: [], Yesterday: [] },
     );
   }, [inRange]);
 

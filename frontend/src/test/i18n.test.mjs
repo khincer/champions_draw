@@ -9,7 +9,7 @@ import en from '../i18n/locales/en.js';
 import es from '../i18n/locales/es.js';
 import fr from '../i18n/locales/fr.js';
 import pt from '../i18n/locales/pt.js';
-import { shortTime, shortDay, shortDate, formatNumber } from '../lib/format.js';
+import { shortTime, shortDay, shortDate, formatNumber, inHomeRange } from '../lib/format.js';
 
 
 /* resolveLocale is pure: no window, no document, no storage access. */
@@ -86,6 +86,28 @@ test('omitting the locale keeps the previous behaviour and its guards', () => {
   assert.equal(shortDate(undefined), '');
   assert.equal(typeof shortDay(SAMPLE), 'string');
   assert.equal(typeof shortDate(SAMPLE), 'string');
+});
+
+
+/* inHomeRange spans three local calendar days. Kickoffs are built relative to
+   the real clock (today at noon, ±1/±2 days) so no clock mocking is needed. */
+function kickoffAtNoon(dayOffset) {
+  const day = new Date();
+  day.setHours(12, 0, 0, 0);
+  day.setDate(day.getDate() + dayOffset);
+  return { kickoff: day.toISOString() };
+}
+
+test('inHomeRange includes yesterday, today and tomorrow, and excludes the day after tomorrow', () => {
+  assert.equal(inHomeRange(kickoffAtNoon(-1)), true, 'yesterday is included');
+  assert.equal(inHomeRange(kickoffAtNoon(0)), true, 'today is included');
+  assert.equal(inHomeRange(kickoffAtNoon(1)), true, 'tomorrow is included');
+  assert.equal(inHomeRange(kickoffAtNoon(2)), false, 'the day after tomorrow is excluded');
+});
+
+test('inHomeRange excludes a matchup with no kickoff', () => {
+  assert.equal(inHomeRange({ kickoff: null }), false);
+  assert.equal(inHomeRange({}), false);
 });
 
 
