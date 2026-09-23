@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -19,7 +19,7 @@ from .serializers import CompactSeasonTeamSerializer
 from .services.draw import DrawError, compute_forbidden_directions, generate_season_draw, previous_season_names
 from .services.import_seed_input import import_seed_input_payload
 from .services.interactive_draw import assign_opponents_for_pick, current_pot, finalize, pick_team, start_or_resume
-from .services.seeding import seed_season_entries
+from .services.seeding import SeedingError, seed_season_entries
 
 
 class DrawApiTests(APITestCase):
@@ -592,6 +592,8 @@ class PreviousSeasonNamesTests(TestCase):
 	def test_returns_none_for_malformed_name(self):
 		self.assertIsNone(previous_season_names('not-a-season'))
 		self.assertIsNone(previous_season_names('2026'))
+		# A friendlies season has no two-season window; Rule 6 must skip it.
+		self.assertIsNone(previous_season_names('Friendlies 2026'))
 
 
 class Rule6Tests(TestCase):
@@ -2137,6 +2139,82 @@ class HomepageMatchesLeagueTests(APITestCase):
 		self.assertEqual(row['competition'], 'Libertadores')
 		self.assertEqual(row['competition_emblem'], 'https://media.api-sports.io/football/leagues/13.png')
 
+	def test_friendlies_row_without_kickoff_is_skipped(self):
+		"""S5c: an sm- SeasonMatchup with no kickoff is skipped, never rendered blank."""
+		association = Association.objects.create(name='England', code='ENG')
+		season = Season.objects.create(name='Friendlies 2026', competition='FRN')
+
+		def add_matchup(marker, kickoff):
+			home = SeasonTeam.objects.create(
+				season=season,
+				team=Team.objects.create(
+					name=f'{marker} Home', short_name=f'{marker}H', association=association,
+				),
+				uefa_club_coefficient=Decimal('0.000'),
+			)
+			away = SeasonTeam.objects.create(
+				season=season,
+				team=Team.objects.create(
+					name=f'{marker} Away', short_name=f'{marker}A', association=association,
+				),
+				uefa_club_coefficient=Decimal('0.000'),
+			)
+			return SeasonMatchup.objects.create(
+				season=season, home_team=home, away_team=away,
+				kickoff=kickoff, status='SCHEDULED',
+			)
+
+		no_kickoff = add_matchup('No', None)
+		with_kickoff = add_matchup('Yes', datetime.now(timezone.utc))
+
+		resp = self.client.get('/api/homepage/matches/')
+		self.assertEqual(resp.status_code, 200)
+		rows = {r['id'] for r in resp.json()['matchups'] if r['id'].startswith('sm-')}
+		self.assertNotIn(f'sm-{no_kickoff.pk}', rows)
+		self.assertIn(f'sm-{with_kickoff.pk}', rows)
+
+	def test_non_ucl_season_labels_and_emblems(self):
+		"""LIB/SUD stay byte-identical; FRN never inherits CONMEBOL's metadata."""
+		def add_season(name, competition, code):
+			association = Association.objects.create(name=f'{competition} Assoc', code=code)
+			season = Season.objects.create(name=name, competition=competition)
+			home = SeasonTeam.objects.create(
+				season=season,
+				team=Team.objects.create(name=f'{competition} Home', short_name='HOM', association=association),
+				uefa_club_coefficient=Decimal('0.000'),
+			)
+			away = SeasonTeam.objects.create(
+				season=season,
+				team=Team.objects.create(name=f'{competition} Away', short_name='AWY', association=association),
+				uefa_club_coefficient=Decimal('0.000'),
+			)
+			SeasonMatchup.objects.create(
+				season=season, home_team=home, away_team=away,
+				kickoff=datetime.now(timezone.utc), status='SCHEDULED',
+			)
+
+		add_season('Libertadores 2026', 'LIB', 'LBA')
+		add_season('Sudamericana 2026', 'SUD', 'SUB')
+		add_season('Friendlies 2026', 'FRN', 'FRA')
+
+		resp = self.client.get('/api/homepage/matches/')
+		by_label = {
+			r['competition']: r
+			for r in resp.json()['matchups']
+			if r['id'].startswith('sm-')
+		}
+		self.assertEqual(
+			by_label['Libertadores']['competition_emblem'],
+			'https://media.api-sports.io/football/leagues/13.png',
+		)
+		self.assertEqual(
+			by_label['Sudamericana']['competition_emblem'],
+			'https://media.api-sports.io/football/leagues/11.png',
+		)
+		friendlies = by_label['International Friendlies']
+		self.assertIsNone(friendlies['competition_emblem'])
+		self.assertEqual(resp.status_code, 200)
+
 	def test_ucl_row_carries_football_data_emblem(self):
 		Season.objects.create(name='2026-27', competition='UCL')
 		fake_fixtures = [{
@@ -2424,8 +2502,265 @@ class BootstrapSeasonCommandTests(TestCase):
 		self.assertTrue(Season.objects.get(name='2026-27').is_active)
 		self.assertEqual(Season.objects.filter(is_active=True).count(), 1)
 
+	def test_friendlies_season_is_left_inactive(self):
+		"""A friendlies season must never become the served active season."""
+		friendlies = Season.objects.create(name='Friendlies 2026', competition='FRN', is_active=False)
+
+		call_command('bootstrap_season')
+
+		friendlies.refresh_from_db()
+		self.assertFalse(friendlies.is_active)
+		self.assertEqual(Season.objects.filter(is_active=True).count(), 1)
+		self.assertEqual(Season.objects.get(is_active=True).name, '2026-27')
+
 	def test_missing_seed_file_fails_loudly(self):
 		with self.assertRaises(CommandError):
 			call_command('bootstrap_season', '--seed-file', 'does/not/exist.json')
 
 		self.assertFalse(Season.objects.filter(name='2026-27').exists())
+
+
+class LeagueListCompetitionTests(APITestCase):
+	"""GET /api/leagues/ season entries: LIB/SUD byte-identical, FRN not CONMEBOL."""
+
+	def test_lib_and_sud_entries_are_byte_identical(self):
+		Season.objects.create(name='Libertadores 2026', competition='LIB')
+		Season.objects.create(name='Sudamericana 2026', competition='SUD')
+		lib = Season.objects.get(name='Libertadores 2026')
+		sud = Season.objects.get(name='Sudamericana 2026')
+
+		resp = self.client.get('/api/leagues/')
+		self.assertEqual(resp.status_code, 200)
+		entries = {e['code']: e for e in resp.json() if e.get('kind') == 'season'}
+		self.assertEqual(entries['LIB'], {
+			'id': f'season-{lib.pk}',
+			'code': 'LIB',
+			'name': 'Libertadores 2026',
+			'country': 'CONMEBOL',
+			'emblem_url': 'https://media.api-sports.io/football/leagues/13.png',
+			'kind': 'season',
+			'season_id': lib.pk,
+		})
+		self.assertEqual(entries['SUD'], {
+			'id': f'season-{sud.pk}',
+			'code': 'SUD',
+			'name': 'Sudamericana 2026',
+			'country': 'CONMEBOL',
+			'emblem_url': 'https://media.api-sports.io/football/leagues/11.png',
+			'kind': 'season',
+			'season_id': sud.pk,
+		})
+
+	def test_friendlies_entry_is_not_conmebol_labelled(self):
+		season = Season.objects.create(name='Friendlies 2026', competition='FRN')
+
+		resp = self.client.get('/api/leagues/')
+		entry = next(e for e in resp.json() if e.get('code') == 'FRN')
+		self.assertEqual(entry['id'], f'season-{season.pk}')
+		self.assertEqual(entry['name'], 'Friendlies 2026')
+		self.assertEqual(entry['country'], 'International')
+		self.assertNotEqual(entry['country'], 'CONMEBOL')
+		self.assertIsNone(entry['emblem_url'])
+
+
+class FriendliesGroupStandingsTests(APITestCase):
+	def test_frn_standings_return_empty_groups(self):
+		"""Risk 1: the teams-browser panel renders empty, not an error."""
+		season = Season.objects.create(name='Friendlies 2026', competition='FRN')
+
+		resp = self.client.get(f'/api/seasons/{season.pk}/group-standings/')
+
+		self.assertEqual(resp.status_code, 200)
+		self.assertEqual(resp.json(), {'season_id': season.pk, 'groups': []})
+
+
+class PromiedosFriendliesSyncTests(TestCase):
+	"""The friendlies pull, run offline against a stubbed date endpoint."""
+
+	def _team(self, team_id, name, country_id):
+		return {'id': team_id, 'name': name, 'short_name': name[:3], 'country_id': country_id}
+
+	def _game(self, game_id, home, away, start_time='22-09-2026 20:00'):
+		return {
+			'id': game_id,
+			'start_time': start_time,
+			'status': {'short_name': 'Prog.', 'name': 'Programado'},
+			'game_time_status_to_display': '',
+			'scores': [],
+			'teams': [home, away],
+		}
+
+	def _payload(self, games, league_id='fha'):
+		return {'leagues': [{'id': league_id, 'games': games}]}
+
+	def _run(self, responder, **options):
+		from io import StringIO
+
+		from draw.management.commands.sync_promiedos_friendlies import Command
+
+		options.setdefault('days_back', 0)
+		options.setdefault('days_ahead', 0)
+		out, err = StringIO(), StringIO()
+		with mock.patch.object(Command, 'fetch_json', side_effect=responder):
+			call_command('sync_promiedos_friendlies', stdout=out, stderr=err, **options)
+		return out.getvalue(), err.getvalue()
+
+	def test_imports_one_day(self):
+		games = [
+			self._game('g1', self._team('t1', 'Argentina', 'ba'), self._team('t2', 'Inglaterra', 'b')),
+			# An unseen country_id for a nation the name map already knows.
+			self._game('g2', self._team('t3', 'Gales', 'zz9'), self._team('t4', 'España', 'c')),
+		]
+		self._run(lambda url: self._payload(games))
+
+		season = Season.objects.get(name=f'Friendlies {date.today().year}')
+		self.assertEqual(season.competition, 'FRN')
+		self.assertFalse(season.is_active)
+
+		# 'ba' resolves via the parent CONMEBOL map, 'b'/'c' via the national id
+		# map, 'zz9' via the national name map.
+		self.assertEqual(
+			set(Association.objects.values_list('code', flat=True)),
+			{'ARG', 'ENG', 'ESP', 'WAL'},
+		)
+		self.assertEqual(SeasonTeam.objects.filter(season=season).count(), 4)
+		matchups = list(SeasonMatchup.objects.filter(season=season))
+		self.assertEqual(len(matchups), 2)
+		self.assertTrue(all(m.matchday is None for m in matchups))
+		self.assertEqual(
+			SeasonMatchup.objects.get(external_id='promiedos:g1').home_team.team.name,
+			'Argentina',
+		)
+
+	def test_zero_friendlies_day_writes_nothing(self):
+		out, err = self._run(lambda url: {'leagues': []})
+
+		self.assertEqual(Season.objects.count(), 0)
+		self.assertEqual(SeasonMatchup.objects.count(), 0)
+		self.assertIn('imported 0', out + err)
+
+	def test_rerun_is_idempotent(self):
+		games = [self._game('g1', self._team('t1', 'Argentina', 'ba'), self._team('t2', 'Inglaterra', 'b'))]
+		self._run(lambda url: self._payload(games))
+		before = (
+			Season.objects.count(), Association.objects.count(), Team.objects.count(),
+			SeasonTeam.objects.count(), SeasonMatchup.objects.count(),
+		)
+		external_id = SeasonMatchup.objects.get().external_id
+
+		self._run(lambda url: self._payload(games))
+
+		after = (
+			Season.objects.count(), Association.objects.count(), Team.objects.count(),
+			SeasonTeam.objects.count(), SeasonMatchup.objects.count(),
+		)
+		self.assertEqual(after, before)
+		self.assertEqual(SeasonMatchup.objects.count(), 1)
+		self.assertEqual(SeasonMatchup.objects.get().external_id, external_id)
+
+	def test_selects_only_fha_and_is_date_scoped(self):
+		from draw.management.commands.sync_promiedos_fixtures import PROMIEDOS_API
+
+		requested = []
+		other_league = {
+			'id': 'not-fha',
+			'games': [self._game('g9', self._team('t9', 'Portugal', 'bb'), self._team('t8', 'Suiza', 'bf'))],
+		}
+		fha_league = {'id': 'fha', 'games': [
+			self._game('g1', self._team('t1', 'Argentina', 'ba'), self._team('t2', 'Inglaterra', 'b')),
+		]}
+
+		def responder(url):
+			requested.append(url)
+			return {'leagues': [other_league, fha_league]}
+
+		self._run(responder, days_back=1, days_ahead=1)
+
+		expected = [
+			f'{PROMIEDOS_API}/games/{(date.today() + timedelta(days=offset)):%d-%m-%Y}'
+			for offset in (-1, 0, 1)
+		]
+		self.assertEqual(requested, expected)
+		self.assertEqual(SeasonMatchup.objects.count(), 1)
+		self.assertEqual(SeasonMatchup.objects.get().external_id, 'promiedos:g1')
+
+
+class FriendliesUnresolvedNationTests(TestCase):
+	"""Resolution misses skip loudly but never fail the run (spec R10)."""
+
+	def _game(self, game_id, home, away):
+		return {
+			'id': game_id,
+			'start_time': '22-09-2026 20:00',
+			'status': {'short_name': 'Prog.', 'name': 'Programado'},
+			'game_time_status_to_display': '',
+			'scores': [],
+			'teams': [home, away],
+		}
+
+	def _team(self, team_id, name, country_id):
+		return {'id': team_id, 'name': name, 'short_name': name[:3], 'country_id': country_id}
+
+	def _run(self, games):
+		from io import StringIO
+
+		from draw.management.commands.sync_promiedos_friendlies import Command
+
+		out, err = StringIO(), StringIO()
+		with mock.patch.object(
+			Command, 'fetch_json',
+			side_effect=lambda url: {'leagues': [{'id': 'fha', 'games': games}]},
+		):
+			call_command(
+				'sync_promiedos_friendlies',
+				days_back=0, days_ahead=0, stdout=out, stderr=err,
+			)
+		return out.getvalue(), err.getvalue()
+
+	def test_all_unresolved_skips_and_run_succeeds(self):
+		games = [self._game(
+			'g1',
+			self._team('t1', 'Futbolandia', 'zzz'),
+			self._team('t2', 'Otrolandia', 'yyy'),
+		)]
+
+		out, err = self._run(games)
+
+		self.assertIn('Futbolandia', err)
+		self.assertIn('zzz', err)
+		self.assertIn('Otrolandia', err)
+		self.assertIn('yyy', err)
+		self.assertIn('imported 0', err)
+		self.assertIn('skipped 1', err)
+		self.assertEqual(SeasonMatchup.objects.count(), 0)
+
+	def test_partial_import_succeeds(self):
+		games = [
+			self._game('g1', self._team('t1', 'Argentina', 'ba'), self._team('t2', 'Inglaterra', 'b')),
+			self._game('g2', self._team('t3', 'Futbolandia', 'zzz'), self._team('t4', 'Otrolandia', 'yyy')),
+		]
+
+		out, err = self._run(games)
+		combined = out + err
+
+		self.assertIn('imported 1', combined)
+		self.assertIn('skipped 1', combined)
+		self.assertEqual(SeasonMatchup.objects.count(), 1)
+		self.assertEqual(SeasonMatchup.objects.get().external_id, 'promiedos:g1')
+
+
+class FriendliesNeverSeededTests(TestCase):
+	def test_friendlies_season_cannot_be_seeded(self):
+		season = Season.objects.create(name='Friendlies 2026', competition='FRN')
+		association = Association.objects.create(name='England', code='ENG')
+		for index in range(5):
+			team = Team.objects.create(
+				name=f'Nation {index}', short_name=f'N{index}', association=association,
+			)
+			SeasonTeam.objects.create(
+				season=season, team=team, uefa_club_coefficient=Decimal('0.000'),
+			)
+
+		with self.assertRaises(SeedingError):
+			seed_season_entries(season)
+

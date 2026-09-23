@@ -16,6 +16,9 @@ export default {
   'errors.server': "Une erreur s'est produite sur le serveur. Réessayez dans un instant.",
   'errors.unknown': "Une erreur s'est produite. Réessayez.",
 
+  'fixtures.fullTime': 'Terminé',
+  'fixtures.versus': 'c.',
+
   'home.all': 'Toutes',
   'home.championsLeague': 'Champions League',
   'home.drawSimulator': 'Simulateur de tirage',
@@ -57,6 +60,8 @@ export default {
   'nav.views': 'Vues',
   'nav.workspace': 'Espace de travail',
 
+  'playoffs.aggregate': 'cumul {{score}}',
+
   'settings.darkTheme': 'Thème sombre',
   'settings.language': 'Langue',
 
@@ -71,6 +76,14 @@ export default {
   'shell.loadingPredictionLab': 'Chargement du laboratoire de pronostics',
   'shell.loadingSeasonData': 'Chargement des données de la saison',
   'shell.workspaceTitle': 'Espace de travail du tirage',
+
+  'standings.eliminated': 'Éliminés',
+  'standings.legendEliminated': 'Éliminés (25-36)',
+  'standings.legendPlayoffs': 'Barrages (9-24)',
+  'standings.legendQualified': 'Qualifiés (1-8)',
+  'standings.playoffs': 'Barrages',
+  'standings.qualified': 'Qualifiés',
+  'standings.team': 'Équipe',
 
   'states.drawFailed': "Le tirage n'a pas pu être généré",
   'states.loading': 'Chargement',

@@ -19,7 +19,7 @@ set -e
 
 case "${SERVICE_ROLE:-}" in
   cron-leagues)
-    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_promiedos_fixtures, sync_match_history"
+    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_promiedos_fixtures, sync_promiedos_friendlies, sync_match_history"
     # Standings and season-level data only. All of it changes slowly, so this
     # stays a daily job. Fixtures and results moved to cron-results because they
     # change constantly: group these by change rate, not by the word "league".
@@ -33,6 +33,12 @@ case "${SERVICE_ROLE:-}" in
     # value, so both run.
     python manage.py sync_promiedos_fixtures --competition lib
     python manage.py sync_promiedos_fixtures --competition sud
+    # International friendlies ("Amistoso Internacional"), same Promiedos source
+    # but a date-scoped pull: the league page 404s for `fha`, so this command
+    # walks /games/DD-MM-YYYY itself and needs no --competition. It creates an
+    # INACTIVE 'Friendlies <year>' season on purpose (see the command's
+    # docstring); never --set-active it.
+    python manage.py sync_promiedos_friendlies
     # Rule 6 (no third consecutive season with the same home team in a pairing)
     # reads SeasonMatchupHistory for the two seasons before the active one. If
     # nothing populates that table the constraint is silently a no-op, so this

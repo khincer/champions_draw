@@ -1,9 +1,12 @@
 import Crest from './Crest';
+import { useI18n } from '../i18n';
 
+/* `labelKey` is the one place a band's copy is named, so an accidental
+   module-level t() is obvious; the mark is a glyph, not copy. */
 const BANDS = {
-  qualified: { mark: '▲', text: 'Qualified', league: 'row-qualified', sidebar: 'r-qual' },
-  playoffs: { mark: '◆', text: 'Playoffs', league: 'row-playoffs', sidebar: 'r-play' },
-  eliminated: { mark: '▼', text: 'Eliminated', league: 'row-eliminated', sidebar: 'r-elim' },
+  qualified: { mark: '▲', labelKey: 'standings.qualified', league: 'row-qualified', sidebar: 'r-qual' },
+  playoffs: { mark: '◆', labelKey: 'standings.playoffs', league: 'row-playoffs', sidebar: 'r-play' },
+  eliminated: { mark: '▼', labelKey: 'standings.eliminated', league: 'row-eliminated', sidebar: 'r-elim' },
 };
 
 function bandOf(position) {
@@ -16,7 +19,10 @@ function bandOf(position) {
 
 const CELLS = {
   pos: { header: '#', slot: 'pos', value: (row, index) => row.position ?? index + 1 },
-  team: { header: 'Team', slot: 'team' },
+  /* `header` stays the English literal because it doubles as the column's
+     React key; `labelKey` carries the copy so the label is translated
+     independently of the key. */
+  team: { header: 'Team', labelKey: 'standings.team', slot: 'team' },
   played: { header: 'P', value: (row) => row.playedGames ?? row.played },
   won: { header: 'W', value: (row) => row.won ?? row.wins },
   drawn: { header: 'D', value: (row) => row.draw ?? row.draws },
@@ -104,6 +110,7 @@ export default function StandingsTable({
   scrollClassName,
   className = '',
 }) {
+  const { t } = useI18n();
   const spec = VARIANTS[variant];
   const columns = spec.columns.map((key) =>
     key === 'played' ? { ...CELLS.played, header: playedHeader } : CELLS[key],
@@ -115,7 +122,7 @@ export default function StandingsTable({
         <tr>
           {columns.map((column) => (
             <th className={column.slot ? spec.header[column.slot] : ''} key={column.header}>
-              {column.header}
+              {column.labelKey ? t(column.labelKey) : column.header}
             </th>
           ))}
         </tr>
@@ -168,7 +175,7 @@ export default function StandingsTable({
                     {column.slot === 'pos' && band ? (
                       <>
                         <span className="band-mark" aria-hidden="true">{BANDS[band].mark}</span>
-                        <span className="sr-only">{BANDS[band].text}</span>
+                        <span className="sr-only">{t(BANDS[band].labelKey)}</span>
                       </>
                     ) : null}
                   </td>
@@ -186,9 +193,9 @@ export default function StandingsTable({
       {scrollClassName ? <div className={scrollClassName}>{table}</div> : table}
       {legend === 'league' ? (
         <div className="table-legend">
-          <span className="legend-dot q" /> Qualified (1-8)
-          <span className="legend-dot p" /> Playoffs (9-24)
-          <span className="legend-dot e" /> Eliminated (25-36)
+          <span className="legend-dot q" /> {t('standings.legendQualified')}
+          <span className="legend-dot p" /> {t('standings.legendPlayoffs')}
+          <span className="legend-dot e" /> {t('standings.legendEliminated')}
         </div>
       ) : null}
       {legend === 'sidebar' ? (

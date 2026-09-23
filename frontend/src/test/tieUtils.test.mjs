@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { pairPlayoffTies, computeAgg, formatAggregate } from '../lib/tieUtils.js';
+import { createTranslator } from '../i18n/index.js';
+
+const t = createTranslator('en');
 
 function matchup(overrides = {}) {
   return {
@@ -91,15 +94,45 @@ test('group matchups with a numeric matchday are excluded; explicit null and mis
 
 /* formatAggregate — LPV-4 "agg X–Y" line rendered from the {home, away}
    object, with the "agg –" placeholder when the tie is unplayed or
-   single-legged (aggregate null). */
+   single-legged (aggregate null). The label is delegated to the injected
+   translator: the exact English strings below prove the catalogue entry, and
+   the delegation test proves the key. */
 test('formatAggregate renders the aggregate line from a played tie', () => {
-  assert.equal(formatAggregate({ home: 4, away: 3 }), 'agg 4–3');
+  assert.equal(formatAggregate({ home: 4, away: 3 }, t), 'agg 4–3');
 });
 
 test('formatAggregate renders the placeholder for unplayed or lone-leg ties', () => {
-  assert.equal(formatAggregate(null), 'agg –');
+  assert.equal(formatAggregate(null, t), 'agg –');
 });
 
 test('formatAggregate keeps a zero-zero aggregate (placeholder only when null)', () => {
-  assert.equal(formatAggregate({ home: 0, away: 0 }), 'agg 0–0');
+  assert.equal(formatAggregate({ home: 0, away: 0 }, t), 'agg 0–0');
+});
+
+test('formatAggregate delegates the label to the injected translator', () => {
+  const calls = [];
+  const stub = (key, params) => {
+    calls.push([key, params]);
+    return 'LABEL';
+  };
+  assert.equal(formatAggregate({ home: 4, away: 3 }, stub), 'LABEL');
+  assert.deepEqual(calls[0], ['playoffs.aggregate', { score: '4–3' }]);
+  assert.equal(formatAggregate(null, stub), 'LABEL');
+  assert.deepEqual(calls[1], ['playoffs.aggregate', { score: '–' }]);
+});
+
+test('formatAggregate follows the locale instead of a hardcoded English label', () => {
+  const french = createTranslator('fr');
+  assert.notEqual(
+    formatAggregate({ home: 4, away: 3 }, french),
+    formatAggregate({ home: 4, away: 3 }, t),
+  );
+});
+
+/* The transitional one-argument branch in lib/tieUtils.js keeps the caller that
+   D2 has not migrated yet (TeamsBrowser.jsx:59) working. Delete this test
+   together with that branch. */
+test('formatAggregate keeps the English label for a caller that passes no translator', () => {
+  assert.equal(formatAggregate({ home: 4, away: 3 }), 'agg 4–3');
+  assert.equal(formatAggregate(null), 'agg –');
 });

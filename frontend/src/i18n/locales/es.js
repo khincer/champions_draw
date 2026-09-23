@@ -15,6 +15,9 @@ export default {
   'errors.server': 'Algo salió mal en el servidor. Inténtalo de nuevo en un momento.',
   'errors.unknown': 'Algo salió mal. Inténtalo de nuevo.',
 
+  'fixtures.fullTime': 'Final',
+  'fixtures.versus': 'vs.',
+
   'home.all': 'Todos',
   'home.championsLeague': 'Champions League',
   'home.drawSimulator': 'Simulador de sorteo',
@@ -56,6 +59,8 @@ export default {
   'nav.views': 'Vistas',
   'nav.workspace': 'Espacio de trabajo',
 
+  'playoffs.aggregate': 'global {{score}}',
+
   'settings.darkTheme': 'Tema oscuro',
   'settings.language': 'Idioma',
 
@@ -70,6 +75,14 @@ export default {
   'shell.loadingPredictionLab': 'Cargando laboratorio de pronósticos',
   'shell.loadingSeasonData': 'Cargando datos de la temporada',
   'shell.workspaceTitle': 'Espacio de trabajo del sorteo',
+
+  'standings.eliminated': 'Eliminados',
+  'standings.legendEliminated': 'Eliminados (25-36)',
+  'standings.legendPlayoffs': 'Eliminatorias (9-24)',
+  'standings.legendQualified': 'Clasificados (1-8)',
+  'standings.playoffs': 'Eliminatorias',
+  'standings.qualified': 'Clasificados',
+  'standings.team': 'Equipo',
 
   'states.drawFailed': 'No se pudo generar el sorteo',
   'states.loading': 'Cargando',
