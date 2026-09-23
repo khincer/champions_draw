@@ -44,6 +44,7 @@ from draw.services.conmebol_naming import (
     PROMIEDOS_NATIONAL_TEAM_ID_MAP,
     normalize_text,
 )
+from draw.services.result_history import record_result_history
 
 # Promiedos' id for "Amistoso Internacional". Only reachable via the date
 # endpoint; the league-filter route 404s for it.
@@ -181,6 +182,7 @@ class Command(PromiedosFixturesCommand):
             imported = 0
             skipped_unresolved = 0
             skipped_invalid = 0
+            history_observations = []
 
             for game in games:
                 teams_info = game.get('teams') or []
@@ -216,6 +218,24 @@ class Command(PromiedosFixturesCommand):
                     'home_goals': int(scores[0]) if finished and len(scores) > 0 else None,
                     'away_goals': int(scores[1]) if finished and len(scores) > 1 else None,
                 }
+
+                # Offered for every game that reaches the upsert -- after the
+                # unresolved-nation skip, before the live-row check. The helper
+                # dedupes against history, so an unchanged game appends nothing.
+                # The enclosing atomic() commits the append with the live upsert;
+                # collecting unconditionally is belt-and-braces on top, so a
+                # flush missed by a crash is re-appended by the next run.
+                history_observations.append({
+                    # The triple is SeasonMatchup's own unique constraint.
+                    # external_id is rejected: it is overwritten when a directed
+                    # pair recurs (two friendly windows) and is not unique.
+                    'subject': f'{season.pk}:{home_entry.pk}:{away_entry.pk}',
+                    'home_label': home.name,
+                    'away_label': away.name,
+                    'home_goals': defaults['home_goals'],
+                    'away_goals': defaults['away_goals'],
+                    'status': defaults['status'],
+                })
 
                 # QuerySet.update() skips Model.full_clean().
                 if SeasonMatchup.objects.filter(
@@ -263,5 +283,17 @@ class Command(PromiedosFixturesCommand):
                 f'[promiedos-friendlies] Upserted {len(teams)} teams, '
                 f'{len(associations)} associations, {imported} matchups'
             )
+
+            # Still inside the transaction opened above, so the live upserts and
+            # the append commit (or roll back) together -- the no-loss window.
+            # The transaction is not a reason to skip the unconditional
+            # collection: that stays the self-heal for a crash before this line.
+            if history_observations:
+                record_result_history(
+                    history_observations,
+                    source='promiedos',
+                    competition=CompetitionChoices.FRIENDLIES,
+                    season_name=season.name,
+                )
 
         self.write_summary(season_name, imported, skipped_unresolved, skipped_outside)
