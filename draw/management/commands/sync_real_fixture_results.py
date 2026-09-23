@@ -37,6 +37,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 
 from draw.models import RealFixtureResult
+from draw.services.result_history import record_result_history
 
 FBREF_URL = 'https://fbref.com/en/comps/8/schedule/Champions-League-Scores-and-Fixtures'
 FOOTBALL_DATA_URL = 'https://api.football-data.org/v4/competitions/CL/matches?season={season}'
@@ -438,11 +439,28 @@ class Command(BaseCommand):
 
         updated = 0
         already = 0
+        history_observations = []
+        # Observations are collected for every matched update, not only changed
+        # ones: record_result_history dedupes against each subject's latest
+        # *history* row, so an already-current fixture adds nothing while a write
+        # whose flush was missed is re-collected on the next run and appended
+        # then. The dedupe is the self-heal, so no transaction is needed here.
         for u in updates:
             fixture = data['fixtures'][u['index']]
             fid = fixture_ids[u['index']]
             new_home = int(u['home_goals'])
             new_away = int(u['away_goals'])
+            if not dry_run:
+                # Offered before the live-row check so an unchanged fixture is
+                # still seen by the helper; --dry-run collects nothing.
+                history_observations.append({
+                    'subject': fid,
+                    'home_label': fixture['home'],
+                    'away_label': fixture['away'],
+                    'home_goals': new_home,
+                    'away_goals': new_away,
+                    'status': 'FINISHED',
+                })
             existing = existing_by_id.get(fid)
             if (
                 existing is not None
@@ -459,6 +477,17 @@ class Command(BaseCommand):
                     fixture_id=fid,
                     defaults={'home_goals': new_home, 'away_goals': new_away},
                 )
+
+        # Flushed once after the loop, un-wrapped. The buffer stays empty under
+        # --dry-run, so a dry run still writes nothing.
+        if history_observations:
+            record_result_history(
+                history_observations,
+                source=source,
+                competition='UCL',
+                # The calendar's season block mirrors Season.name ('2026-27').
+                season_name=data.get('season', {}).get('name', ''),
+            )
 
         if unmatched:
             self.stdout.write(self.style.WARNING(
