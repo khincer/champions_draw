@@ -1,12 +1,13 @@
-"""Shared CONMEBOL naming data for the fixture syncs.
+"""Shared naming data for the Promiedos fixture syncs.
 
-Lives outside any management command because two syncs need it: the Promiedos
-scraper (the one that actually runs) and, historically, the API-Football
-command that was retired when its free plan started returning 403 for the
-current season.
+Lives outside any management command because the Promiedos syncs need it: the
+CONMEBOL club sync (`sync_promiedos_fixtures`) and the international-friendlies
+sync (`sync_promiedos_friendlies`). Historically the retired API-Football
+command (403 on its free plan for the current season) read it too.
 
 Neither source's payload carries a usable country for a team, so association
-codes are resolved from this name map. Both sources spell clubs differently
+codes are resolved from the name map (and, for national teams, the two maps at
+the bottom of this file). Both sources spell clubs differently
 ("Atletico MG" vs "Atletico-MG", "Estudiantes L.P." vs "Estudiantes LP"), so
 the aliases below are intentional and each one is commented with the source
 that produced it.
@@ -98,6 +99,82 @@ TEAM_COUNTRY_BY_NAME = {
     'rayo zuliano': 'VEN', 'monagas': 'VEN',
     'carabobo': 'VEN', 'estudiantes de merida': 'VEN',
     'deportivo la guaira': 'VEN',
+}
+
+# International friendlies ("Amistoso Internacional", Promiedos league `fha`).
+# Promiedos' national-team country_id space is opaque and non-ISO -- prominent
+# nations get 1-2 chars ('b' England, 'c' Spain, 'f' France, 'h' Netherlands) --
+# so the 87 below were transcribed from a sweep of every day of 2026 (#442:
+# 97 distinct ids; the other 10 are the CONMEBOL ids above and resolve via
+# super()). Every code is 3 ASCII chars because Association.code is
+# max_length=3, unique=True (models.py:35); ENG/SCO/WAL/NIR/KOS are FIFA codes.
+# ponytail: exhaustive for the 2026 sweep, not for later cycles -- the name map
+# below (and the skip-with-warning policy) covers the rest.
+PROMIEDOS_NATIONAL_TEAM_ID_MAP = {
+    # UEFA
+    'b': 'ENG', 'baa': 'WAL', 'bad': 'AND', 'bae': 'BLR', 'baf': 'KAZ',
+    'bag': 'FRO', 'bb': 'POR', 'bc': 'TUR', 'bd': 'GRE', 'bf': 'SUI',
+    'bg': 'BEL', 'c': 'ESP', 'ca': 'AUT', 'caf': 'KOS', 'cc': 'CZE',
+    'cd': 'DEN', 'ce': 'SWE', 'cf': 'FIN', 'cg': 'UKR', 'ch': 'NOR',
+    'cj': 'ROU', 'd': 'ITA', 'da': 'HUN', 'dc': 'ISL', 'dh': 'POL',
+    'di': 'CRO', 'dj': 'CYP', 'e': 'GER', 'eg': 'SVN', 'ej': 'ARM',
+    'f': 'FRA', 'fg': 'MKD', 'h': 'NED', 'hh': 'AZE', 'i': 'SCO',
+    'ie': 'MNE', 'if': 'SRB', 'j': 'IRL', 'jb': 'MDA', 'jc': 'LUX',
+    'je': 'SMR', 'jj': 'NIR',
+    # AFC
+    'bbe': 'IRQ', 'bbf': 'QAT', 'bbj': 'JOR', 'bcb': 'UZB', 'bcc': 'KSA',
+    'bce': 'UAE', 'cbj': 'BAN', 'fa': 'SIN', 'ia': 'IND', 'de': 'JPN',
+    'dg': 'AUS', 'ig': 'KOR',
+    # CAF
+    'bch': 'MAR', 'bcj': 'BEN', 'bda': 'SDN', 'bdb': 'EGY', 'bdc': 'ZAM',
+    'bdd': 'SEN', 'bdf': 'TUN', 'bdj': 'ALG', 'bef': 'CPV', 'bhe': 'MAD',
+    'bjb': 'MTN', 'bjc': 'BDI', 'cdf': 'COD', 'gf': 'GHA', 'he': 'CIV',
+    'id': 'NGA', 'bfa': 'BFA',
+    # CONCACAF
+    'bea': 'GUA', 'beg': 'PAN', 'beh': 'SLV', 'bei': 'TRI', 'bfc': 'HAI',
+    'bfd': 'CRC', 'bgj': 'HON', 'bhi': 'PUR', 'bi': 'USA', 'bic': 'NCA',
+    'bje': 'BER', 'cdc': 'CUW', 'cfc': 'ARU', 'db': 'MEX', 'gg': 'CAN',
+    # OFC
+    'bfj': 'NZL',
+}
+
+# Name fallback: resolves an unseen country_id for a nation we already know
+# (Promiedos renumbers; a national team's name *is* its country, and the name
+# survives a code change). Spanish names as Promiedos spells them, normalized
+# so lookups are accent-insensitive, mirroring TEAM_COUNTRY_BY_NAME. Listed in
+# the same order as the id map above.
+NATIONAL_TEAM_COUNTRY_BY_NAME = {
+    # UEFA
+    'inglaterra': 'ENG', 'gales': 'WAL', 'andorra': 'AND', 'bielorrusia': 'BLR',
+    'kazajistan': 'KAZ', 'islas feroe': 'FRO', 'portugal': 'POR', 'turquia': 'TUR',
+    'grecia': 'GRE', 'suiza': 'SUI', 'belgica': 'BEL', 'espana': 'ESP',
+    'austria': 'AUT', 'kosovo': 'KOS', 'republica checa': 'CZE', 'dinamarca': 'DEN',
+    'suecia': 'SWE', 'finlandia': 'FIN', 'ucrania': 'UKR', 'noruega': 'NOR',
+    'rumania': 'ROU', 'italia': 'ITA', 'hungria': 'HUN', 'islandia': 'ISL',
+    'polonia': 'POL', 'croacia': 'CRO', 'chipre': 'CYP', 'alemania': 'GER',
+    'eslovenia': 'SVN', 'armenia': 'ARM', 'francia': 'FRA', 'macedonia del norte': 'MKD',
+    'paises bajos': 'NED', 'azerbaiyan': 'AZE', 'escocia': 'SCO', 'montenegro': 'MNE',
+    'serbia': 'SRB', 'irlanda': 'IRL', 'moldavia': 'MDA', 'luxemburgo': 'LUX',
+    'san marino': 'SMR', 'irlanda del norte': 'NIR',
+    # AFC
+    'irak': 'IRQ', 'qatar': 'QAT', 'jordania': 'JOR', 'uzbekistan': 'UZB',
+    'arabia saudita': 'KSA', 'emiratos arabes': 'UAE', 'bangladesh': 'BAN',
+    'singapur': 'SIN', 'india': 'IND', 'japon': 'JPN', 'australia': 'AUS',
+    'corea del sur': 'KOR',
+    # CAF
+    'marruecos': 'MAR', 'benin': 'BEN', 'sudan': 'SDN', 'egipto': 'EGY',
+    'zambia': 'ZAM', 'senegal': 'SEN', 'tunez': 'TUN', 'argelia': 'ALG',
+    'cabo verde': 'CPV', 'madagascar': 'MAD', 'mauritania': 'MTN', 'burundi': 'BDI',
+    'rd congo': 'COD', 'ghana': 'GHA', 'costa de marfil': 'CIV', 'nigeria': 'NGA',
+    'burkina faso': 'BFA',
+    # CONCACAF
+    'guatemala': 'GUA', 'panama': 'PAN', 'el salvador': 'SLV',
+    'trinidad y tobago': 'TRI', 'haiti': 'HAI', 'costa rica': 'CRC',
+    'honduras': 'HON', 'puerto rico': 'PUR', 'estados unidos': 'USA',
+    'nicaragua': 'NCA', 'bermuda': 'BER', 'curazao': 'CUW', 'aruba': 'ARU',
+    'mexico': 'MEX', 'canada': 'CAN',
+    # OFC
+    'nueva zelanda': 'NZL',
 }
 
 

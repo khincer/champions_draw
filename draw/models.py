@@ -6,6 +6,7 @@ class CompetitionChoices(models.TextChoices):
 	CHAMPIONS_LEAGUE = 'UCL', 'UEFA Champions League'
 	LIBERTADORES = 'LIB', 'Copa Libertadores'
 	SUDAMERICANA = 'SUD', 'Copa Sudamericana'
+	FRIENDLIES = 'FRN', 'International Friendlies'
 
 
 class QualifiedViaChoices(models.TextChoices):
