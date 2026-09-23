@@ -16,6 +16,9 @@ export default {
   'errors.server': 'Something went wrong on the server. Try again in a moment.',
   'errors.unknown': 'Something went wrong. Try again.',
 
+  'fixtures.fullTime': 'FT',
+  'fixtures.versus': 'vs',
+
   'home.all': 'All',
   'home.championsLeague': 'Champions League',
   'home.drawSimulator': 'Draw simulator',
@@ -27,13 +30,14 @@ export default {
   'home.live': 'Live',
   'home.matchday': 'Matchday {{number}}',
   'home.matchesRefreshFailed': 'Matches could not refresh',
-  'home.noMatchesText': 'Today and yesterday games appear here with live results as they happen. Refresh to check again.',
+  'home.noMatchesText': 'Tomorrow, today and yesterday games appear here with live results as they happen. Refresh to check again.',
   'home.noMatchesTitle': 'No matches today',
   'home.realDraw': 'Real draw',
   'home.result': 'Result',
   'home.retryRefresh': 'Retry refresh',
   'home.today': 'Today',
   'home.todayLoadFailed': "Today's matches could not load",
+  'home.tomorrow': 'Tomorrow',
   'home.versus': '{{home}} versus {{away}}',
   'home.viewMatchDetails': 'View match details: {{home}} versus {{away}}',
   'home.welcome': 'Welcome',
@@ -57,6 +61,8 @@ export default {
   'nav.views': 'Views',
   'nav.workspace': 'Workspace',
 
+  'playoffs.aggregate': 'agg {{score}}',
+
   'settings.darkTheme': 'Dark theme',
   'settings.language': 'Language',
 
@@ -71,6 +77,14 @@ export default {
   'shell.loadingPredictionLab': 'Loading prediction lab',
   'shell.loadingSeasonData': 'Loading season data',
   'shell.workspaceTitle': 'Draw workspace',
+
+  'standings.eliminated': 'Eliminated',
+  'standings.legendEliminated': 'Eliminated (25-36)',
+  'standings.legendPlayoffs': 'Playoffs (9-24)',
+  'standings.legendQualified': 'Qualified (1-8)',
+  'standings.playoffs': 'Playoffs',
+  'standings.qualified': 'Qualified',
+  'standings.team': 'Team',
 
   'states.drawFailed': 'The draw could not be generated',
   'states.loading': 'Loading',

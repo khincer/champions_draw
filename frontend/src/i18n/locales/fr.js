@@ -16,6 +16,9 @@ export default {
   'errors.server': "Une erreur s'est produite sur le serveur. Réessayez dans un instant.",
   'errors.unknown': "Une erreur s'est produite. Réessayez.",
 
+  'fixtures.fullTime': 'Terminé',
+  'fixtures.versus': 'c.',
+
   'home.all': 'Toutes',
   'home.championsLeague': 'Champions League',
   'home.drawSimulator': 'Simulateur de tirage',
@@ -27,13 +30,14 @@ export default {
   'home.live': 'En direct',
   'home.matchday': 'Journée {{number}}',
   'home.matchesRefreshFailed': "Impossible d'actualiser les matchs",
-  'home.noMatchesText': "Les matchs d'aujourd'hui et d'hier apparaissent ici avec les résultats en direct au fur et à mesure. Actualisez pour vérifier à nouveau.",
+  'home.noMatchesText': "Les matchs de demain, d'aujourd'hui et d'hier apparaissent ici avec les résultats en direct au fur et à mesure. Actualisez pour vérifier à nouveau.",
   'home.noMatchesTitle': "Aucun match aujourd'hui",
   'home.realDraw': 'Tirage réel',
   'home.result': 'Résultat',
   'home.retryRefresh': "Réessayer l'actualisation",
   'home.today': "Aujourd'hui",
   'home.todayLoadFailed': "Impossible de charger les matchs d'aujourd'hui",
+  'home.tomorrow': 'Demain',
   'home.versus': '{{home}} contre {{away}}',
   'home.viewMatchDetails': 'Voir les détails du match : {{home}} contre {{away}}',
   'home.welcome': 'Bienvenue',
@@ -57,6 +61,8 @@ export default {
   'nav.views': 'Vues',
   'nav.workspace': 'Espace de travail',
 
+  'playoffs.aggregate': 'cumul {{score}}',
+
   'settings.darkTheme': 'Thème sombre',
   'settings.language': 'Langue',
 
@@ -71,6 +77,14 @@ export default {
   'shell.loadingPredictionLab': 'Chargement du laboratoire de pronostics',
   'shell.loadingSeasonData': 'Chargement des données de la saison',
   'shell.workspaceTitle': 'Espace de travail du tirage',
+
+  'standings.eliminated': 'Éliminés',
+  'standings.legendEliminated': 'Éliminés (25-36)',
+  'standings.legendPlayoffs': 'Barrages (9-24)',
+  'standings.legendQualified': 'Qualifiés (1-8)',
+  'standings.playoffs': 'Barrages',
+  'standings.qualified': 'Qualifiés',
+  'standings.team': 'Équipe',
 
   'states.drawFailed': "Le tirage n'a pas pu être généré",
   'states.loading': 'Chargement',

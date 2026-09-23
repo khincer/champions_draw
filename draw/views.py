@@ -503,13 +503,29 @@ def parse_bool(value) -> bool:
 
 # --- Leagues & Standings ---
 
-# Competition emblems keyed by code, shared by the league list and the homepage
-# feed. CONMEBOL seasons carry no emblem in their own data, so the api-sports
-# crests stand in — the same convention the team-logo backfill uses.
-CONMEBOL_EMBLEMS = {
-	'LIB': 'https://media.api-sports.io/football/leagues/13.png',
-	'SUD': 'https://media.api-sports.io/football/leagues/11.png',
+# Competition metadata keyed by code, shared by the league list and the homepage
+# feed: it doubles as the serve list and the label source, so a competition
+# cannot be served-but-unlabelled. CONMEBOL seasons carry no emblem in their own
+# data, so the api-sports crests stand in — the same convention the team-logo
+# backfill uses. Friendlies (FRN) have no crest of their own, hence None.
+COMPETITION_META = {
+	'LIB': {'label': 'Libertadores', 'country': 'CONMEBOL', 'emblem_url': 'https://media.api-sports.io/football/leagues/13.png'},
+	'SUD': {'label': 'Sudamericana', 'country': 'CONMEBOL', 'emblem_url': 'https://media.api-sports.io/football/leagues/11.png'},
+	'FRN': {'label': 'International Friendlies', 'country': 'International', 'emblem_url': None},
 }
+
+# Non-UCL seasons surfaced by the league list and the homepage feed. Derived from
+# COMPETITION_META (insertion order preserved) rather than repeated as a literal,
+# so a code cannot be served by one surface while missing from the label map.
+NON_UCL_COMPETITIONS = tuple(COMPETITION_META)
+
+
+def competition_meta(code):
+	"""Label/country/emblem for a competition code.
+
+	The `.get()` fallback returns the raw code with no country and no emblem, so
+	an unknown competition can never inherit another one's metadata."""
+	return COMPETITION_META.get(code, {'label': code, 'country': '', 'emblem_url': None})
 
 # football-data's Champions League crest. UCL homepage rows come from a static
 # fixture JSON with no emblem, so this mirrors the `League.emblem_url` the UCL
@@ -532,19 +548,19 @@ class LeagueListAPIView(generics.ListAPIView):
 			}
 			for lg in leagues
 		]
-		conmebol = [
+		season_leagues = [
 			{
 				'id': f'season-{s.pk}',
 				'code': s.competition,
 				'name': s.name,
-				'country': 'CONMEBOL',
-				'emblem_url': CONMEBOL_EMBLEMS.get(s.competition),
+				'country': competition_meta(s.competition)['country'],
+				'emblem_url': competition_meta(s.competition)['emblem_url'],
 				'kind': 'season',
 				'season_id': s.pk,
 			}
-			for s in Season.objects.filter(competition__in=['LIB', 'SUD']).order_by('-name')
+			for s in Season.objects.filter(competition__in=NON_UCL_COMPETITIONS).order_by('-name')
 		]
-		data.extend(conmebol)
+		data.extend(season_leagues)
 		return Response(data)
 
 
@@ -557,11 +573,15 @@ class SeasonGroupStandingsAPIView(APIView):
 	matchday becomes an edge between its two SeasonTeam nodes, and each
 	connected component is one group (8 groups of 4 in the CONMEBOL format,
 	but derived generically). Components are labeled 'A', 'B', ... in
-	alphabetical order of their member team names."""
+	alphabetical order of their member team names.
+
+	Friendlies seasons (FRN) have no matchday, so they return an empty `groups`
+	list with a 200 rather than a 404 — the teams-browser panel renders empty
+	instead of erroring."""
 
 	def get(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
-		if season.competition not in ('LIB', 'SUD'):
+		if season.competition not in ('LIB', 'SUD', 'FRN'):
 			raise NotFound('Group standings only exist for CONMEBOL seasons.')
 
 		matchups = list(
@@ -817,12 +837,12 @@ class LeagueMatchPredictionAPIView(APIView):
 
 class HomepageMatchesAPIView(APIView):
 	"""Homepage feed: today/yesterday real fixtures for the newest UCL season
-	plus every CONMEBOL (Libertadores/Sudamericana) season's matchups.
+	plus every non-UCL season's matchups (CONMEBOL + international friendlies).
 
 	The frontend filters by inHomeRange client-side, so all rows are served and
 	the kickoff-bearing subset renders. Rows carry a per-match season_id,
 	competition label, and (for league rows) league_id. UCL and league rows are
-	openable; CONMEBOL matchups have no detail endpoint."""
+	openable; CONMEBOL and friendlies matchups have no detail endpoint."""
 
 	def get(self, request):
 		rows = []
@@ -855,22 +875,22 @@ class HomepageMatchesAPIView(APIView):
 			# UCL fixture loading must never take down the feed; the CONMEBOL
 			# rows below still render even when this fails.
 			pass
-		conmebol_seasons = list(Season.objects.filter(competition__in=['LIB', 'SUD']).order_by('-name'))
-		if conmebol_seasons:
+		season_leagues = list(Season.objects.filter(competition__in=NON_UCL_COMPETITIONS).order_by('-name'))
+		if season_leagues:
 			matchups = list(
 				SeasonMatchup.objects.select_related(
 					'home_team__team', 'away_team__team',
-				).filter(season__in=conmebol_seasons)
+				).filter(season__in=season_leagues)
 			)
-			competition_label = {'LIB': 'Libertadores', 'SUD': 'Sudamericana'}
 			for m in matchups:
 				if not m.kickoff:
 					continue
+				meta = competition_meta(m.season.competition)
 				rows.append({
 					'id': f'sm-{m.id}',
 					'season_id': m.season_id,
-					'competition': competition_label.get(m.season.competition, m.season.competition),
-					'competition_emblem': CONMEBOL_EMBLEMS.get(m.season.competition),
+					'competition': meta['label'],
+					'competition_emblem': meta['emblem_url'],
 					'openable': False,
 					'home_team': CompactSeasonTeamSerializer(m.home_team).data,
 					'away_team': CompactSeasonTeamSerializer(m.away_team).data,

@@ -15,6 +15,9 @@ export default {
   'errors.server': 'Algo deu errado no servidor. Tente novamente em instantes.',
   'errors.unknown': 'Algo deu errado. Tente novamente.',
 
+  'fixtures.fullTime': 'Final',
+  'fixtures.versus': 'vs.',
+
   'home.all': 'Todas',
   'home.championsLeague': 'Champions League',
   'home.drawSimulator': 'Simulador de sorteio',
@@ -26,13 +29,14 @@ export default {
   'home.live': 'Ao vivo',
   'home.matchday': 'Rodada {{number}}',
   'home.matchesRefreshFailed': 'Não foi possível atualizar as partidas',
-  'home.noMatchesText': 'As partidas de hoje e de ontem aparecem aqui com resultados ao vivo conforme acontecem. Atualize para verificar novamente.',
+  'home.noMatchesText': 'As partidas de amanhã, hoje e ontem aparecem aqui com resultados ao vivo conforme acontecem. Atualize para verificar novamente.',
   'home.noMatchesTitle': 'Nenhuma partida hoje',
   'home.realDraw': 'Sorteio real',
   'home.result': 'Resultado',
   'home.retryRefresh': 'Tentar atualização novamente',
   'home.today': 'Hoje',
   'home.todayLoadFailed': 'Não foi possível carregar as partidas de hoje',
+  'home.tomorrow': 'Amanhã',
   'home.versus': '{{home}} contra {{away}}',
   'home.viewMatchDetails': 'Ver detalhes da partida: {{home}} contra {{away}}',
   'home.welcome': 'Bem-vindo',
@@ -56,6 +60,8 @@ export default {
   'nav.views': 'Visualizações',
   'nav.workspace': 'Área de trabalho',
 
+  'playoffs.aggregate': 'agregado {{score}}',
+
   'settings.darkTheme': 'Tema escuro',
   'settings.language': 'Idioma',
 
@@ -70,6 +76,14 @@ export default {
   'shell.loadingPredictionLab': 'Carregando laboratório de palpites',
   'shell.loadingSeasonData': 'Carregando dados da temporada',
   'shell.workspaceTitle': 'Área de trabalho do sorteio',
+
+  'standings.eliminated': 'Eliminados',
+  'standings.legendEliminated': 'Eliminados (25-36)',
+  'standings.legendPlayoffs': 'Play-offs (9-24)',
+  'standings.legendQualified': 'Classificados (1-8)',
+  'standings.playoffs': 'Play-offs',
+  'standings.qualified': 'Classificados',
+  'standings.team': 'Equipe',
 
   'states.drawFailed': 'Não foi possível gerar o sorteio',
   'states.loading': 'Carregando',
