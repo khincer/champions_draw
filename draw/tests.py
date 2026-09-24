@@ -3361,3 +3361,172 @@ class LeagueFixturesHistoryTests(TestCase):
 			25,
 		)
 
+class NationsLeagueUnresolvedNationTests(TestCase):
+	"""An unmapped nation skips its matchup but never fails the run (R10/S10b).
+
+	Offline: the two network boundaries (`fetch` for the filter page and
+	`fetch_json` for the games payload) are stubbed.
+	"""
+
+	def _team(self, team_id, name, country_id):
+		return {'id': team_id, 'name': name, 'short_name': name[:3], 'country_id': country_id}
+
+	def _game(self, game_id, home, away):
+		return {
+			'id': game_id,
+			'start_time': '22-09-2026 20:00',
+			'status': {'short_name': 'Prog.', 'name': 'Programado'},
+			'game_time_status_to_display': '',
+			'scores': [],
+			'teams': [home, away],
+		}
+
+	def _filters_html(self):
+		payload = {'props': {'pageProps': {'data': {'games': {'filters': [
+			{'key': '7016_5_1_1', 'name': 'Fecha 1'},
+		]}}}}}
+		return (
+			'<div id="root"></div>'
+			'<script id="__NEXT_DATA__" type="application/json">'
+			f'{json.dumps(payload)}'
+			'</script>'
+		)
+
+	def _run(self, games):
+		from io import StringIO
+
+		from draw.management.commands.sync_promiedos_nations_league import Command
+
+		out, err = StringIO(), StringIO()
+		with mock.patch.object(Command, 'fetch', return_value=self._filters_html()), \
+				mock.patch.object(Command, 'fetch_json', return_value={'games': games}):
+			call_command(
+				'sync_promiedos_nations_league', '--competition', 'unl',
+				stdout=out, stderr=err,
+			)
+		return out.getvalue(), err.getvalue()
+
+	def test_unresolved_nation_skips_matchup_and_names_team_and_code(self):
+		games = [self._game(
+			'g1', self._team('t1', 'Futbolandia', 'zzz'), self._team('t2', 'Otrolandia', 'yyy'),
+		)]
+
+		out, err = self._run(games)
+
+		# The warning names both the team and the opaque country_id, and the run
+		# still succeeds (no exception, the season is created).
+		self.assertIn('Futbolandia', err)
+		self.assertIn('zzz', err)
+		self.assertIn('Otrolandia', err)
+		self.assertIn('yyy', err)
+		self.assertEqual(SeasonMatchup.objects.count(), 0)
+		season = Season.objects.get(name='Nations League 2026')
+		self.assertEqual(season.competition, 'UNL')
+
+	def test_resolvable_matchup_imports_beside_an_unresolved_one(self):
+		games = [
+			self._game('g1', self._team('t1', 'España', 'c'), self._team('t2', 'Inglaterra', 'b')),
+			self._game('g2', self._team('t3', 'Futbolandia', 'zzz'), self._team('t4', 'Otrolandia', 'yyy')),
+		]
+
+		out, err = self._run(games)
+
+		self.assertEqual(SeasonMatchup.objects.count(), 1)
+		matchup = SeasonMatchup.objects.get()
+		self.assertEqual(matchup.external_id, 'promiedos:g1')
+		self.assertEqual(matchup.matchday, 1)
+		self.assertIn('zzz', err)
+
+
+class NationsLeagueNeverSeededTests(TestCase):
+	def test_nations_league_season_cannot_be_seeded(self):
+		season = Season.objects.create(name='Nations League 2026', competition='UNL')
+		association = Association.objects.create(name='Spain', code='ESP')
+		for index in range(5):
+			team = Team.objects.create(
+				name=f'Nation {index}', short_name=f'N{index}', association=association,
+			)
+			SeasonTeam.objects.create(
+				season=season, team=team, uefa_club_coefficient=Decimal('0.000'),
+			)
+
+		with self.assertRaises(SeedingError):
+			seed_season_entries(season)
+
+
+class NationsLeagueCompetitionMetaTests(APITestCase):
+	def test_unl_is_served_and_labelled(self):
+		from .views import COMPETITION_META, NON_UCL_COMPETITIONS
+
+		self.assertIn('UNL', COMPETITION_META)
+		self.assertIn('UNL', NON_UCL_COMPETITIONS)
+		self.assertEqual(COMPETITION_META['UNL']['label'], 'Nations League')
+		self.assertEqual(COMPETITION_META['UNL']['country'], 'International')
+
+	def test_group_standings_return_derived_groups_not_404(self):
+		season = Season.objects.create(name='Nations League 2026', competition='UNL')
+		association = Association.objects.create(name='Spain', code='ESP')
+		entries = []
+		for index in range(4):
+			team = Team.objects.create(
+				name=f'Nation {index}', short_name=f'N{index}', association=association,
+			)
+			entries.append(SeasonTeam.objects.create(
+				season=season, team=team, uefa_club_coefficient=Decimal('0.000'),
+			))
+		SeasonMatchup.objects.create(
+			season=season, home_team=entries[0], away_team=entries[1], matchday=1,
+		)
+		SeasonMatchup.objects.create(
+			season=season, home_team=entries[2], away_team=entries[3], matchday=1,
+		)
+
+		resp = self.client.get(f'/api/seasons/{season.pk}/group-standings/')
+
+		self.assertEqual(resp.status_code, 200)
+		groups = resp.json()['groups']
+		self.assertEqual(len(groups), 2)
+		self.assertEqual({len(group['standings']) for group in groups}, {2})
+
+	def test_lib_guard_is_unchanged(self):
+		# S11c: the guard change is a superset of the old literal, so a LIB
+		# season with no matchups still returns 200 with empty groups.
+		season = Season.objects.create(name='Libertadores 2026', competition='LIB')
+
+		resp = self.client.get(f'/api/seasons/{season.pk}/group-standings/')
+
+		self.assertEqual(resp.status_code, 200)
+		self.assertEqual(resp.json(), {'season_id': season.pk, 'groups': []})
+
+
+class NationsLeagueTeamMapTests(TestCase):
+	"""The 12 codes the `habg` sweep found missing resolve to their ISO-3 codes."""
+
+	CODES = {
+		'bab': 'LIE', 'bac': 'EST', 'caj': 'GIB', 'dd': 'SVK',
+		'ea': 'BUL', 'eb': 'LVA', 'ec': 'LTU', 'fh': 'BIH',
+		'g': 'ISR', 'hg': 'ALB', 'hi': 'GEO', 'jd': 'MLT',
+	}
+
+	NAMES = {
+		'Liechtenstein': 'LIE', 'Estonia': 'EST', 'Gibraltar': 'GIB',
+		'Eslovaquia': 'SVK', 'Bulgaria': 'BUL', 'Letonia': 'LVA',
+		'Lituania': 'LTU', 'Bosnia Herzegovina': 'BIH', 'Israel': 'ISR',
+		'Albania': 'ALB', 'Georgia': 'GEO', 'Malta': 'MLT',
+	}
+
+	def _resolve(self, name, country_id):
+		from draw.management.commands.sync_promiedos_nations_league import Command
+
+		return Command().resolve_association_code({'name': name, 'country_id': country_id})
+
+	def test_ids_resolve_to_iso3(self):
+		for country_id, code in self.CODES.items():
+			with self.subTest(country_id=country_id):
+				self.assertEqual(self._resolve('', country_id), code)
+
+	def test_names_resolve_to_iso3_with_no_id(self):
+		for name, code in self.NAMES.items():
+			with self.subTest(name=name):
+				self.assertEqual(self._resolve(name, None), code)
+

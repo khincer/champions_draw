@@ -507,11 +507,13 @@ def parse_bool(value) -> bool:
 # feed: it doubles as the serve list and the label source, so a competition
 # cannot be served-but-unlabelled. CONMEBOL seasons carry no emblem in their own
 # data, so the api-sports crests stand in — the same convention the team-logo
-# backfill uses. Friendlies (FRN) have no crest of their own, hence None.
+# backfill uses. Friendlies (FRN) and the Nations League (UNL) have no crest of
+# their own, hence None.
 COMPETITION_META = {
 	'LIB': {'label': 'Libertadores', 'country': 'CONMEBOL', 'emblem_url': 'https://media.api-sports.io/football/leagues/13.png'},
 	'SUD': {'label': 'Sudamericana', 'country': 'CONMEBOL', 'emblem_url': 'https://media.api-sports.io/football/leagues/11.png'},
 	'FRN': {'label': 'International Friendlies', 'country': 'International', 'emblem_url': None},
+	'UNL': {'label': 'Nations League', 'country': 'International', 'emblem_url': None},
 }
 
 # Non-UCL seasons surfaced by the league list and the homepage feed. Derived from
@@ -567,7 +569,7 @@ class LeagueListAPIView(generics.ListAPIView):
 
 
 class SeasonGroupStandingsAPIView(APIView):
-	"""Group-stage standings for a CONMEBOL season.
+	"""Group-stage standings for a non-UCL season.
 
 	Groups are derived from the matchup graph: every SeasonMatchup with a
 	matchday becomes an edge between its two SeasonTeam nodes, and each
@@ -575,14 +577,15 @@ class SeasonGroupStandingsAPIView(APIView):
 	but derived generically). Components are labeled 'A', 'B', ... in
 	alphabetical order of their member team names.
 
-	Friendlies seasons (FRN) have no matchday, so they return an empty `groups`
-	list with a 200 rather than a 404 — the teams-browser panel renders empty
-	instead of erroring."""
+	Nations League (UNL) matchups carry a matchday ("Fecha N"), so they get
+	real derived group tables. Friendlies seasons (FRN) have no matchday, so
+	they return an empty `groups` list with a 200 rather than a 404 — the
+	teams-browser panel renders empty instead of erroring."""
 
 	def get(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
-		if season.competition not in ('LIB', 'SUD', 'FRN'):
-			raise NotFound('Group standings only exist for CONMEBOL seasons.')
+		if season.competition not in NON_UCL_COMPETITIONS:
+			raise NotFound('Group standings only exist for non-UCL seasons.')
 
 		matchups = list(
 			SeasonMatchup.objects.select_related('home_team__team', 'away_team__team')
