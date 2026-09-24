@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 
 from .management.commands.sync_real_fixture_results import (
 	parse_promiedos_live,
-	resolve,
+	resolve_live,
 )
 
 from .models import (
@@ -374,7 +374,7 @@ class LiveScoresAPIView(APIView):
 
 		fixture_id_by_pair = {}
 		for m in matchups:
-			key = (resolve(m['home_team']['name']), resolve(m['away_team']['name']))
+			key = (resolve_live(m['home_team']['name']), resolve_live(m['away_team']['name']))
 			fixture_id_by_pair.setdefault(key, m['id'])
 
 		try:
@@ -384,7 +384,7 @@ class LiveScoresAPIView(APIView):
 
 		live = {}
 		for game in live_games:
-			fixture_id = fixture_id_by_pair.get((resolve(game['home']), resolve(game['away'])))
+			fixture_id = fixture_id_by_pair.get((resolve_live(game['home']), resolve_live(game['away'])))
 			if fixture_id is None:
 				continue  # not one of our league-phase fixtures
 			live[fixture_id] = {

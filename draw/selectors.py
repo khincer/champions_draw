@@ -248,8 +248,12 @@ PROMIEDOS_LIVE_URL_BY_COMPETITION = {
 
 
 def promiedos_live_url(competition):
-	"""Live-score page for a competition, or None when it has no live source."""
-	return PROMIEDOS_LIVE_URL_BY_COMPETITION.get(competition)
+	"""Live-score page for a competition, or None when it has no live source.
+
+	`competition` may arrive as a `CompetitionChoices` member rather than a plain
+	string, so it is coerced before the lookup.
+	"""
+	return PROMIEDOS_LIVE_URL_BY_COMPETITION.get(str(competition))
 
 
 # Short TTL so several viewers polling every 30s don't each hit promiedos; a 15s

@@ -122,6 +122,80 @@ def normalize(name):
     return ' '.join(parts)
 
 
+# Promiedos serves the league live page in English while the games endpoint that
+# names our teams is Spanish, so a live match only matched when both names
+# happened to coincide. Serbia, Portugal, Kosovo and Liechtenstein matched fine
+# on their own, but the key is the (home, away) PAIR -- one non-coinciding
+# partner (Greece, Wales, Ireland) killed the whole fixture. One of seven
+# Nations League games matched because of it.
+#
+# Kept separate from _ALIASES, which is keyed for football-data and shared with
+# the UCL paths. Only names that actually differ are listed; identical ones need
+# no entry. Targets are the names the Promiedos games endpoint stores.
+_PROMIEDOS_LIVE_ALIASES = {
+    'azerbaijan': 'azerbaiyan',
+    'belarus': 'bielorrusia',
+    'belgium': 'belgica',
+    'brazil': 'brasil',
+    'croatia': 'croacia',
+    'cyprus': 'chipre',
+    'czech republic': 'republica checa',
+    'czechia': 'republica checa',
+    'denmark': 'dinamarca',
+    'england': 'inglaterra',
+    'faroe islands': 'islas feroe',
+    'finland': 'finlandia',
+    'france': 'francia',
+    'germany': 'alemania',
+    'greece': 'grecia',
+    'hungary': 'hungria',
+    'iceland': 'islandia',
+    'ireland': 'irlanda',
+    'italy': 'italia',
+    'japan': 'japon',
+    'jordan': 'jordania',
+    'kazakhstan': 'kazajstan',
+    'latvia': 'letonia',
+    'lithuania': 'lituania',
+    'luxembourg': 'luxemburgo',
+    'moldova': 'moldavia',
+    'morocco': 'marruecos',
+    'netherlands': 'paises bajos',
+    'north macedonia': 'macedonia del norte',
+    'northern ireland': 'irlanda del norte',
+    'norway': 'noruega',
+    'poland': 'polonia',
+    'romania': 'rumania',
+    'scotland': 'escocia',
+    'slovakia': 'eslovaquia',
+    'slovenia': 'eslovenia',
+    'south korea': 'corea del sur',
+    'spain': 'espana',
+    'sweden': 'suecia',
+    'switzerland': 'suiza',
+    'turkey': 'turquia',
+    'ukraine': 'ucrania',
+    'united states': 'estados unidos',
+    'usa': 'estados unidos',
+    'wales': 'gales',
+    # CONMEBOL: the live page abbreviates where the games endpoint does not.
+    'ldu': 'liga de quito',
+}
+
+
+def resolve_live(name):
+    """Resolve a Promiedos live-page name to the name we store for that team.
+
+    Chains into the shared `_ALIASES` rather than replacing it. Those entries
+    already cover cases the live page needs -- 'fc barcelona' resolves to the
+    'Barcelona' we store -- so consulting only the live map silently dropped
+    every alias that predated it.
+    """
+    normalized = normalize(name)
+    normalized = _PROMIEDOS_LIVE_ALIASES.get(normalized, normalized)
+    return _ALIASES.get(normalized, normalized)
+
+
 def resolve(name):
     return _ALIASES.get(normalize(name), normalize(name))
 
