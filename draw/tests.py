@@ -1353,6 +1353,37 @@ class DomesticStandingJoinTests(TestCase):
 		self.assertIsNone(CompactSeasonTeamSerializer(entry2).data['domestic'])
 
 
+class RealDrawSeasonScopeTests(TestCase):
+	"""The checked-in UCL calendar names its own season; anything else gets []."""
+
+	def _fixtures(self, name, competition):
+		from draw.selectors import load_real_fixtures
+
+		season = Season.objects.create(name=name, competition=competition)
+		return load_real_fixtures(season)
+
+	def test_non_ucl_season_serves_no_real_fixtures(self):
+		# Joining the UCL calendar against another competition's teams made every
+		# lookup miss, so the endpoint 404'd with "Team not found in season: <team>".
+		self.assertEqual(self._fixtures('Libertadores 2026', 'LIB'), [])
+
+	def test_other_ucl_season_serves_nothing(self):
+		# The calendar covers 2026-27 only; the previous UCL season has no file.
+		self.assertEqual(self._fixtures('2025-26', 'UCL'), [])
+
+	def test_the_calendar_season_is_not_refused_by_the_guard(self):
+		# The guard must not swallow the season the calendar actually describes.
+		# This season has no SeasonTeam rows, so it passes the guard and fails
+		# later, in the team join -- which is what proves it was not refused.
+		from rest_framework.exceptions import NotFound
+
+		from draw.selectors import load_real_fixtures
+
+		season = Season.objects.create(name='2026-27', competition='UCL')
+		with self.assertRaises(NotFound):
+			load_real_fixtures(season)
+
+
 class RealPredictionSyncApiTests(APITestCase):
 	"""Exercises /api/ui/seasons/<pk>/real-predictions/ against the real
 	league-phase fixtures file (2026-27), which is what ships in the repo."""

@@ -90,6 +90,18 @@ def load_real_fixtures(season: Season) -> list:
 	"""
 	data = real_fixtures_json()
 
+	# The checked-in calendar covers exactly one season and names it. Serving it
+	# for any other season joins UCL fixtures against another competition's teams,
+	# so every lookup misses and the caller 404s with the misleading
+	# "Team not found in season: <team>" -- which is what a non-UCL season on the
+	# real-draw page used to produce. Refuse rather than guess.
+	calendar_season = data.get('season') or {}
+	if (season.competition, season.name) != (
+		calendar_season.get('competition'),
+		calendar_season.get('name'),
+	):
+		return []
+
 	# Live scores come from the DB (Railway's filesystem is ephemeral and not
 	# shared across services); the JSON above is only the static calendar.
 	db_results = {
