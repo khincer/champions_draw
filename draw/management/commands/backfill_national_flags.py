@@ -41,7 +41,7 @@ FLAG_CODE_BY_ISO3 = {
     'KSA': 'sa', 'LIE': 'li', 'LTU': 'lt', 'LUX': 'lu', 'LVA': 'lv', 'MAR': 'ma',
     'MDA': 'md', 'MEX': 'mx', 'MKD': 'mk', 'MLT': 'mt', 'MNE': 'me', 'MTN': 'mr',
     'NCA': 'ni', 'NED': 'nl', 'NGA': 'ng', 'NIR': 'gb-nir', 'NOR': 'no', 'NZL': 'nz',
-    'PAN': 'pa', 'POL': 'pl', 'POR': 'pt', 'PUR': 'pr', 'QAT': 'qa', 'ROU': 'ro',
+    'PAN': 'pa', 'POL': 'pl', 'POR': 'pt', 'PSE': 'ps', 'PUR': 'pr', 'QAT': 'qa', 'ROU': 'ro',
     'SCO': 'gb-sct', 'SDN': 'sd', 'SEN': 'sn', 'SIN': 'sg', 'SLV': 'sv', 'SMR': 'sm',
     'SRB': 'rs', 'SUI': 'ch', 'SVK': 'sk', 'SVN': 'si', 'SWE': 'se', 'TRI': 'tt',
     'TUN': 'tn', 'TUR': 'tr', 'UAE': 'ae', 'UKR': 'ua', 'USA': 'us', 'UZB': 'uz',
