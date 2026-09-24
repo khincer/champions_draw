@@ -2932,6 +2932,103 @@ class PromiedosFixturesHistoryTests(TestCase):
 		self.assertNotEqual(row.subject, matchup.external_id)
 
 
+class PromiedosFriendliesHistoryTests(TestCase):
+	"""The FRN writer appends history alongside its upsert.
+
+	Offline: the date endpoint (``fetch_json``) is stubbed exactly as
+	``PromiedosFriendliesSyncTests`` does.
+	"""
+
+	def _team(self, team_id, name, country_id):
+		return {'id': team_id, 'name': name, 'short_name': name[:3], 'country_id': country_id}
+
+	def _game(self, game_id, home, away, scores=None):
+		return {
+			'id': game_id,
+			'start_time': '22-09-2026 20:00',
+			'status': (
+				{'short_name': 'Final', 'name': 'Finalizado'} if scores
+				else {'short_name': 'Prog.', 'name': 'Programado'}
+			),
+			'game_time_status_to_display': 'Final' if scores else '',
+			'scores': scores or [],
+			'teams': [home, away],
+		}
+
+	def _payload(self, games, league_id='fha'):
+		return {'leagues': [{'id': league_id, 'games': games}]}
+
+	def _run(self, responder, **options):
+		from io import StringIO
+
+		from draw.management.commands.sync_promiedos_friendlies import Command
+
+		options.setdefault('days_back', 0)
+		options.setdefault('days_ahead', 0)
+		out, err = StringIO(), StringIO()
+		with mock.patch.object(Command, 'fetch_json', side_effect=responder):
+			call_command('sync_promiedos_friendlies', stdout=out, stderr=err, **options)
+		return out.getvalue(), err.getvalue()
+
+	def _subject(self):
+		season = Season.objects.get(name=f'Friendlies {date.today().year}')
+		matchup = SeasonMatchup.objects.get(external_id='promiedos:g1')
+		return f'{season.pk}:{matchup.home_team_id}:{matchup.away_team_id}'
+
+	def test_changed_score_appends_history_keyed_by_triple(self):
+		home = self._team('t1', 'Argentina', 'ba')
+		away = self._team('t2', 'Inglaterra', 'b')
+
+		self._run(lambda url: self._payload([self._game('g1', home, away, [2, 1])]))
+		self._run(lambda url: self._payload([self._game('g1', home, away, [3, 1])]))
+
+		rows = ResultHistory.objects.filter(source='promiedos')
+		self.assertEqual(rows.count(), 2)
+		self.assertEqual(
+			set(rows.values_list('home_goals', 'away_goals')), {(2, 1), (3, 1)}
+		)
+
+		subject = self._subject()
+		# The triple is the model's own unique constraint; the external_id is
+		# overwritten when a directed pair recurs, so it must not be the key.
+		self.assertEqual(set(rows.values_list('subject', flat=True)), {subject})
+		self.assertNotIn('promiedos:g1', {r.subject for r in rows})
+
+		row = rows.order_by('id').first()
+		self.assertEqual(
+			(row.competition, row.season_name, row.home_label, row.away_label, row.status),
+			('FRN', f'Friendlies {date.today().year}', 'Argentina', 'Inglaterra', 'FINISHED'),
+		)
+
+	def test_unchanged_rerun_appends_nothing(self):
+		home = self._team('t1', 'Argentina', 'ba')
+		away = self._team('t2', 'Inglaterra', 'b')
+		games = [self._game('g1', home, away, [2, 1])]
+
+		self._run(lambda url: self._payload(games))
+		self._run(lambda url: self._payload(games))
+
+		rows = ResultHistory.objects.filter(source='promiedos')
+		self.assertEqual(rows.count(), 1)
+		self.assertEqual(list(rows.values_list('home_goals', 'away_goals')), [(2, 1)])
+
+	def test_unresolved_nation_appends_no_history(self):
+		games = [self._game(
+			'g1',
+			self._team('t1', 'Futbolandia', 'zzz'),
+			self._team('t2', 'Otrolandia', 'yyy'),
+			[1, 0],
+		)]
+
+		_, err = self._run(lambda url: self._payload(games))
+
+		# The nation never resolves, so the game stops before the upsert and is
+		# never collected: no matchup, and no history row either.
+		self.assertEqual(SeasonMatchup.objects.count(), 0)
+		self.assertEqual(ResultHistory.objects.count(), 0)
+		self.assertIn('skipped 1', err)
+
+
 class FriendliesUnresolvedNationTests(TestCase):
 	"""Resolution misses skip loudly but never fail the run (spec R10)."""
 
