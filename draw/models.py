@@ -68,6 +68,11 @@ class Team(models.Model):
 	name = models.CharField(max_length=100)
 	short_name = models.CharField(max_length=30)
 	logo_url = models.URLField(max_length=500, blank=True)
+	# Promiedos' opaque team id, e.g. 'bdb'. The sync already received it and
+	# threw it away; keeping it is what makes a team's Promiedos page reachable
+	# (`/team/<url_name>/<id>`). Blank for teams that never came from Promiedos,
+	# such as the UCL field imported from the seed file, so it is not unique.
+	promiedos_id = models.CharField(max_length=32, blank=True, default='', db_index=True)
 	association = models.ForeignKey(
 		Association,
 		on_delete=models.PROTECT,

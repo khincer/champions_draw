@@ -277,11 +277,16 @@ class Command(BaseCommand):
         association = self.upsert_association(code, association_cache)
 
         short_name = (team_info.get('short_name') or name)[:30]
-        team, _ = Team.objects.get_or_create(
+        team, created = Team.objects.get_or_create(
             association=association,
             name=name,
-            defaults={'short_name': short_name, 'logo_url': ''},
+            defaults={'short_name': short_name, 'logo_url': '', 'promiedos_id': team_id or ''},
         )
+        # Existing rows predate the column, so re-running a sync is what backfills
+        # the id. Cheap: only writes when it actually changes.
+        if not created and team_id and team.promiedos_id != team_id:
+            team.promiedos_id = team_id
+            team.save(update_fields=['promiedos_id'])
         team_cache[team_id] = team
         return team
 
