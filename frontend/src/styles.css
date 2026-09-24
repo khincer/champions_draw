@@ -2160,7 +2160,10 @@ select:focus,
 .homepage-filter-emblem { width: 18px; height: 18px; object-fit: contain; }
 
 /* League cards */
-.leagues-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 24px; }
+.leagues-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; padding: 24px; }
+/* A competition with no crest of its own (FRN, UNL) renders a globe in the same
+   slot the crest would occupy. */
+.league-card-globe { color: var(--muted); }
 .league-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px; transition: border-color 0.15s; }
 .league-card:hover { border-color: var(--green-primary); }
 .league-card img { height: 40px; }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { ArrowLeft, ChevronDown, Home, Plane, RefreshCw } from 'lucide-preact';
+import { ArrowLeft, ChevronDown, Globe, Home, Plane, RefreshCw } from 'lucide-preact';
 import Button from '../components/Button';
 import Crest from '../components/Crest';
 import LeagueFixtureRow from '../components/LeagueFixtureRow';
@@ -339,7 +339,12 @@ export default function TeamsBrowser({
         <div className="leagues-grid">
           {leagues.map((league) => (
             <button className="league-card" key={league.id} onClick={() => handleSelectLeague(league)}>
-              {league.emblem_url && <img src={league.emblem_url} alt="" />}
+              {/* International competitions carry no crest of their own -- FRN and
+                  UNL both serve emblem_url: null -- so they get a globe instead of
+                  an empty slot. */}
+              {league.emblem_url
+                ? <img src={league.emblem_url} alt="" />
+                : <Globe size={40} aria-hidden="true" className="league-card-globe" />}
               <div className="league-card-name">{league.name}</div>
               {league.country && <div className="league-card-country">{league.country}</div>}
             </button>
