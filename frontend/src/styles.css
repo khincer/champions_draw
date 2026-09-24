@@ -3558,6 +3558,61 @@ dialog.match-detail-view {
   background: color-mix(in srgb, var(--sidebar) 60%, transparent);
 }
 
+/* First-visit name prompt. Native `<dialog>` + `showModal()` like the match
+   detail overlay above, so the top layer handles inertness and Tab confinement
+   and only the UA chrome needs overriding. */
+dialog.name-dialog {
+  width: min(420px, calc(100% - var(--space-8)));
+  margin: auto;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--sh-3);
+}
+
+.name-dialog::backdrop {
+  background: color-mix(in srgb, var(--sidebar) 60%, transparent);
+}
+
+.name-dialog h2 { margin: 0 0 var(--space-2); font-size: 1.1rem; }
+.name-dialog-input {
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+}
+.name-dialog-actions { display: flex; justify-content: flex-end; margin-top: var(--space-3); }
+.name-dialog-save {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--green-ink);
+  color: var(--surface);
+  font-weight: 800;
+  cursor: pointer;
+}
+.name-dialog-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* The name is captured once by the dialog, so the header shows it rather than an
+   always-visible input; this is the way back in to change it. */
+.playing-as {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.playing-as:hover { color: var(--ink); }
+.playing-as strong { color: var(--ink); }
+
 .match-detail-back {
   align-self: flex-start;
 }
