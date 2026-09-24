@@ -211,7 +211,14 @@ def _season_matchup_fixtures(season: Season) -> list:
 				{'home_goals': row.home_goals, 'away_goals': row.away_goals}
 				if has_result else None
 			),
-			'closed': row.status == 'FINISHED',
+			# Kickoff-based, matching the calendar path, NOT status-based. The
+			# client polls live scores only while some fixture is `closed` with no
+			# result yet; deriving this from FINISHED made an in-play match look
+			# open, so the poll never started and live scores never appeared.
+			'closed': (
+				kickoff is not None
+				and datetime.now(timezone.utc) >= (kickoff - timedelta(minutes=10))
+			),
 		})
 
 	return matchups
