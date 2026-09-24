@@ -47,7 +47,12 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
         <div className="hub-team">
           <Crest team={match.home_team} size="md" />
           <p className="hub-team-name">{match.home_team.name}</p>
-          {match.home_team.short_name && <p className="hub-team-short">{match.home_team.short_name}</p>}
+          {/* Promiedos gives national teams a short_name identical to the name
+              ('Japón'/'Japón'), so the card printed the same label twice. Only
+              show a short label that actually shortens something. */}
+          {match.home_team.short_name && match.home_team.short_name !== match.home_team.name && (
+            <p className="hub-team-short">{match.home_team.short_name}</p>
+          )}
         </div>
         <div className="hub-score-area">
           {result ? (
@@ -70,7 +75,9 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
         <div className="hub-team">
           <Crest team={match.away_team} size="md" />
           <p className="hub-team-name">{match.away_team.name}</p>
-          {match.away_team.short_name && <p className="hub-team-short">{match.away_team.short_name}</p>}
+          {match.away_team.short_name && match.away_team.short_name !== match.away_team.name && (
+            <p className="hub-team-short">{match.away_team.short_name}</p>
+          )}
         </div>
       </div>
       <footer className="home-game-card-footer">
