@@ -576,3 +576,118 @@ class LeagueMatchPrediction(models.Model):
 
 	def __str__(self) -> str:
 		return f'{self.player_name}: {self.match} — {self.home_goals}-{self.away_goals}'
+
+
+class TeamProfile(models.Model):
+	"""Club profile scraped from a team's Promiedos page.
+
+	One row per team. Flat columns on purpose: the downstream pandas model
+	reads ``TeamProfile.objects.values()`` straight into a DataFrame, so a
+	JSON blob would have to be unpacked first.
+
+	`founded` is the club's founding year, which Promiedos serves in
+	``team_info`` as 'Fundación'. It is absent for some clubs, and the
+	similarly named 'Fundación' inside ``stadium.info`` is the *stadium's*
+	year, not the club's — only `team_info` is read for it.
+	"""
+	team = models.OneToOneField(
+		Team,
+		on_delete=models.CASCADE,
+		related_name='profile',
+	)
+	nickname = models.CharField(max_length=160, blank=True, default='')
+	founded = models.PositiveSmallIntegerField(null=True, blank=True)
+	club_city = models.CharField(max_length=160, blank=True, default='')
+	stadium_name = models.CharField(max_length=200, blank=True, default='')
+	# Promiedos serves capacity display-formatted ('78,838'); the thousands
+	# separators are stripped on write and the field stays NULL when the
+	# string does not parse, so a bad source value fails loudly in the log
+	# instead of silently truncating.
+	stadium_capacity = models.PositiveIntegerField(null=True, blank=True)
+	stadium_city = models.CharField(max_length=160, blank=True, default='')
+	primary_color = models.CharField(max_length=9, blank=True, default='')
+	text_color = models.CharField(max_length=9, blank=True, default='')
+	synced_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['team__name']
+
+	def __str__(self) -> str:
+		return f'{self.team.name} profile'
+
+
+class SquadPlayer(models.Model):
+	"""One player (or staff member) in a team's Promiedos squad.
+
+	`group` is the Promiedos position group exactly as served -- Arqueros,
+	Defensores, Mediocampistas, Delanteros or Dirección -- kept as a string
+	because the source string is the contract, not an enum of ours.
+
+	`birth_date` and `height` are stored as the display strings Promiedos
+	serves (DD/MM/YYYY and metres); parsing them happens downstream where the
+	consumer can decide what an unparseable value means.
+	"""
+	team = models.ForeignKey(
+		Team,
+		on_delete=models.CASCADE,
+		related_name='squad',
+	)
+	name = models.CharField(max_length=120)
+	shirt_number = models.PositiveSmallIntegerField(null=True, blank=True)
+	birth_date = models.CharField(max_length=20, blank=True, default='')
+	height = models.CharField(max_length=10, blank=True, default='')
+	group = models.CharField(max_length=40, blank=True, default='')
+	# Promiedos' own player id. The team-page payload carries no id today, so
+	# this stays blank until a source exposes one; it is here so a future
+	# richer endpoint can fill it without another migration.
+	promiedos_player_id = models.CharField(max_length=32, blank=True, default='')
+
+	class Meta:
+		ordering = ['team__name', 'group', 'name']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['team', 'name'],
+				name='unique_squad_player_per_team',
+			),
+		]
+
+	def __str__(self) -> str:
+		return f'{self.name} ({self.team.name})'
+
+
+class TeamStatLeader(models.Model):
+	"""One row of a per-competition leaderboard on a team's Promiedos page.
+
+	``competition`` scopes the leaderboard (Promiedos filters these tables per
+	competition, so one team has several rows per metric) and ``metric`` is the
+	leaderboard name as served -- 'Goles', 'Asistencias', 'Barridas ganadas',
+	'Tarjetas Rojas', 'Tarjetas Amarillas'.
+
+	``value`` is an IntegerField: every metric Promiedos serves is a count, and
+	the downstream pandas model wants a numeric column without a cast. A row
+	whose value does not parse as an integer is skipped and logged by the sync
+	rather than coerced, so a future decimal metric fails loudly.
+	"""
+	team = models.ForeignKey(
+		Team,
+		on_delete=models.CASCADE,
+		related_name='stat_leaders',
+	)
+	competition = models.CharField(max_length=160)
+	metric = models.CharField(max_length=80)
+	player_name = models.CharField(max_length=120)
+	player_short_name = models.CharField(max_length=80, blank=True, default='')
+	rank = models.PositiveSmallIntegerField()
+	value = models.IntegerField()
+
+	class Meta:
+		ordering = ['team__name', 'competition', 'metric', 'rank']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['team', 'competition', 'metric', 'player_name'],
+				name='unique_stat_leader_per_team',
+			),
+		]
+
+	def __str__(self) -> str:
+		return f'{self.team.name} {self.competition} {self.metric}: {self.player_name} ({self.value})'

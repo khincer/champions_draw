@@ -4,7 +4,7 @@ import unicodedata
 from django.db.models import Max
 from rest_framework import serializers
 
-from .models import Association, LeagueStanding, Season, SeasonDraw, SeasonMatchup, SeasonTeam, Team
+from .models import Association, LeagueStanding, Season, SeasonDraw, SeasonMatchup, SeasonTeam, SquadPlayer, Team, TeamProfile, TeamStatLeader
 
 
 def _normalize_team_name(name):
@@ -239,3 +239,45 @@ def serialize_league_match(match, prediction, now):
             else None
         ),
     }
+
+
+class TeamProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeamProfile
+        fields = [
+            'nickname',
+            'founded',
+            'club_city',
+            'stadium_name',
+            'stadium_capacity',
+            'stadium_city',
+            'primary_color',
+            'text_color',
+            'synced_at',
+        ]
+
+
+class SquadPlayerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SquadPlayer
+        fields = [
+            'name',
+            'shirt_number',
+            'birth_date',
+            'height',
+            'group',
+            'promiedos_player_id',
+        ]
+
+
+class TeamStatLeaderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeamStatLeader
+        fields = [
+            'competition',
+            'metric',
+            'player_name',
+            'player_short_name',
+            'rank',
+            'value',
+        ]

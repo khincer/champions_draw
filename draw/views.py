@@ -27,6 +27,10 @@ from .models import (
 	SeasonDraw,
 	SeasonMatchup,
 	SeasonTeam,
+	SquadPlayer,
+	Team,
+	TeamProfile,
+	TeamStatLeader,
 )
 from .selectors import (
 	active_season,
@@ -44,6 +48,11 @@ from .serializers import (
 	SeasonMatchupSerializer,
 	SeasonSerializer,
 	SeasonTeamSerializer,
+	SquadPlayerSerializer,
+	TeamProfileSerializer,
+	TeamSerializer,
+	TeamStatLeaderSerializer,
+	_normalize_team_name,
 	serialize_league_match,
 )
 from .services.draw import DrawError, generate_season_draw
@@ -121,9 +130,62 @@ class TeamOverviewAPIView(APIView):
 		)
 
 
+class TeamProfileAPIView(APIView):
+	"""Profile, squad and per-competition leaderboards for one team.
+
+	Resolved by name, not pk: the leagues browser identifies teams by name
+	string (LeagueStanding and LeagueMatch carry names, never Team FKs) and
+	TeamPage only receives ``{name, crest}``, so a pk-keyed route would have
+	nothing to key on. Exact name wins; otherwise the first Team whose
+	normalized name matches the query's is used.
+
+	An unresolved name is a 200 with ``found: false`` and empty sections, not
+	a 404, so the panel can say "not tracked" instead of showing a load error.
+	"""
+
+	def get(self, request):
+		name = (request.query_params.get('name') or '').strip()
+		if not name:
+			return Response(
+				{'detail': 'A name query parameter is required.'},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+
+		team = Team.objects.select_related('association').filter(name=name).first()
+		if team is None:
+			target = _normalize_team_name(name)
+			match_id = next(
+				(
+					team_id
+					for team_id, team_name in Team.objects.values_list('id', 'name')
+					if _normalize_team_name(team_name) == target
+				),
+				None,
+			)
+			if match_id is not None:
+				team = Team.objects.select_related('association').get(pk=match_id)
+
+		if team is None:
+			return Response(
+				{'found': False, 'team': None, 'profile': None, 'squad': [], 'stat_leaders': []},
+				status=status.HTTP_200_OK,
+			)
+
+		profile = TeamProfile.objects.filter(team=team).first()
+		return Response(
+			{
+				'found': True,
+				'team': TeamSerializer(team).data,
+				'profile': TeamProfileSerializer(profile).data if profile else None,
+				'squad': SquadPlayerSerializer(team.squad.all(), many=True).data,
+				'stat_leaders': TeamStatLeaderSerializer(team.stat_leaders.all(), many=True).data,
+			},
+			status=status.HTTP_200_OK,
+		)
+
+
 class SeasonSeedingAPIView(APIView):
 	permission_classes = [IsAuthenticated]
-
 	def post(self, request, pk):
 		season = get_object_or_404(Season, pk=pk)
 

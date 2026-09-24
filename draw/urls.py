@@ -31,6 +31,7 @@ from .views import (
 	TeamDetailAPIView,
 	TeamListAPIView,
 	TeamOverviewAPIView,
+	TeamProfileAPIView,
 	UiSeasonStateAPIView,
 )
 
@@ -51,6 +52,7 @@ urlpatterns = [
     path('ui/seasons/<int:pk>/match-details/<str:fixture_id>/', MatchDetailsAPIView.as_view(), name='ui-season-match-details'),
     path('teams/', TeamListAPIView.as_view(), name='team-list'),
     path('teams/overview/', TeamOverviewAPIView.as_view(), name='team-overview'),
+    path('teams/profile/', TeamProfileAPIView.as_view(), name='team-profile'),
     path('teams/<int:pk>/', TeamDetailAPIView.as_view(), name='team-detail'),
     # Leagues & standings
     path('leagues/', LeagueListAPIView.as_view(), name='league-list'),

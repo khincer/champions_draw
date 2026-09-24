@@ -6,6 +6,7 @@ import LeagueFixtureRow from './LeagueFixtureRow';
 import StandingsTable from './StandingsTable';
 import { EmptyState, ErrorState, Skeleton } from './States';
 import { apiFetch } from '../lib/api';
+import { buildLeaderboards, groupSquad } from '../lib/teamProfile';
 import { normTeamName } from '../lib/teams';
 
 export default function TeamPage({
@@ -49,6 +50,30 @@ export default function TeamPage({
     return () => { uclTokenRef.current += 1; };
   }, [league, leagues]);
 
+  const [teamData, setTeamData] = useState(null);
+  const [teamReq, setTeamReq] = useState({ status: 'idle', error: '' });
+  const teamTokenRef = useRef(0);
+
+  async function loadTeamProfile() {
+    const token = ++teamTokenRef.current;
+    setTeamReq({ status: 'loading', error: '' });
+    try {
+      const data = await apiFetch(`/teams/profile/?name=${encodeURIComponent(team.name)}`);
+      if (token !== teamTokenRef.current) return;
+      setTeamData(data);
+      setTeamReq({ status: 'success', error: '' });
+    } catch (err) {
+      if (token !== teamTokenRef.current) return;
+      setTeamData(null);
+      setTeamReq({ status: 'error', error: err.message });
+    }
+  }
+
+  useEffect(() => {
+    loadTeamProfile();
+    return () => { teamTokenRef.current += 1; };
+  }, [team.name]);
+
   const norm = normTeamName;
   const standing = (standings || []).find(
     (r) => norm(r.team_name || r.team?.name || r.name) === norm(team.name),
@@ -64,6 +89,12 @@ export default function TeamPage({
   const uclFinished = ucl ? teamMatches(ucl.matches.finished) : [];
   const uclUpcoming = ucl ? teamMatches(ucl.matches.upcoming) : [];
   const isUcl = league && league.code === 'CL';
+  const profile = teamData ? teamData.profile : null;
+  const squad = Array.isArray(teamData?.squad) ? teamData.squad : [];
+  const statLeaders = Array.isArray(teamData?.stat_leaders) ? teamData.stat_leaders : [];
+  const found = teamData ? teamData.found !== false : false;
+  const squadGroups = groupSquad(squad);
+  const leaderboards = buildLeaderboards(statLeaders);
 
   return (
     <div style={{ padding: '24px', maxWidth: 1280 }}>
@@ -211,9 +242,113 @@ export default function TeamPage({
           </div>
           <div className="panel-card">
             <h3 className="panel-title">Squad</h3>
-            <p className="muted small">
-              Player data not synced yet.
-            </p>
+            {teamReq.status === 'loading' || teamReq.status === 'idle' ? (
+              <Skeleton rows={3} label="Loading squad" />
+            ) : teamReq.status === 'error' ? (
+              <ErrorState
+                title="Team data could not load"
+                detail={teamReq.error}
+                onRetry={loadTeamProfile}
+              />
+            ) : !found ? (
+              <EmptyState
+                title={`${team.name} is not in the database`}
+                text="This team has no club record yet."
+              />
+            ) : !profile && !squad.length && !statLeaders.length ? (
+              <EmptyState
+                title="Player data not synced yet"
+                text="This team has no squad or player stats on record yet."
+              />
+            ) : squadGroups.length ? (
+              squadGroups.map((group) => (
+                <div className="fixture-mini-list" key={group.group}>
+                  <div className="fixture-mini-heading">{group.group}</div>
+                  {group.players.map((player, index) => (
+                    <div className="squad-row" key={`${player.name}-${index}`}>
+                      <span className="squad-number">{player.shirt_number ?? '-'}</span>
+                      <span className="squad-name">{player.name}</span>
+                      {player.birth_date ? <span className="squad-meta">{player.birth_date}</span> : null}
+                      {player.height ? <span className="squad-meta">{player.height}</span> : null}
+                    </div>
+                  ))}
+                </div>
+              ))
+            ) : (
+              <p className="muted small">No squad players on record.</p>
+            )}
+          </div>
+          {profile ? (
+            <div className="panel-card">
+              <h3 className="panel-title">Profile</h3>
+              <div className="ucl-card">
+                {profile.stadium_name ? (
+                  <div className="ucl-card-row">
+                    <span>Stadium</span>
+                    <b>{profile.stadium_name}</b>
+                  </div>
+                ) : null}
+                {profile.stadium_capacity ? (
+                  <div className="ucl-card-row">
+                    <span>Capacity</span>
+                    <b>{profile.stadium_capacity}</b>
+                  </div>
+                ) : null}
+                {profile.stadium_city ? (
+                  <div className="ucl-card-row">
+                    <span>Stadium city</span>
+                    <b>{profile.stadium_city}</b>
+                  </div>
+                ) : null}
+                {profile.founded ? (
+                  <div className="ucl-card-row">
+                    <span>Founded</span>
+                    <b>{profile.founded}</b>
+                  </div>
+                ) : null}
+                {profile.nickname ? (
+                  <div className="ucl-card-row">
+                    <span>Nickname</span>
+                    <b>{profile.nickname}</b>
+                  </div>
+                ) : null}
+                {profile.primary_color ? (
+                  <div className="ucl-card-row">
+                    <span>Colours</span>
+                    <b
+                      className="color-swatch"
+                      style={{ background: profile.primary_color, color: profile.text_color || '#FFFFFF' }}
+                    >
+                      {profile.primary_color}
+                    </b>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          <div className="panel-card">
+            <h3 className="panel-title">Top players</h3>
+            {leaderboards.length ? (
+              leaderboards.map((competition) => (
+                <div className="fixture-mini-list" key={competition.competition}>
+                  <div className="fixture-mini-heading">{competition.competition}</div>
+                  {competition.metrics.map((metric) => (
+                    <div key={metric.metric}>
+                      <div className="fixture-mini-heading">{metric.metric}</div>
+                      {metric.rows.map((row, index) => (
+                        <div className="leader-row" key={`${row.player_name}-${index}`}>
+                          <span className="leader-rank">{row.rank}</span>
+                          <span className="leader-name">{row.player_name || row.player_short_name || ''}</span>
+                          <b className="leader-value">{row.value}</b>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))
+            ) : (
+              <p className="muted small">No leaderboard data synced yet.</p>
+            )}
           </div>
         </aside>
       </div>

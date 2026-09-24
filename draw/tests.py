@@ -15,7 +15,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueMatch, LeagueMatchPrediction, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, RealFixturePrediction, RealFixtureResult, ResultHistory, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, Team
+from .models import Association, DrawMethodChoices, DrawStatusChoices, InteractiveDrawPick, KnockoutPrediction, League, LeagueMatch, LeagueMatchPrediction, LeagueStanding, MatchPrediction, PlayoffPrediction, Prediction, QualifiedViaChoices, RealFixturePrediction, RealFixtureResult, ResultHistory, Season, SeasonDraw, SeasonMatchup, SeasonMatchupHistory, SeasonTeam, SquadPlayer, Team, TeamProfile, TeamStatLeader
 from .serializers import CompactSeasonTeamSerializer
 from .services.draw import DrawError, compute_forbidden_directions, generate_season_draw, previous_season_names
 from .services.import_seed_input import import_seed_input_payload
@@ -3625,4 +3625,362 @@ class NationsLeagueTeamMapTests(TestCase):
 		for name, code in self.NAMES.items():
 			with self.subTest(name=name):
 				self.assertEqual(self._resolve(name, None), code)
+
+
+def sample_team_page_data():
+	"""A fresh Promiedos team-page ``data`` block, shaped like the live one.
+
+	Deliberately mirrors quirks the live probe confirmed: the club's founding
+	year (1895) lives in team_info while the stadium's (1950) lives in
+	stadium.info, 'Barridas ganadas' is a decimal average, and the staff row
+	carries a blank shirt number.
+	"""
+	return {
+		'competitor': {
+			'name': 'Flamengo',
+			'colors': {'color': '#AB1B10', 'text_color': '#FFFFFF'},
+		},
+		'team_info': [
+			{'name': 'Apodo', 'value': 'Mengao / Rubro-Negro'},
+			{'name': 'Fundación', 'value': '1895'},
+			{'name': 'Club de', 'value': 'Rio de Janeiro'},
+			{'name': 'Estadio', 'value': 'Maracana'},
+		],
+		'stadium': {
+			'name': 'Estadio Jornalista Mario Filho (Maracana)',
+			'info': [
+				{'name': 'Nombre', 'value': 'Maracana'},
+				{'name': 'Capacidad', 'value': '78,838'},
+				{'name': 'Fundación', 'value': '1950'},
+				{'name': 'Ciudad', 'value': 'Rio de Janeiro'},
+			],
+		},
+		'squad': {
+			'groups': [
+				{
+					'name': 'Arqueros',
+					'rows': [
+						{'entity': {'type': 2, 'object': {
+							'num': '1', 'name': 'Agustin Rossi', 'short_name': 'Rossi',
+							'birthdate': '21/08/1995', 'height': '1.93', 'is_staff': False,
+						}}},
+					],
+				},
+				{
+					'name': 'Delanteros',
+					'rows': [
+						{'entity': {'type': 2, 'object': {
+							'num': '7', 'name': 'Luiz Araujo', 'short_name': 'Araujo',
+							'birthdate': '02/06/1996', 'height': '1.75', 'is_staff': False,
+						}}},
+					],
+				},
+				{
+					'name': 'Dirección',
+					'rows': [
+						{'entity': {'type': 2, 'object': {
+							'num': '', 'name': 'Leonardo Jardim', 'short_name': 'Jardim',
+							'birthdate': '01/08/1974', 'height': '', 'is_staff': True,
+						}}},
+					],
+				},
+			],
+		},
+		'stats': {
+			'filters': [
+				{
+					'name': 'Brasileirao',
+					'key': '113_76_-1',
+					'selected': True,
+					'tables': [
+						{
+							'name': 'Goles',
+							'rows': [
+								{'num': 1, 'entity': {'type': 4, 'object': {
+									'name': 'Pedro', 'short_name': 'Pedro'}},
+								 'values': [{'key': 'Goals', 'value': '16'}]},
+								{'num': 2, 'entity': {'type': 4, 'object': {
+									'name': 'Samuel Lino', 'short_name': 'Lino'}},
+								 'values': [{'key': 'Goals', 'value': '9'}]},
+							],
+						},
+						{
+							'name': 'Barridas ganadas',
+							'rows': [
+								{'num': 1, 'entity': {'type': 4, 'object': {
+									'name': 'Samuel Lino', 'short_name': 'Lino'}},
+								 'values': [{'key': 'Tackles', 'value': '0.4'}]},
+							],
+						},
+					],
+				},
+				{'name': 'CONMEBOL Copa Libertadores', 'key': '102_69_-1', 'tables': []},
+			],
+		},
+	}
+
+
+class TeamProfileModelTests(TestCase):
+	def setUp(self):
+		self.association = Association.objects.create(name='Brazil', code='BRA')
+		self.team = Team.objects.create(
+			name='Flamengo', short_name='FLA', association=self.association,
+		)
+
+	def test_profile_is_one_to_one(self):
+		TeamProfile.objects.create(team=self.team, nickname='Mengao')
+
+		with self.assertRaises(IntegrityError), transaction.atomic():
+			TeamProfile.objects.create(team=self.team)
+
+	def test_squad_player_is_unique_per_team(self):
+		SquadPlayer.objects.create(team=self.team, name='Pedro')
+
+		with self.assertRaises(IntegrityError), transaction.atomic():
+			SquadPlayer.objects.create(team=self.team, name='Pedro')
+
+	def test_same_player_name_is_allowed_on_a_different_team(self):
+		other = Team.objects.create(name='Palmeiras', short_name='PAL', association=self.association)
+		SquadPlayer.objects.create(team=self.team, name='Pedro')
+		SquadPlayer.objects.create(team=other, name='Pedro')
+
+		self.assertEqual(SquadPlayer.objects.count(), 2)
+
+	def test_stat_leader_key_is_team_competition_metric_player(self):
+		TeamStatLeader.objects.create(
+			team=self.team, competition='Brasileirao', metric='Goles',
+			player_name='Pedro', rank=1, value=16,
+		)
+
+		with self.assertRaises(IntegrityError), transaction.atomic():
+			TeamStatLeader.objects.create(
+				team=self.team, competition='Brasileirao', metric='Goles',
+				player_name='Pedro', rank=1, value=16,
+			)
+
+	def test_one_player_can_lead_several_metrics(self):
+		TeamStatLeader.objects.create(
+			team=self.team, competition='Brasileirao', metric='Goles',
+			player_name='Pedro', rank=1, value=16,
+		)
+		TeamStatLeader.objects.create(
+			team=self.team, competition='Brasileirao', metric='Asistencias',
+			player_name='Pedro', rank=3, value=4,
+		)
+
+		self.assertEqual(TeamStatLeader.objects.count(), 2)
+
+
+class PromiedosTeamParsingTests(TestCase):
+	def test_parse_int_handles_thousands_separator_and_blanks(self):
+		from draw.management.commands.sync_promiedos_team import parse_int
+
+		self.assertEqual(parse_int('78,838'), 78838)
+		self.assertEqual(parse_int('16'), 16)
+		self.assertEqual(parse_int(7), 7)
+		self.assertIsNone(parse_int(''))
+		self.assertIsNone(parse_int('   '))
+		self.assertIsNone(parse_int(None))
+		# A decimal average must fail loudly rather than truncate to 0.
+		self.assertIsNone(parse_int('0.4'))
+
+	def test_parse_profile_reads_club_year_not_stadium_year(self):
+		from draw.management.commands.sync_promiedos_team import parse_profile
+
+		profile, unparsed = parse_profile(sample_team_page_data())
+
+		self.assertEqual(profile['nickname'], 'Mengao / Rubro-Negro')
+		self.assertEqual(profile['founded'], 1895)
+		self.assertEqual(profile['club_city'], 'Rio de Janeiro')
+		self.assertEqual(profile['stadium_capacity'], 78838)
+		self.assertEqual(profile['stadium_city'], 'Rio de Janeiro')
+		self.assertEqual(profile['primary_color'], '#AB1B10')
+		self.assertEqual(profile['text_color'], '#FFFFFF')
+		self.assertEqual(unparsed, [])
+
+	def test_parse_profile_reports_unparseable_values_instead_of_coercing(self):
+		from draw.management.commands.sync_promiedos_team import parse_profile
+
+		data = sample_team_page_data()
+		data['stadium']['info'][1]['value'] = 'seventy-eight thousand'
+
+		profile, unparsed = parse_profile(data)
+
+		self.assertIsNone(profile['stadium_capacity'])
+		self.assertEqual(len(unparsed), 1)
+		self.assertIn('stadium capacity', unparsed[0])
+
+	def test_parse_squad_keeps_group_strings_and_blank_shirt_numbers(self):
+		from draw.management.commands.sync_promiedos_team import parse_squad
+
+		squad = parse_squad(sample_team_page_data())
+
+		self.assertEqual({p['group'] for p in squad}, {'Arqueros', 'Delanteros', 'Dirección'})
+		self.assertEqual(next(p for p in squad if p['name'] == 'Agustin Rossi')['shirt_number'], 1)
+		# Staff rows carry a blank num; it becomes NULL, never 0.
+		self.assertIsNone(next(p for p in squad if p['name'] == 'Leonardo Jardim')['shirt_number'])
+
+	def test_parse_stat_leaders_skips_decimal_metrics(self):
+		from draw.management.commands.sync_promiedos_team import parse_stat_leaders
+
+		leaders, skipped = parse_stat_leaders(sample_team_page_data())
+
+		self.assertEqual(len(leaders), 2)
+		self.assertEqual({l['competition'] for l in leaders}, {'Brasileirao'})
+		self.assertEqual([l['value'] for l in leaders], [16, 9])
+		self.assertEqual(leaders[0]['rank'], 1)
+		# 'Barridas ganadas' is an average ('0.4'), so it is skipped, not truncated.
+		self.assertEqual(len(skipped), 1)
+		self.assertIn('Barridas ganadas', skipped[0])
+
+	def test_team_page_data_rejects_a_page_without_the_blob(self):
+		from draw.management.commands.sync_promiedos_team import team_page_data
+
+		with self.assertRaises(ValueError):
+			team_page_data('<html><body>nope</body></html>')
+
+
+class SyncPromiedosTeamCommandTests(TestCase):
+	def setUp(self):
+		self.association = Association.objects.create(name='Brazil', code='BRA')
+		self.team = Team.objects.create(
+			name='Flamengo', short_name='FLA', association=self.association,
+			promiedos_id='bcbf',
+		)
+
+	def _html(self, data):
+		blob = json.dumps({'props': {'pageProps': {'data': data}}})
+		return f'<html><script id="__NEXT_DATA__" type="application/json">{blob}</script></html>'
+
+	def _run(self, data=None):
+		from draw.management.commands.sync_promiedos_team import Command
+
+		html = self._html(data if data is not None else sample_team_page_data())
+		with mock.patch.object(Command, 'fetch', return_value=html):
+			call_command('sync_promiedos_team', '--team', 'Flamengo', verbosity=0)
+
+	def test_sync_writes_profile_squad_and_leaders(self):
+		self._run()
+
+		profile = TeamProfile.objects.get(team=self.team)
+		self.assertEqual(profile.founded, 1895)
+		self.assertEqual(profile.stadium_capacity, 78838)
+		self.assertEqual(SquadPlayer.objects.filter(team=self.team).count(), 3)
+		self.assertEqual(TeamStatLeader.objects.filter(team=self.team).count(), 2)
+
+	def test_rerunning_is_a_noop(self):
+		self._run()
+		first_profile = TeamProfile.objects.get(team=self.team)
+		first_sync = first_profile.synced_at
+
+		self._run()
+
+		self.assertEqual(TeamProfile.objects.count(), 1)
+		self.assertEqual(SquadPlayer.objects.count(), 3)
+		self.assertEqual(TeamStatLeader.objects.count(), 2)
+		# Unchanged rows are never saved, so synced_at does not move.
+		self.assertEqual(TeamProfile.objects.get(team=self.team).synced_at, first_sync)
+
+	def test_removed_players_are_deleted_on_the_next_run(self):
+		self._run()
+		self.assertEqual(SquadPlayer.objects.count(), 3)
+
+		data = sample_team_page_data()
+		data['squad']['groups'] = [
+			group for group in data['squad']['groups'] if group['name'] == 'Dirección'
+		]
+		self._run(data)
+
+		self.assertEqual([p.name for p in SquadPlayer.objects.all()], ['Leonardo Jardim'])
+
+	def test_dry_run_writes_nothing(self):
+		from draw.management.commands.sync_promiedos_team import Command
+
+		html = self._html(sample_team_page_data())
+		with mock.patch.object(Command, 'fetch', return_value=html):
+			call_command('sync_promiedos_team', '--team', 'Flamengo', '--dry-run', verbosity=0)
+
+		self.assertEqual(TeamProfile.objects.count(), 0)
+		self.assertEqual(SquadPlayer.objects.count(), 0)
+		self.assertEqual(TeamStatLeader.objects.count(), 0)
+
+	def test_teams_without_a_promiedos_id_are_skipped(self):
+		Team.objects.create(
+			name='Arsenal', short_name='ARS', association=self.association,
+		)
+		from draw.management.commands.sync_promiedos_team import Command
+
+		with mock.patch.object(
+			Command, 'fetch', return_value=self._html(sample_team_page_data())
+		) as fetch:
+			call_command('sync_promiedos_team', verbosity=0)
+
+		# Only the team that has an id was fetched.
+		self.assertEqual(fetch.call_count, 1)
+		self.assertFalse(TeamProfile.objects.filter(team__name='Arsenal').exists())
+
+
+class TeamProfileApiTests(APITestCase):
+	def setUp(self):
+		self.association = Association.objects.create(name='Brazil', code='BRA')
+		self.team = Team.objects.create(
+			name='Flamengo', short_name='FLA', association=self.association,
+			promiedos_id='bcbf',
+		)
+		TeamProfile.objects.create(
+			team=self.team, nickname='Mengao', founded=1895, stadium_capacity=78838,
+		)
+		SquadPlayer.objects.create(
+			team=self.team, name='Pedro', shirt_number=9, group='Delanteros',
+		)
+		TeamStatLeader.objects.create(
+			team=self.team, competition='Brasileirao', metric='Goles',
+			player_name='Pedro', rank=1, value=16,
+		)
+
+	def test_returns_profile_squad_and_leaders(self):
+		response = self.client.get('/api/teams/profile/', {'name': 'Flamengo'})
+
+		self.assertEqual(response.status_code, 200)
+		body = response.json()
+		self.assertTrue(body['found'])
+		self.assertEqual(body['profile']['nickname'], 'Mengao')
+		self.assertEqual(body['profile']['stadium_capacity'], 78838)
+		self.assertEqual([p['name'] for p in body['squad']], ['Pedro'])
+		self.assertEqual(body['stat_leaders'][0]['metric'], 'Goles')
+		self.assertEqual(body['stat_leaders'][0]['value'], 16)
+
+	def test_resolves_a_name_that_only_matches_after_normalization(self):
+		response = self.client.get('/api/teams/profile/', {'name': 'flamengo!'})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.json()['found'])
+
+	def test_unknown_team_is_a_200_with_found_false(self):
+		response = self.client.get('/api/teams/profile/', {'name': 'Nonexistent FC'})
+
+		self.assertEqual(response.status_code, 200)
+		body = response.json()
+		self.assertFalse(body['found'])
+		self.assertIsNone(body['profile'])
+		self.assertEqual(body['squad'], [])
+		self.assertEqual(body['stat_leaders'], [])
+
+	def test_team_without_synced_data_reports_found_with_empty_sections(self):
+		Team.objects.create(
+			name='Palmeiras', short_name='PAL', association=self.association,
+			promiedos_id='xyz',
+		)
+		response = self.client.get('/api/teams/profile/', {'name': 'Palmeiras'})
+
+		self.assertEqual(response.status_code, 200)
+		body = response.json()
+		self.assertTrue(body['found'])
+		self.assertIsNone(body['profile'])
+		self.assertEqual(body['squad'], [])
+
+	def test_missing_name_is_a_400(self):
+		response = self.client.get('/api/teams/profile/')
+
+		self.assertEqual(response.status_code, 400)
 
