@@ -845,6 +845,20 @@ class LeagueMatchPredictionAPIView(APIView):
 # --- Homepage: recent + upcoming matches ---
 
 
+def _kickoff_closed(kickoff):
+	"""True once a fixture's predictions have closed (10 minutes before kickoff).
+
+	Kickoffs come back naive from SQLite, so they are pinned to UTC before the
+	comparison. Comparing a naive datetime against an aware `now` raises, and that
+	took the whole homepage feed down rather than degrading one row.
+	"""
+	if kickoff is None:
+		return False
+	if kickoff.tzinfo is None:
+		kickoff = kickoff.replace(tzinfo=timezone.utc)
+	return datetime.now(timezone.utc) >= (kickoff - timedelta(minutes=10))
+
+
 class HomepageMatchesAPIView(APIView):
 	"""Homepage feed: today/yesterday real fixtures for the newest UCL season
 	plus every non-UCL season's matchups (CONMEBOL + international friendlies).
@@ -911,10 +925,7 @@ class HomepageMatchesAPIView(APIView):
 						if m.status == 'FINISHED' and m.home_goals is not None and m.away_goals is not None
 						else None
 					),
-					# Kickoff-based, matching every other real-fixture path.
-					# Deriving this from FINISHED made an in-play match look open,
-					# so the homepage never started its live-score poll.
-					'closed': datetime.now(timezone.utc) >= (m.kickoff - timedelta(minutes=10)),
+					'closed': _kickoff_closed(m.kickoff),
 					'status': m.status,
 				})
 		try:
@@ -949,7 +960,7 @@ class HomepageMatchesAPIView(APIView):
 							if m.status == 'FINISHED' and m.home_goals is not None and m.away_goals is not None
 							else None
 						),
-						'closed': m.status == 'FINISHED',
+						'closed': _kickoff_closed(m.kickoff),
 						'status': m.status,
 					})
 		except Exception:

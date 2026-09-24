@@ -1384,6 +1384,36 @@ class RealDrawSeasonScopeTests(TestCase):
 			load_real_fixtures(season)
 
 
+class HomepageKickoffClosedTests(TestCase):
+	"""A naive kickoff must not take the whole homepage feed down."""
+
+	def _closed(self, kickoff):
+		from draw.views import _kickoff_closed
+
+		return _kickoff_closed(kickoff)
+
+	def test_naive_kickoff_does_not_raise(self):
+		# SQLite hands back naive datetimes; comparing one against an aware `now`
+		# raises, and that 500'd the entire feed rather than one row.
+		naive_past = datetime(2026, 9, 24, 10, 0)
+		naive_future = datetime(2099, 1, 1, 10, 0)
+
+		self.assertIs(self._closed(naive_past), True)
+		self.assertIs(self._closed(naive_future), False)
+
+	def test_aware_kickoff_still_works(self):
+		from datetime import timezone as tz
+
+		aware_past = datetime(2026, 9, 24, 10, 0, tzinfo=tz.utc)
+		aware_future = datetime(2099, 1, 1, 10, 0, tzinfo=tz.utc)
+
+		self.assertIs(self._closed(aware_past), True)
+		self.assertIs(self._closed(aware_future), False)
+
+	def test_missing_kickoff_is_not_closed(self):
+		self.assertIs(self._closed(None), False)
+
+
 class RealPredictionSyncApiTests(APITestCase):
 	"""Exercises /api/ui/seasons/<pk>/real-predictions/ against the real
 	league-phase fixtures file (2026-27), which is what ships in the repo."""
