@@ -2837,6 +2837,100 @@ class PromiedosFriendliesSyncTests(TestCase):
 		self.assertIsNone(CompactSeasonTeamSerializer(entry).data['domestic'])
 
 
+class PromiedosFixturesHistoryTests(TestCase):
+	"""The LIB/SUD matchup writer appends history alongside its upsert.
+
+	Offline: the network boundary (``fetch`` for the filter page and
+	``fetch_json`` for the games payload) is stubbed, mirroring
+	``PromiedosFriendliesSyncTests``.
+	"""
+
+	def _team(self, team_id, name, country_id):
+		return {'id': team_id, 'name': name, 'short_name': name[:3], 'country_id': country_id}
+
+	def _game(self, game_id, home, away, home_goals=None, away_goals=None):
+		finished = home_goals is not None and away_goals is not None
+		return {
+			'id': game_id,
+			'start_time': '22-09-2026 20:00',
+			'status': {
+				'short_name': 'Final' if finished else 'Prog.',
+				'name': 'Finalizado' if finished else 'Programado',
+			},
+			'game_time_status_to_display': 'Final' if finished else '',
+			'scores': [home_goals, away_goals] if finished else [],
+			'teams': [home, away],
+		}
+
+	def _payload(self, games):
+		return {'games': games}
+
+	def _filters_html(self):
+		blob = json.dumps({'props': {'pageProps': {'data': {'games': {'filters': [
+			{'key': '102_69_4_1', 'name': 'Fecha 1'},
+		]}}}}})
+		return f'<script id="__NEXT_DATA__" type="application/json">{blob}</script>'
+
+	def _run(self, games, **options):
+		from io import StringIO
+
+		from draw.management.commands.sync_promiedos_fixtures import Command
+
+		options.setdefault('competition', 'lib')
+		out, err = StringIO(), StringIO()
+		with mock.patch.object(Command, 'fetch', return_value=self._filters_html()), \
+				mock.patch.object(Command, 'fetch_json', return_value=self._payload(games)):
+			call_command('sync_promiedos_fixtures', stdout=out, stderr=err, **options)
+		return out.getvalue(), err.getvalue()
+
+	def _home_and_away(self):
+		return (
+			self._team('t1', 'Flamengo', 'cb'),
+			self._team('t2', 'Boca Juniors', 'ba'),
+		)
+
+	def test_changed_score_appends_history_keyed_by_the_triple(self):
+		home, away = self._home_and_away()
+
+		self._run([self._game('g1', home, away, 1, 0)])
+		self._run([self._game('g1', home, away, 2, 0)])
+
+		rows = ResultHistory.objects.filter(source='promiedos')
+		self.assertEqual(rows.count(), 2)
+		self.assertEqual(
+			set(rows.values_list('home_goals', 'away_goals')),
+			{(1, 0), (2, 0)},
+		)
+		season = Season.objects.get()
+		matchup = SeasonMatchup.objects.get()
+		row = rows.order_by('id').first()
+		self.assertEqual(row.subject, f'{season.pk}:{matchup.home_team_id}:{matchup.away_team_id}')
+		self.assertEqual((row.competition, row.season_name), ('LIB', 'Libertadores 2026'))
+		self.assertEqual((row.home_label, row.away_label), ('Flamengo', 'Boca Juniors'))
+		self.assertEqual(row.status, 'FINISHED')
+
+	def test_unchanged_rerun_appends_nothing(self):
+		home, away = self._home_and_away()
+		games = [self._game('g1', home, away, 1, 0)]
+
+		self._run(games)
+		self._run(games)
+
+		self.assertEqual(ResultHistory.objects.filter(source='promiedos').count(), 1)
+
+	def test_subject_is_the_triple_not_the_external_id(self):
+		home, away = self._home_and_away()
+
+		self._run([self._game('g1', home, away, 1, 0)])
+
+		season = Season.objects.get()
+		matchup = SeasonMatchup.objects.get()
+		row = ResultHistory.objects.get()
+		self.assertEqual(matchup.external_id, 'promiedos:g1')
+		self.assertEqual(row.subject, f'{season.pk}:{matchup.home_team_id}:{matchup.away_team_id}')
+		self.assertNotEqual(row.subject, matchup.external_id)
+
+
 class FriendliesUnresolvedNationTests(TestCase):
 	"""Resolution misses skip loudly but never fail the run (spec R10)."""
 

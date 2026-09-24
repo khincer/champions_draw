@@ -32,6 +32,7 @@ from draw.services.conmebol_naming import (
     TEAM_COUNTRY_BY_NAME,
     normalize_text,
 )
+from draw.services.result_history import record_result_history
 from draw.models import (
     Association,
     CompetitionChoices,
@@ -329,6 +330,7 @@ class Command(BaseCommand):
             skipped_team_names = set()
             skipped_matchups = 0
             matchups = 0
+            history_observations = []
 
             for game, filter_matchday in games:
                 teams_info = game.get('teams') or []
@@ -360,6 +362,22 @@ class Command(BaseCommand):
                     'away_goals': int(scores[1]) if finished and len(scores) > 1 else None,
                 }
 
+                # The triple is the model's own (season, home, away) identity;
+                # external_id is overwritten when a directed pair recurs (group
+                # + knockout), the very case history exists for. Collected for
+                # every game whose defaults we build, not only changed ones: the
+                # helper dedupes against history, so an unchanged fixture adds
+                # nothing and a missed flush is re-collected next run
+                # (belt-and-braces on the surrounding transaction).
+                history_observations.append({
+                    'subject': f'{season.pk}:{home_entry.pk}:{away_entry.pk}',
+                    'home_label': home.name,
+                    'away_label': away.name,
+                    'home_goals': defaults['home_goals'],
+                    'away_goals': defaults['away_goals'],
+                    'status': defaults['status'],
+                })
+
                 # QuerySet.update() skips Model.full_clean().
                 if SeasonMatchup.objects.filter(
                     season=season, home_team=home_entry, away_team=away_entry
@@ -382,6 +400,17 @@ class Command(BaseCommand):
                         ignore_conflicts=True,
                     )
                 matchups += 1
+
+            # Flushed once, before the run summary, inside the existing
+            # transaction: the live upsert and the history append commit
+            # together, so a crash cannot lose the previous value.
+            if history_observations:
+                record_result_history(
+                    history_observations,
+                    source='promiedos',
+                    competition=competition_code,
+                    season_name=season.name,
+                )
 
             if skipped_team_names:
                 self.stderr.write(self.style.WARNING(
