@@ -28,6 +28,7 @@ static/ui/
 # Local tooling artifacts
 .codegraph/
 .atl/
+graphify-out/
 test_probe_*.py
 
 # Environment and editor files
