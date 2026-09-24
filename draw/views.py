@@ -35,6 +35,7 @@ from .selectors import (
 	interactive_state,
 	league_fixture_state,
 	load_real_fixtures,
+	promiedos_live_url,
 )
 from .serializers import (
 	CompactSeasonMatchupSerializer,
@@ -365,13 +366,19 @@ class LiveScoresAPIView(APIView):
 		season = get_object_or_404(Season, pk=pk)
 		matchups = load_real_fixtures(season)
 
+		live_url = promiedos_live_url(season.competition)
+		if live_url is None:
+			# No live source for this competition (the friendlies league has no
+			# working league page). Nothing is live, which is not an error.
+			return Response({'live': {}}, status=status.HTTP_200_OK)
+
 		fixture_id_by_pair = {}
 		for m in matchups:
 			key = (resolve(m['home_team']['name']), resolve(m['away_team']['name']))
 			fixture_id_by_pair.setdefault(key, m['id'])
 
 		try:
-			live_games = parse_promiedos_live(fetch_promiedos_live_html())
+			live_games = parse_promiedos_live(fetch_promiedos_live_html(live_url))
 		except (RuntimeError, ValueError, KeyError, IndexError, json.JSONDecodeError) as exc:
 			return Response({'live': {}, 'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 

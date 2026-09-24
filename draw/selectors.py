@@ -234,17 +234,36 @@ def real_fixtures_json():
 		return json.load(f)
 
 
-# Short TTL so several viewers polling every 30s don't each hit promiedos; a
-# 15s cache caps upstream traffic at ~4 fetches/min regardless of audience.
-_PROMIEDOS_LIVE_CACHE = {'at': 0.0, 'html': None}
+# Promiedos serves one league page per competition, and the live scrape reads the
+# page of the season it is scoring -- a UCL-only URL silently produced no live
+# scores for any other competition. The friendlies league has no working league
+# page (its route 404s; the sync reaches it through the date endpoint), so it is
+# deliberately absent and reports nothing live rather than guessing.
+PROMIEDOS_LIVE_URL_BY_COMPETITION = {
+	'UCL': PROMIEDOS_URL,
+	'LIB': 'https://www.promiedos.com.ar/league/conmebol-libertadores/bac',
+	'SUD': 'https://www.promiedos.com.ar/league/conmebol-sudamericana/dij',
+	'UNL': 'https://www.promiedos.com.ar/league/uefa-nations-league/habg',
+}
 
 
-def fetch_promiedos_live_html():
+def promiedos_live_url(competition):
+	"""Live-score page for a competition, or None when it has no live source."""
+	return PROMIEDOS_LIVE_URL_BY_COMPETITION.get(competition)
+
+
+# Short TTL so several viewers polling every 30s don't each hit promiedos; a 15s
+# cache caps upstream traffic at ~4 fetches/min per competition. Keyed by URL
+# because the page differs per competition.
+_PROMIEDOS_LIVE_CACHE = {}
+
+
+def fetch_promiedos_live_html(url):
 	now = time.monotonic()
-	cached = _PROMIEDOS_LIVE_CACHE
-	if cached['html'] is None or now - cached['at'] > 15:
-		cached['html'] = fetch(PROMIEDOS_URL, source='Promiedos')
-		cached['at'] = now
+	cached = _PROMIEDOS_LIVE_CACHE.get(url)
+	if cached is None or now - cached['at'] > 15:
+		cached = {'at': now, 'html': fetch(url, source='Promiedos')}
+		_PROMIEDOS_LIVE_CACHE[url] = cached
 	return cached['html']
 
 
