@@ -1353,6 +1353,67 @@ class DomesticStandingJoinTests(TestCase):
 		self.assertIsNone(CompactSeasonTeamSerializer(entry2).data['domestic'])
 
 
+class RealDrawSeasonScopeTests(TestCase):
+	"""The checked-in UCL calendar names its own season; anything else gets []."""
+
+	def _fixtures(self, name, competition):
+		from draw.selectors import load_real_fixtures
+
+		season = Season.objects.create(name=name, competition=competition)
+		return load_real_fixtures(season)
+
+	def test_non_ucl_season_serves_no_real_fixtures(self):
+		# Joining the UCL calendar against another competition's teams made every
+		# lookup miss, so the endpoint 404'd with "Team not found in season: <team>".
+		self.assertEqual(self._fixtures('Libertadores 2026', 'LIB'), [])
+
+	def test_other_ucl_season_serves_nothing(self):
+		# The calendar covers 2026-27 only; the previous UCL season has no file.
+		self.assertEqual(self._fixtures('2025-26', 'UCL'), [])
+
+	def test_the_calendar_season_is_not_refused_by_the_guard(self):
+		# The guard must not swallow the season the calendar actually describes.
+		# This season has no SeasonTeam rows, so it passes the guard and fails
+		# later, in the team join -- which is what proves it was not refused.
+		from rest_framework.exceptions import NotFound
+
+		from draw.selectors import load_real_fixtures
+
+		season = Season.objects.create(name='2026-27', competition='UCL')
+		with self.assertRaises(NotFound):
+			load_real_fixtures(season)
+
+
+class HomepageKickoffClosedTests(TestCase):
+	"""A naive kickoff must not take the whole homepage feed down."""
+
+	def _closed(self, kickoff):
+		from draw.views import _kickoff_closed
+
+		return _kickoff_closed(kickoff)
+
+	def test_naive_kickoff_does_not_raise(self):
+		# SQLite hands back naive datetimes; comparing one against an aware `now`
+		# raises, and that 500'd the entire feed rather than one row.
+		naive_past = datetime(2026, 9, 24, 10, 0)
+		naive_future = datetime(2099, 1, 1, 10, 0)
+
+		self.assertIs(self._closed(naive_past), True)
+		self.assertIs(self._closed(naive_future), False)
+
+	def test_aware_kickoff_still_works(self):
+		from datetime import timezone as tz
+
+		aware_past = datetime(2026, 9, 24, 10, 0, tzinfo=tz.utc)
+		aware_future = datetime(2099, 1, 1, 10, 0, tzinfo=tz.utc)
+
+		self.assertIs(self._closed(aware_past), True)
+		self.assertIs(self._closed(aware_future), False)
+
+	def test_missing_kickoff_is_not_closed(self):
+		self.assertIs(self._closed(None), False)
+
+
 class RealPredictionSyncApiTests(APITestCase):
 	"""Exercises /api/ui/seasons/<pk>/real-predictions/ against the real
 	league-phase fixtures file (2026-27), which is what ships in the repo."""
@@ -2315,6 +2376,41 @@ class HomepageMatchesLeagueTests(APITestCase):
 		row = next(r for r in resp.json()['matchups'] if r['id'] == 'real-1-1')
 		self.assertEqual(row['competition'], 'Champions League')
 		self.assertEqual(row['competition_emblem'], 'https://crests.football-data.org/CL.png')
+
+
+class LeaguePicksMatchdayScopeTests(APITestCase):
+	"""The picks page predicts one matchday and reports one matchday."""
+
+	def setUp(self):
+		self.league = League.objects.create(name='Premier League', code='PL', country='England')
+		now = datetime.now(timezone.utc)
+		for matchday, offset in ((5, -2), (6, 1)):
+			for index in range(2):
+				LeagueMatch.objects.create(
+					league=self.league,
+					match_id=matchday * 100 + index,
+					home_name=f'H{matchday}{index}', away_name=f'A{matchday}{index}',
+					home_short='H', away_short='A',
+					kickoff=now + timedelta(days=offset, hours=index),
+					status='FINISHED' if offset < 0 else 'SCHEDULED',
+					home_goals=1 if offset < 0 else None,
+					away_goals=0 if offset < 0 else None,
+					matchday=matchday,
+				)
+
+	def _get(self):
+		return self.client.get(f'/api/leagues/{self.league.pk}/predictions/')
+
+	def test_upcoming_is_only_the_next_matchday(self):
+		resp = self._get()
+
+		self.assertEqual(resp.status_code, 200)
+		self.assertEqual({m['matchday'] for m in resp.data['upcoming']}, {6})
+
+	def test_finished_is_only_the_last_completed_matchday(self):
+		resp = self._get()
+
+		self.assertEqual({m['matchday'] for m in resp.data['finished']}, {5})
 
 
 class LeagueMatchPredictionApiTests(APITestCase):

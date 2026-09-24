@@ -2160,7 +2160,31 @@ select:focus,
 .homepage-filter-emblem { width: 18px; height: 18px; object-fit: contain; }
 
 /* League cards */
-.leagues-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 24px; }
+.leagues-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; padding: 24px; }
+/* A competition with no crest of its own (FRN, UNL) renders a globe in the same
+   slot the crest would occupy. */
+.league-card-globe { color: var(--muted); }
+
+/* Matchday navigation in the league view: one button per matchday, opening on
+   the most recently played one. Wraps rather than scrolling -- a league runs to
+   38 matchdays and a scroll strip would hide most of them. */
+.matchday-nav-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: var(--space-3); }
+.matchday-nav-btn {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--font-small);
+  font-weight: 800;
+  cursor: pointer;
+}
+.matchday-nav-btn:hover { color: var(--ink); }
+.matchday-nav-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.matchday-nav-btn.is-active { background: var(--surface); color: var(--green-ink); box-shadow: var(--sh-card-strong); }
 .league-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px; transition: border-color 0.15s; }
 .league-card:hover { border-color: var(--green-primary); }
 .league-card img { height: 40px; }
@@ -3557,6 +3581,91 @@ dialog.match-detail-view {
 .match-detail-view::backdrop {
   background: color-mix(in srgb, var(--sidebar) 60%, transparent);
 }
+
+/* First-visit name prompt. Native `<dialog>` + `showModal()` like the match
+   detail overlay above, so the top layer handles inertness and Tab confinement
+   and only the UA chrome needs overriding. */
+dialog.name-dialog {
+  width: min(420px, calc(100% - var(--space-8)));
+  margin: auto;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--sh-3);
+}
+
+.name-dialog::backdrop {
+  background: color-mix(in srgb, var(--sidebar) 60%, transparent);
+}
+
+.name-dialog h2 { margin: 0 0 var(--space-2); font-size: 1.1rem; }
+.name-dialog-input {
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+}
+.name-dialog-actions { display: flex; justify-content: flex-end; margin-top: var(--space-3); }
+.name-dialog-save {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--green-ink);
+  color: var(--surface);
+  font-weight: 800;
+  cursor: pointer;
+}
+.name-dialog-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* The name is captured once by the dialog, so the header shows it rather than an
+   always-visible input; this is the way back in to change it. */
+.playing-as {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.playing-as:hover { color: var(--ink); }
+.playing-as strong { color: var(--ink); }
+
+/* Competition cards on the real-draw page. The page body swaps to whichever is
+   active, so they behave as tabs that happen to be laid out as cards. */
+.real-competition-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.real-competition-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--sh-card);
+}
+.real-competition-card:hover { border-color: var(--blue); }
+.real-competition-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.real-competition-card.is-active { border-color: var(--green-ink); box-shadow: var(--sh-card-strong); }
+.real-competition-card:disabled { opacity: 0.5; cursor: not-allowed; }
+.real-competition-season { color: var(--muted); font-size: var(--font-small); }
 
 .match-detail-back {
   align-self: flex-start;

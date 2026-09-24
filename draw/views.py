@@ -1,7 +1,7 @@
 import json
 from collections import Counter
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import django
 from django.shortcuts import get_object_or_404
@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 
 from .management.commands.sync_real_fixture_results import (
 	parse_promiedos_live,
-	resolve,
+	resolve_live,
 )
 
 from .models import (
@@ -35,6 +35,7 @@ from .selectors import (
 	interactive_state,
 	league_fixture_state,
 	load_real_fixtures,
+	promiedos_live_url,
 )
 from .serializers import (
 	CompactSeasonMatchupSerializer,
@@ -365,19 +366,25 @@ class LiveScoresAPIView(APIView):
 		season = get_object_or_404(Season, pk=pk)
 		matchups = load_real_fixtures(season)
 
+		live_url = promiedos_live_url(season.competition)
+		if live_url is None:
+			# No live source for this competition (the friendlies league has no
+			# working league page). Nothing is live, which is not an error.
+			return Response({'live': {}}, status=status.HTTP_200_OK)
+
 		fixture_id_by_pair = {}
 		for m in matchups:
-			key = (resolve(m['home_team']['name']), resolve(m['away_team']['name']))
+			key = (resolve_live(m['home_team']['name']), resolve_live(m['away_team']['name']))
 			fixture_id_by_pair.setdefault(key, m['id'])
 
 		try:
-			live_games = parse_promiedos_live(fetch_promiedos_live_html())
+			live_games = parse_promiedos_live(fetch_promiedos_live_html(live_url))
 		except (RuntimeError, ValueError, KeyError, IndexError, json.JSONDecodeError) as exc:
 			return Response({'live': {}, 'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
 		live = {}
 		for game in live_games:
-			fixture_id = fixture_id_by_pair.get((resolve(game['home']), resolve(game['away'])))
+			fixture_id = fixture_id_by_pair.get((resolve_live(game['home']), resolve_live(game['away'])))
 			if fixture_id is None:
 				continue  # not one of our league-phase fixtures
 			live[fixture_id] = {
@@ -507,13 +514,14 @@ def parse_bool(value) -> bool:
 # feed: it doubles as the serve list and the label source, so a competition
 # cannot be served-but-unlabelled. CONMEBOL seasons carry no emblem in their own
 # data, so the api-sports crests stand in — the same convention the team-logo
-# backfill uses. Friendlies (FRN) and the Nations League (UNL) have no crest of
-# their own, hence None.
+# backfill uses. The Nations League has its own crest, same api-sports convention
+# as the CONMEBOL rows above. The friendlies are a fixture bucket rather than a
+# competition, so they genuinely have none, hence None.
 COMPETITION_META = {
 	'LIB': {'label': 'Libertadores', 'country': 'CONMEBOL', 'emblem_url': 'https://media.api-sports.io/football/leagues/13.png'},
 	'SUD': {'label': 'Sudamericana', 'country': 'CONMEBOL', 'emblem_url': 'https://media.api-sports.io/football/leagues/11.png'},
 	'FRN': {'label': 'International Friendlies', 'country': 'International', 'emblem_url': None},
-	'UNL': {'label': 'Nations League', 'country': 'International', 'emblem_url': None},
+	'UNL': {'label': 'Nations League', 'country': 'International', 'emblem_url': 'https://media.api-sports.io/football/leagues/5.png'},
 }
 
 # Non-UCL seasons surfaced by the league list and the homepage feed. Derived from
@@ -754,10 +762,48 @@ class LeagueMatchPredictionAPIView(APIView):
 		player_name = request.query_params.get('player_name', '').strip()
 		now = django.utils.timezone.now()
 		qs = LeagueMatch.objects.filter(league=league)
-		finished = qs.filter(status='FINISHED', kickoff__lte=now).order_by('-kickoff')[:30]
-		# Kicked off but not final (IN_PLAY, PAUSED, …): visible, read-only picks.
-		in_play = qs.filter(kickoff__lte=now).exclude(status='FINISHED').order_by('-kickoff')[:30]
-		upcoming = qs.filter(kickoff__gt=now).order_by('kickoff')[:30]
+
+		# Matchday-scoped, not a rolling window. The page predicts exactly one
+		# matchday -- the next one to be played -- and reports exactly one, the
+		# last one completed. A rolling window of finished/upcoming fixtures mixed
+		# matchdays together, so a half-played matchday sat beside the next one.
+		completed_matchdays = sorted(
+			md for md in qs.filter(status='FINISHED').values_list('matchday', flat=True).distinct()
+			if md is not None
+		)
+		last_completed = completed_matchdays[-1] if completed_matchdays else None
+
+		# The next matchday is the one after the last completed one, NOT the lowest
+		# matchday holding an unplayed fixture. La Liga carries a rescheduled
+		# matchday-6 fixture with a future kickoff while matchdays 6 and 7 are both
+		# already played, so the kickoff-only rule picked matchday 6 and offered that
+		# single stray fixture while hiding the real next matchday.
+		next_matchday = (last_completed + 1) if last_completed is not None else None
+
+		# Fall back to the old rolling window when the league carries no matchday
+		# information at all. Scoping strictly would hide every fixture instead,
+		# which is worse than mixing matchdays together.
+		if last_completed is not None:
+			finished = qs.filter(matchday=last_completed, status='FINISHED').order_by('kickoff')
+		else:
+			finished = qs.filter(status='FINISHED', kickoff__lte=now).order_by('-kickoff')[:30]
+
+		# Kicked off but not final (IN_PLAY, PAUSED, .): visible, read-only picks.
+		# Left unscoped on purpose -- these belong to the matchday being played,
+		# which is neither the last completed nor the next one.
+		in_play = qs.filter(kickoff__lte=now).exclude(status='FINISHED').order_by('kickoff')
+
+		if next_matchday is not None:
+			# Everything still open up to and including the next matchday, so a
+			# rescheduled fixture from an earlier matchday stays predictable instead
+			# of vanishing. Later matchdays are excluded: those are not on offer yet.
+			upcoming = (
+				qs.filter(kickoff__gt=now)
+				.exclude(matchday__gt=next_matchday)
+				.order_by('kickoff')
+			)
+		else:
+			upcoming = qs.filter(kickoff__gt=now).order_by('kickoff')[:30]
 
 		by_match_id = {}
 		if player_name:
@@ -838,6 +884,20 @@ class LeagueMatchPredictionAPIView(APIView):
 # --- Homepage: recent + upcoming matches ---
 
 
+def _kickoff_closed(kickoff):
+	"""True once a fixture's predictions have closed (10 minutes before kickoff).
+
+	Kickoffs come back naive from SQLite, so they are pinned to UTC before the
+	comparison. Comparing a naive datetime against an aware `now` raises, and that
+	took the whole homepage feed down rather than degrading one row.
+	"""
+	if kickoff is None:
+		return False
+	if kickoff.tzinfo is None:
+		kickoff = kickoff.replace(tzinfo=timezone.utc)
+	return datetime.now(timezone.utc) >= (kickoff - timedelta(minutes=10))
+
+
 class HomepageMatchesAPIView(APIView):
 	"""Homepage feed: today/yesterday real fixtures for the newest UCL season
 	plus every non-UCL season's matchups (CONMEBOL + international friendlies).
@@ -904,7 +964,7 @@ class HomepageMatchesAPIView(APIView):
 						if m.status == 'FINISHED' and m.home_goals is not None and m.away_goals is not None
 						else None
 					),
-					'closed': m.status == 'FINISHED',
+					'closed': _kickoff_closed(m.kickoff),
 					'status': m.status,
 				})
 		try:
@@ -939,7 +999,7 @@ class HomepageMatchesAPIView(APIView):
 							if m.status == 'FINISHED' and m.home_goals is not None and m.away_goals is not None
 							else None
 						),
-						'closed': m.status == 'FINISHED',
+						'closed': _kickoff_closed(m.kickoff),
 						'status': m.status,
 					})
 		except Exception:

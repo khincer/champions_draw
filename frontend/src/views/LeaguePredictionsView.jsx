@@ -3,7 +3,7 @@ import FixtureRow from '../components/FixtureRow';
 import SegmentControl from '../components/SegmentControl';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import ScoreInput from '../components/ScoreInput';
-import { setPlayerName as persistPlayerName } from '../lib/predictionStorage';
+import { getPlayerName as readStoredPlayerName, setPlayerName as persistPlayerName } from '../lib/predictionStorage';
 
 const SYNC_DELAY_MS = 1200;
 const VERDICT_LABEL = { exact: 'Exact', outcome: 'Outcome', miss: 'Miss' };
@@ -80,6 +80,20 @@ export default function LeaguePredictionsView({
 
   const [leagueId, setLeagueId] = useState('');
   const [data, setData] = useState(null);
+
+  /* The name is asked for once, on first visit, and stored under the same key the
+     rest of the app reads. It used to be a permanent input in the header. Picks
+     cannot be saved without it, so the prompt replaces that input rather than the
+     section simply disappearing. Mount-only deps: a dismissed dialog stays
+     dismissed. */
+  const nameDialogRef = useRef(null);
+  const [nameDraft, setNameDraft] = useState('');
+
+  useEffect(() => {
+    if ((playerName || readStoredPlayerName() || '').trim()) return;
+    const node = nameDialogRef.current;
+    if (node && !node.open) node.showModal();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const [preds, setPreds] = useState({});
@@ -310,6 +324,39 @@ export default function LeaguePredictionsView({
 
   return (
     <section className="workspace">
+      <dialog ref={nameDialogRef} className="name-dialog" aria-labelledby="picks-name-title">
+        <form
+          method="dialog"
+          onSubmit={(event) => {
+            const value = nameDraft.trim();
+            if (!value) {
+              event.preventDefault();
+              return;
+            }
+            setPlayerName(value);
+            persistPlayerName(value);
+          }}
+        >
+          <h2 id="picks-name-title">How do you want to be called?</h2>
+          <p className="muted">
+            This labels your picks. It is saved on this device, and only asked once.
+          </p>
+          <input
+            className="name-dialog-input"
+            value={nameDraft}
+            maxLength={80}
+            placeholder="Your name"
+            aria-label="Your name"
+            autofocus
+            onInput={(event) => setNameDraft(event.currentTarget.value)}
+          />
+          <div className="name-dialog-actions">
+            <button type="submit" className="name-dialog-save" disabled={!nameDraft.trim()}>
+              Save
+            </button>
+          </div>
+        </form>
+      </dialog>
       <div className="command-band">
         <div>
           <h1>Match picks</h1>
@@ -317,21 +364,6 @@ export default function LeaguePredictionsView({
             Predict the exact score of each fixture, one pick per match. Finished
             matches lock and show the real result next to your pick.
           </p>
-        </div>
-        <div className="draw-controls">
-          <label className="seed-input">
-            <span>Player name</span>
-            <input
-              value={playerName}
-              maxLength={80}
-              placeholder="Your name"
-              onInput={(event) => {
-                const value = event.currentTarget.value;
-                setPlayerName(value);
-                persistPlayerName(value);
-              }}
-            />
-          </label>
         </div>
       </div>
 
@@ -387,13 +419,11 @@ export default function LeaguePredictionsView({
                         {selectedLeague ? `${selectedLeague.name}: upcoming` : 'Upcoming'}
                       </strong>
                       <span role="status">
-                        {(playerName || '').trim()
-                          ? syncStatus === 'saving'
-                            ? 'Saving your picks…'
-                            : syncStatus === 'error'
-                              ? 'Your picks could not be saved'
-                              : 'Your picks save automatically'
-                          : 'Add your name to save picks'}
+                        {syncStatus === 'saving'
+                          ? 'Saving your picks…'
+                          : syncStatus === 'error'
+                            ? 'Your picks could not be saved'
+                            : 'Your picks save automatically'}
                       </span>
                     </div>
                     <div className="fixture-list">
@@ -414,7 +444,7 @@ export default function LeaguePredictionsView({
                     <article className="matchday">
                       <div className="matchday-head">
                         <strong id="picks-inplay-heading">In play</strong>
-                        <span>Read-only &middot; awaiting result</span>
+                        <span>Awaiting result</span>
                       </div>
                       <div className="fixture-list">
                         {inPlay.map(renderInPlayRow)}
@@ -427,7 +457,6 @@ export default function LeaguePredictionsView({
                   <article className="matchday">
                     <div className="matchday-head">
                       <strong id="picks-finished-heading">Recent results</strong>
-                      <span>Read-only</span>
                     </div>
                     <div className="fixture-list">
                       {finished.length ? (

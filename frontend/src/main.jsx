@@ -151,8 +151,23 @@ function App() {
     if (!anyAwaiting) return undefined;
     const pollLive = async () => {
       try {
-        const data = await apiFetch(`/ui/seasons/${selectedSeasonId}/live-scores/`);
-        setLiveScores(data.live || {});
+        /* Only a season with a fixture that has kicked off and still has no
+           result can have anything live, so poll just those. Polling every
+           season the rows belong to would hit Promiedos for competitions that
+           are finished or have no live source at all. */
+        const seasonIds = [...new Set(
+          homeMatchesRef.current
+            .filter((m) => m.closed && !m.result)
+            .map((m) => m.season_id)
+            .filter(Boolean),
+        )];
+        if (!seasonIds.length) return;
+        const payloads = await Promise.all(
+          seasonIds.map((id) =>
+            apiFetch(`/ui/seasons/${id}/live-scores/`).catch(() => ({ live: {} })),
+          ),
+        );
+        setLiveScores(payloads.reduce((acc, p) => ({ ...acc, ...(p.live || {}) }), {}));
         setLiveScoresError('');
       } catch {
         setLiveScoresError('shell.liveScoresUnavailable');

@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import ScoreInput from '../components/ScoreInput';
 import { groupBy } from '../lib/groupBy';
 import {
+  getPlayerName as readStoredPlayerName,
   loadRealLocal,
   saveRealLocal,
   setPlayerName as persistPlayerName,
@@ -47,6 +48,14 @@ function verdictFor(pred, result) {
 
 const VERDICT_LABEL = { exact: 'Exact', outcome: 'Outcome', miss: 'Miss' };
 
+/* The competitions this page serves, in the order the cards render. Order is
+   deliberate: the Champions League is the one with predictions and share. */
+const REAL_COMPETITIONS = [
+  { code: 'UCL', label: 'Champions League' },
+  { code: 'LIB', label: 'Libertadores' },
+  { code: 'SUD', label: 'Sudamericana' },
+];
+
 export default function RealDrawView({
   seasonId,
   setSeasonId,
@@ -66,6 +75,18 @@ export default function RealDrawView({
   const [syncError, setSyncError] = useState('');
   const predsRef = useRef(preds);
   const syncTimer = useRef(null);
+  const nameDialogRef = useRef(null);
+  const [nameDraft, setNameDraft] = useState('');
+
+  /* Ask for a display name once, on first visit, and never again. The answer is
+     stored under the same localStorage key the rest of the app already reads, so
+     every other surface picks it up. Mount-only deps on purpose: a dismissed
+     dialog must stay dismissed, and the "Playing as" control is the way back in. */
+  useEffect(() => {
+    if ((playerName || readStoredPlayerName() || '').trim()) return;
+    const node = nameDialogRef.current;
+    if (node && !node.open) node.showModal();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFixtures = useCallback(async () => {
     if (!seasonId) return;
@@ -167,6 +188,22 @@ export default function RealDrawView({
 
   const matchdays = useMemo(() => groupBy(data?.matchups || [], 'matchday'), [data]);
 
+  /* Newest season per competition, so a card always opens the current one rather
+     than whichever the global selector happened to hold. */
+  const seasonByCompetition = useMemo(() => {
+    const newest = new Map();
+    for (const season of seasons || []) {
+      const held = newest.get(season.competition);
+      if (!held || String(season.name) > String(held.name)) newest.set(season.competition, season);
+    }
+    return newest;
+  }, [seasons]);
+
+  const selectedSeason = (seasons || []).find((s) => String(s.id) === String(seasonId));
+  const selectedCompetition = selectedSeason?.competition;
+  const selectedCompetitionLabel =
+    REAL_COMPETITIONS.find((c) => c.code === selectedCompetition)?.label;
+
   const anyAwaiting = useMemo(
     () => Boolean(data && data.matchups && data.matchups.some((f) => f.closed && !f.result)),
     [data],
@@ -234,38 +271,80 @@ export default function RealDrawView({
 
   return (
     <section className="workspace">
+      <dialog ref={nameDialogRef} className="name-dialog" aria-labelledby="name-dialog-title">
+        <form
+          method="dialog"
+          onSubmit={(event) => {
+            const value = nameDraft.trim();
+            if (!value) {
+              event.preventDefault();
+              return;
+            }
+            setPlayerName(value);
+            persistPlayerName(value);
+          }}
+        >
+          <h2 id="name-dialog-title">How do you want to be called?</h2>
+          <p className="muted">
+            This labels your predictions. It is saved on this device, and only asked once.
+          </p>
+          <input
+            className="name-dialog-input"
+            value={nameDraft}
+            maxLength={80}
+            placeholder="Your name"
+            aria-label="Your name"
+            autofocus
+            onInput={(event) => setNameDraft(event.currentTarget.value)}
+          />
+          <div className="name-dialog-actions">
+            <button type="submit" className="name-dialog-save" disabled={!nameDraft.trim()}>
+              Save
+            </button>
+          </div>
+        </form>
+      </dialog>
       <div className="command-band">
         <div>
-          <h1>Official UCL real draw</h1>
+          <h1>{selectedCompetitionLabel || 'International'}</h1>
           <p>
-            Predict the real league-phase fixtures. Predictions close 10 minutes before kickoff.
+            Real league-phase fixtures. Predictions close 10 minutes before kickoff.
           </p>
         </div>
         <div className="draw-controls">
-          <label className="seed-input">
-            <span>Player name</span>
-            <input
-              value={playerName}
-              maxLength={80}
-              placeholder="Your name"
-              onInput={(event) => {
-                const v = event.currentTarget.value;
-                setPlayerName(v);
-                persistPlayerName(v);
-              }}
-            />
-          </label>
-          <label className="seed-input">
-            <span>Season year</span>
-            <select value={seasonId} onChange={(event) => setSeasonId(event.currentTarget.value)}>
-              {seasons.map((season) => (
-                <option key={season.id} value={season.id}>
-                  {season.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <button
+            type="button"
+            className="playing-as"
+            onClick={() => {
+              setNameDraft((playerName || readStoredPlayerName() || '').trim());
+              const node = nameDialogRef.current;
+              if (node && !node.open) node.showModal();
+            }}
+          >
+            Playing as <strong>{(playerName || '').trim() || 'Guest'}</strong>
+          </button>
         </div>
+      </div>
+      <div className="real-competition-cards" role="group" aria-label="Competition">
+        {REAL_COMPETITIONS.map(({ code, label }) => {
+          const season = seasonByCompetition.get(code);
+          const active = selectedCompetition === code;
+          return (
+            <button
+              key={code}
+              type="button"
+              className={`real-competition-card${active ? ' is-active' : ''}`}
+              aria-pressed={active}
+              disabled={!season}
+              onClick={() => { if (season) setSeasonId(String(season.id)); }}
+            >
+              <strong>{label}</strong>
+              <span className="real-competition-season">
+                {season ? season.name : 'Not available'}
+              </span>
+            </button>
+          );
+        })}
       </div>
       {fixturesStatus === 'error' ? (
         <ErrorState

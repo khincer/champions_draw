@@ -139,21 +139,35 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
     [visibleMatches],
   );
 
-  /* Render order is Tomorrow, Today, Yesterday — deliberate, do not "fix" it.
-     Object.entries preserves this insertion order. */
+  /* Render order is Today, Tomorrow, Yesterday, and `Object.entries` preserves
+     that insertion order. Today first is the point: the day you are looking at
+     is the one you want at the top, so this deliberately reverses the older
+     Tomorrow/Today/Yesterday order. */
   const groups = useMemo(() => {
     const now = new Date();
     const today = now.toDateString();
     const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString();
-    return inRange.reduce(
+    const buckets = inRange.reduce(
       (acc, m) => {
         const day = new Date(m.kickoff).toDateString();
         const key = day === tomorrow ? 'Tomorrow' : day === today ? 'Today' : 'Yesterday';
         acc[key].push(m);
         return acc;
       },
-      { Tomorrow: [], Today: [], Yesterday: [] },
+      { Today: [], Tomorrow: [], Yesterday: [] },
     );
+
+    /* Within a day, games that already finished sink below the ones still to
+       play -- otherwise a 12:30 result pushes today's 20:00 fixture off the top
+       of the list -- and the rest run in kickoff order. */
+    for (const day of Object.keys(buckets)) {
+      buckets[day].sort((a, b) => {
+        const byFinished = Number(Boolean(a.result)) - Number(Boolean(b.result));
+        if (byFinished !== 0) return byFinished;
+        return (a.kickoff || '').localeCompare(b.kickoff || '');
+      });
+    }
+    return buckets;
   }, [inRange]);
 
   const latestResults = useMemo(

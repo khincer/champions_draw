@@ -128,6 +128,7 @@ PROMIEDOS_NATIONAL_TEAM_ID_MAP = {
     'g': 'ISR', 'hg': 'ALB', 'hi': 'GEO', 'jd': 'MLT',
     # AFC
     'bbe': 'IRQ', 'bbf': 'QAT', 'bbj': 'JOR', 'bcb': 'UZB', 'bcc': 'KSA',
+    'ccg': 'PSE',
     'bce': 'UAE', 'cbj': 'BAN', 'fa': 'SIN', 'ia': 'IND', 'de': 'JPN',
     'dg': 'AUS', 'ig': 'KOR',
     # CAF
@@ -166,6 +167,7 @@ NATIONAL_TEAM_COUNTRY_BY_NAME = {
     'israel': 'ISR', 'albania': 'ALB', 'georgia': 'GEO', 'malta': 'MLT',
     # AFC
     'irak': 'IRQ', 'qatar': 'QAT', 'jordania': 'JOR', 'uzbekistan': 'UZB',
+    'palestina': 'PSE',
     'arabia saudita': 'KSA', 'emiratos arabes': 'UAE', 'bangladesh': 'BAN',
     'singapur': 'SIN', 'india': 'IND', 'japon': 'JPN', 'australia': 'AUS',
     'corea del sur': 'KOR',

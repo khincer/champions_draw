@@ -90,6 +90,20 @@ def load_real_fixtures(season: Season) -> list:
 	"""
 	data = real_fixtures_json()
 
+	# The checked-in calendar covers exactly one season and names it. Serving it
+	# for any other season joins UCL fixtures against another competition's teams,
+	# so every lookup misses and the caller 404s with the misleading
+	# "Team not found in season: <team>" -- which is what a non-UCL season on the
+	# real-draw page used to produce. Refuse rather than guess.
+	calendar_season = data.get('season') or {}
+	if (season.competition, season.name) != (
+		calendar_season.get('competition'),
+		calendar_season.get('name'),
+	):
+		# Not the calendar's season, but it may still have real fixtures of its
+		# own: LIB, SUD and UNL carry matchdays and results in SeasonMatchup.
+		return _season_matchup_fixtures(season)
+
 	# Live scores come from the DB (Railway's filesystem is ephemeral and not
 	# shared across services); the JSON above is only the static calendar.
 	db_results = {
@@ -152,6 +166,64 @@ def load_real_fixtures(season: Season) -> list:
 	return matchups
 
 
+def _season_matchup_fixtures(season: Season) -> list:
+	"""Real fixtures for a season with no checked-in calendar.
+
+	Same payload shape as the calendar path, so the real-draw page and the
+	prediction sync do not care which source a competition came from. LIB, SUD
+	and UNL carry real matchdays and results in SeasonMatchup; the friendlies
+	season carries no matchday at all, which the UI already handles by grouping
+	on a null matchday.
+	"""
+	rows = (
+		SeasonMatchup.objects.select_related(
+			'home_team__team', 'home_team__team__association',
+			'away_team__team', 'away_team__team__association',
+		)
+		.filter(season=season)
+		.order_by('matchday', 'kickoff', 'pk')
+	)
+
+	matchups = []
+	for row in rows:
+		kickoff = row.kickoff
+		if kickoff is not None and kickoff.tzinfo is None:
+			kickoff = kickoff.replace(tzinfo=timezone.utc)
+
+		has_result = row.home_goals is not None and row.away_goals is not None
+		matchups.append({
+			# `sm-` namespaced so it can never collide with the calendar's
+			# matchday-indexed ids.
+			'id': f'sm-{row.pk}',
+			'home_team': CompactSeasonTeamSerializer(row.home_team).data,
+			'away_team': CompactSeasonTeamSerializer(row.away_team).data,
+			'home_entry': row.home_team,
+			'away_entry': row.away_team,
+			'matchday': row.matchday,
+			'home_goals': None,
+			'away_goals': None,
+			'status': row.status,
+			'kickoff': (
+				kickoff.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+				if kickoff is not None else None
+			),
+			'result': (
+				{'home_goals': row.home_goals, 'away_goals': row.away_goals}
+				if has_result else None
+			),
+			# Kickoff-based, matching the calendar path, NOT status-based. The
+			# client polls live scores only while some fixture is `closed` with no
+			# result yet; deriving this from FINISHED made an in-play match look
+			# open, so the poll never started and live scores never appeared.
+			'closed': (
+				kickoff is not None
+				and datetime.now(timezone.utc) >= (kickoff - timedelta(minutes=10))
+			),
+		})
+
+	return matchups
+
+
 @lru_cache(maxsize=1)
 def real_fixtures_json():
 	# Checked-in static calendar, never rewritten at runtime: parse once per
@@ -162,17 +234,40 @@ def real_fixtures_json():
 		return json.load(f)
 
 
-# Short TTL so several viewers polling every 30s don't each hit promiedos; a
-# 15s cache caps upstream traffic at ~4 fetches/min regardless of audience.
-_PROMIEDOS_LIVE_CACHE = {'at': 0.0, 'html': None}
+# Promiedos serves one league page per competition, and the live scrape reads the
+# page of the season it is scoring -- a UCL-only URL silently produced no live
+# scores for any other competition. The friendlies league has no working league
+# page (its route 404s; the sync reaches it through the date endpoint), so it is
+# deliberately absent and reports nothing live rather than guessing.
+PROMIEDOS_LIVE_URL_BY_COMPETITION = {
+	'UCL': PROMIEDOS_URL,
+	'LIB': 'https://www.promiedos.com.ar/league/conmebol-libertadores/bac',
+	'SUD': 'https://www.promiedos.com.ar/league/conmebol-sudamericana/dij',
+	'UNL': 'https://www.promiedos.com.ar/league/uefa-nations-league/habg',
+}
 
 
-def fetch_promiedos_live_html():
+def promiedos_live_url(competition):
+	"""Live-score page for a competition, or None when it has no live source.
+
+	`competition` may arrive as a `CompetitionChoices` member rather than a plain
+	string, so it is coerced before the lookup.
+	"""
+	return PROMIEDOS_LIVE_URL_BY_COMPETITION.get(str(competition))
+
+
+# Short TTL so several viewers polling every 30s don't each hit promiedos; a 15s
+# cache caps upstream traffic at ~4 fetches/min per competition. Keyed by URL
+# because the page differs per competition.
+_PROMIEDOS_LIVE_CACHE = {}
+
+
+def fetch_promiedos_live_html(url):
 	now = time.monotonic()
-	cached = _PROMIEDOS_LIVE_CACHE
-	if cached['html'] is None or now - cached['at'] > 15:
-		cached['html'] = fetch(PROMIEDOS_URL, source='Promiedos')
-		cached['at'] = now
+	cached = _PROMIEDOS_LIVE_CACHE.get(url)
+	if cached is None or now - cached['at'] > 15:
+		cached = {'at': now, 'html': fetch(url, source='Promiedos')}
+		_PROMIEDOS_LIVE_CACHE[url] = cached
 	return cached['html']
 
 
