@@ -56,7 +56,7 @@ case "${SERVICE_ROLE:-}" in
     python manage.py sync_match_history
     ;;
   cron-results)
-    echo "[entrypoint] SERVICE_ROLE=cron-results -> sync_real_fixture_results, sync_league_fixtures"
+    echo "[entrypoint] SERVICE_ROLE=cron-results -> sync_real_fixture_results, sync_promiedos_fixtures, sync_promiedos_nations_league, sync_promiedos_friendlies, sync_league_fixtures"
     # Results and fixtures, in that order. sync_real_fixture_results is seconds
     # and feeds the live product; sync_league_fixtures is minutes (nine leagues
     # with sleeps and rate-limit retries), so it must not delay the fast one if
@@ -64,6 +64,16 @@ case "${SERVICE_ROLE:-}" in
     # sync_league_fixtures needs League rows, which cron-leagues' daily
     # sync_leagues creates -- run cron-leagues once after a fresh database.
     python manage.py sync_real_fixture_results --source promiedos
+    # The Promiedos competitions belong here, not only on the daily cron-leagues
+    # job. Their results change as constantly as the UCL's, and a daily cadence
+    # left a finished Libertadores, Sudamericana, Nations League or friendlies
+    # match sitting at IN_PLAY with no score until the next day: the live feed
+    # stops reporting a game the moment it ends, and nothing else was promoting
+    # the final result into the database.
+    python manage.py sync_promiedos_fixtures --competition lib
+    python manage.py sync_promiedos_fixtures --competition sud
+    python manage.py sync_promiedos_nations_league --competition unl
+    python manage.py sync_promiedos_friendlies
     python manage.py sync_league_fixtures
     ;;
   *)
