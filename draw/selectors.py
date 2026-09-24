@@ -100,7 +100,9 @@ def load_real_fixtures(season: Season) -> list:
 		calendar_season.get('competition'),
 		calendar_season.get('name'),
 	):
-		return []
+		# Not the calendar's season, but it may still have real fixtures of its
+		# own: LIB, SUD and UNL carry matchdays and results in SeasonMatchup.
+		return _season_matchup_fixtures(season)
 
 	# Live scores come from the DB (Railway's filesystem is ephemeral and not
 	# shared across services); the JSON above is only the static calendar.
@@ -159,6 +161,57 @@ def load_real_fixtures(season: Season) -> list:
 			# DB result wins; the JSON's static result is the fallback.
 			'result': db_results.get(fid) or fixture.get('result'),
 			'closed': closed,
+		})
+
+	return matchups
+
+
+def _season_matchup_fixtures(season: Season) -> list:
+	"""Real fixtures for a season with no checked-in calendar.
+
+	Same payload shape as the calendar path, so the real-draw page and the
+	prediction sync do not care which source a competition came from. LIB, SUD
+	and UNL carry real matchdays and results in SeasonMatchup; the friendlies
+	season carries no matchday at all, which the UI already handles by grouping
+	on a null matchday.
+	"""
+	rows = (
+		SeasonMatchup.objects.select_related(
+			'home_team__team', 'home_team__team__association',
+			'away_team__team', 'away_team__team__association',
+		)
+		.filter(season=season)
+		.order_by('matchday', 'kickoff', 'pk')
+	)
+
+	matchups = []
+	for row in rows:
+		kickoff = row.kickoff
+		if kickoff is not None and kickoff.tzinfo is None:
+			kickoff = kickoff.replace(tzinfo=timezone.utc)
+
+		has_result = row.home_goals is not None and row.away_goals is not None
+		matchups.append({
+			# `sm-` namespaced so it can never collide with the calendar's
+			# matchday-indexed ids.
+			'id': f'sm-{row.pk}',
+			'home_team': CompactSeasonTeamSerializer(row.home_team).data,
+			'away_team': CompactSeasonTeamSerializer(row.away_team).data,
+			'home_entry': row.home_team,
+			'away_entry': row.away_team,
+			'matchday': row.matchday,
+			'home_goals': None,
+			'away_goals': None,
+			'status': row.status,
+			'kickoff': (
+				kickoff.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+				if kickoff is not None else None
+			),
+			'result': (
+				{'home_goals': row.home_goals, 'away_goals': row.away_goals}
+				if has_result else None
+			),
+			'closed': row.status == 'FINISHED',
 		})
 
 	return matchups
