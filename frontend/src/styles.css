@@ -2256,6 +2256,15 @@ select:focus,
 .ucl-card-row { display: flex; justify-content: space-between; font-size: 13px; }
 .ucl-card-row b { text-align: right; }
 .muted.small { font-size: 12px; }
+.squad-row { display: grid; grid-template-columns: 24px 1fr auto auto; gap: 8px; align-items: baseline; padding: 3px 0; font-size: 12px; }
+.squad-number { color: var(--muted); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.squad-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.squad-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.color-swatch { padding: 2px 8px; border: 1px solid var(--line); border-radius: var(--radius-pill); font-size: 11px; font-weight: 700; }
+.leader-row { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: baseline; padding: 3px 0; font-size: 12px; }
+.leader-rank { color: var(--muted); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.leader-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leader-value { font-variant-numeric: tabular-nums; }
 
 /* ─── Breakpoint scale: 1120 / 920 / 760 / 640 ─────────────────────────────
    Every `@media (max-width: …)` in this file is a member of that set, and the
