@@ -2378,6 +2378,41 @@ class HomepageMatchesLeagueTests(APITestCase):
 		self.assertEqual(row['competition_emblem'], 'https://crests.football-data.org/CL.png')
 
 
+class LeaguePicksMatchdayScopeTests(APITestCase):
+	"""The picks page predicts one matchday and reports one matchday."""
+
+	def setUp(self):
+		self.league = League.objects.create(name='Premier League', code='PL', country='England')
+		now = datetime.now(timezone.utc)
+		for matchday, offset in ((5, -2), (6, 1)):
+			for index in range(2):
+				LeagueMatch.objects.create(
+					league=self.league,
+					match_id=matchday * 100 + index,
+					home_name=f'H{matchday}{index}', away_name=f'A{matchday}{index}',
+					home_short='H', away_short='A',
+					kickoff=now + timedelta(days=offset, hours=index),
+					status='FINISHED' if offset < 0 else 'SCHEDULED',
+					home_goals=1 if offset < 0 else None,
+					away_goals=0 if offset < 0 else None,
+					matchday=matchday,
+				)
+
+	def _get(self):
+		return self.client.get(f'/api/leagues/{self.league.pk}/predictions/')
+
+	def test_upcoming_is_only_the_next_matchday(self):
+		resp = self._get()
+
+		self.assertEqual(resp.status_code, 200)
+		self.assertEqual({m['matchday'] for m in resp.data['upcoming']}, {6})
+
+	def test_finished_is_only_the_last_completed_matchday(self):
+		resp = self._get()
+
+		self.assertEqual({m['matchday'] for m in resp.data['finished']}, {5})
+
+
 class LeagueMatchPredictionApiTests(APITestCase):
     """Tests for GET/PUT /api/leagues/<league_id>/predictions/."""
 

@@ -761,10 +761,40 @@ class LeagueMatchPredictionAPIView(APIView):
 		player_name = request.query_params.get('player_name', '').strip()
 		now = django.utils.timezone.now()
 		qs = LeagueMatch.objects.filter(league=league)
-		finished = qs.filter(status='FINISHED', kickoff__lte=now).order_by('-kickoff')[:30]
-		# Kicked off but not final (IN_PLAY, PAUSED, …): visible, read-only picks.
-		in_play = qs.filter(kickoff__lte=now).exclude(status='FINISHED').order_by('-kickoff')[:30]
-		upcoming = qs.filter(kickoff__gt=now).order_by('kickoff')[:30]
+
+		# Matchday-scoped, not a rolling window. The page predicts exactly one
+		# matchday -- the next one to be played -- and reports exactly one, the
+		# last one completed. A rolling window of finished/upcoming fixtures mixed
+		# matchdays together, so a half-played matchday sat beside the next one.
+		completed_matchdays = sorted(
+			md for md in qs.filter(status='FINISHED').values_list('matchday', flat=True).distinct()
+			if md is not None
+		)
+		last_completed = completed_matchdays[-1] if completed_matchdays else None
+
+		open_matchdays = sorted(
+			md for md in qs.filter(kickoff__gt=now).values_list('matchday', flat=True).distinct()
+			if md is not None
+		)
+		next_matchday = open_matchdays[0] if open_matchdays else None
+
+		# Fall back to the old rolling window when the league carries no matchday
+		# information at all. Scoping strictly would hide every fixture instead,
+		# which is worse than mixing matchdays together.
+		if last_completed is not None:
+			finished = qs.filter(matchday=last_completed, status='FINISHED').order_by('kickoff')
+		else:
+			finished = qs.filter(status='FINISHED', kickoff__lte=now).order_by('-kickoff')[:30]
+
+		# Kicked off but not final (IN_PLAY, PAUSED, .): visible, read-only picks.
+		# Left unscoped on purpose -- these belong to the matchday being played,
+		# which is neither the last completed nor the next one.
+		in_play = qs.filter(kickoff__lte=now).exclude(status='FINISHED').order_by('kickoff')
+
+		if next_matchday is not None:
+			upcoming = qs.filter(matchday=next_matchday, kickoff__gt=now).order_by('kickoff')
+		else:
+			upcoming = qs.filter(kickoff__gt=now).order_by('kickoff')[:30]
 
 		by_match_id = {}
 		if player_name:
