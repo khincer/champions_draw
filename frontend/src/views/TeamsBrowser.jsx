@@ -94,6 +94,14 @@ export default function TeamsBrowser({
   const [seasonMatchups, setSeasonMatchups] = useState([]);
   const playoffTies = useMemo(() => pairPlayoffTies(seasonMatchups), [seasonMatchups]);
 
+  /* Friendlies (FRN) is a plain list of games: no league phase, no knockout, and
+     every matchup is matchday-less by design. That last part matters -- the
+     group|playoffs toggle and `pairPlayoffTies` both read "no matchday" as "this
+     is a knockout leg", which is true for LIB/SUD but misfiles every friendlies
+     fixture. So FRN skips the toggle and the group tables entirely and renders
+     its fixtures. */
+  const gamesOnly = selectedLeague?.kind === 'season' && selectedLeague?.code === 'FRN';
+
   async function loadStandings(league) {
     if (!league) return;
     setStandingsReq({ status: 'loading', error: '' });
@@ -200,7 +208,7 @@ export default function TeamsBrowser({
             <RefreshCw size={14} /> Refresh
           </button>
         </div>
-        {selectedLeague.kind === 'season' && (
+        {selectedLeague.kind === 'season' && !gamesOnly && (
           <SegmentControl
             className="segment-control"
             label="League phase"
@@ -212,7 +220,31 @@ export default function TeamsBrowser({
             ]}
           />
         )}
-        {selectedLeague.kind === 'season' && leaguePhase === 'playoffs' ? (
+        {gamesOnly ? (
+          <div>
+            <h2 style={{ marginTop: 16 }}>{selectedLeague.name}</h2>
+            {fixturesReq.status === 'loading' || fixturesReq.status === 'idle' ? (
+              <Skeleton rows={5} label="Loading fixtures" variant="fixture" />
+            ) : fixturesReq.status === 'error' ? (
+              <ErrorState
+                title="Fixtures could not load"
+                detail={fixturesReq.error}
+                onRetry={() => loadFixtures(selectedLeague)}
+              />
+            ) : leagueMatches.finished?.length || leagueMatches.upcoming?.length ? (
+              <div className="fixture-mini-list">
+                {[...leagueMatches.finished, ...leagueMatches.upcoming]
+                  .map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
+              </div>
+            ) : (
+              <EmptyState
+                title="No finished matches yet"
+                text="Results appear here once this competition has played fixtures. Refresh to check again."
+                action={<Button onClick={() => loadFixtures(selectedLeague)}>Refresh</Button>}
+              />
+            )}
+          </div>
+        ) : selectedLeague.kind === 'season' && leaguePhase === 'playoffs' ? (
           playoffTies.length ? (
             <div className="playoff-tie-list">
               {playoffTies.map((tie) => <PlayoffTieCard key={tie.legs[0].id} tie={tie} />)}
