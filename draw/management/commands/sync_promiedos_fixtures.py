@@ -32,6 +32,7 @@ from draw.services.conmebol_naming import (
     TEAM_COUNTRY_BY_NAME,
     normalize_text,
 )
+from draw.services.result_history import record_result_history
 from draw.models import (
     Association,
     CompetitionChoices,
@@ -54,6 +55,14 @@ REQUEST_PAUSE_SECONDS = 0.2  # polite spacing between games calls
 COMPETITIONS = {
     'lib': ('bac', 'conmebol-libertadores', CompetitionChoices.LIBERTADORES, 'Libertadores'),
     'sud': ('dij', 'conmebol-sudamericana', CompetitionChoices.SUDAMERICANA, 'Sudamericana'),
+    # The Nations League is a national-team competition: its season must be
+    # created by the `sync_promiedos_nations_league` subclass, which supplies
+    # national association resolution and national-team season defaults. This
+    # entry exists only so that subclass can reuse `get_filters`; running the
+    # parent directly (`--competition unl`) resolves club-only and would create
+    # the season with CONMEBOL metadata. Loud, low severity; the cron uses the
+    # subclass.
+    'unl': ('habg', 'uefa-nations-league', CompetitionChoices.NATIONS_LEAGUE, 'Nations League'),
 }
 
 # Promiedos team objects carry no country name, only an opaque country_id.
@@ -144,7 +153,7 @@ class Command(BaseCommand):
             '--competition',
             required=True,
             choices=sorted(COMPETITIONS),
-            help='lib (Copa Libertadores) or sud (Copa Sudamericana).',
+            help='lib (Copa Libertadores), sud (Copa Sudamericana) or unl (UEFA Nations League -- run unl via sync_promiedos_nations_league, not this command).',
         )
         parser.add_argument(
             '--season',
@@ -224,6 +233,26 @@ class Command(BaseCommand):
         if code:
             return code
         return TEAM_COUNTRY_BY_NAME.get(normalize_text(team_info.get('name')))
+
+    def season_defaults(self):
+        """Extra Season defaults applied on CREATE, beside `competition`.
+
+        The 4-pots-of-8 / 6-match UCL-CONMEBOL shape is this command's own;
+        a national-team competition overrides it (the Nations League subclass
+        returns `{}` so the model defaults stand). `get_or_create` applies
+        these on CREATE only.
+        """
+        return {'pot_count': 4, 'teams_per_pot': 8, 'total_matches': 6}
+
+    def unresolved_team_label(self, name, country_id):
+        """Label for the 'Skipped teams with unresolvable country' warning.
+
+        Name-only by default, matching this command's output today. The
+        Nations League subclass adds the opaque `country_id`, because a
+        national team's name alone does not say which map key is missing
+        (spec R10/S10b).
+        """
+        return name
 
     def upsert_association(self, code, cache):
         if code not in cache:
@@ -305,12 +334,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             season, _ = Season.objects.get_or_create(
                 name=season_name,
-                defaults={
-                    'competition': competition_code,
-                    'pot_count': 4,
-                    'teams_per_pot': 8,
-                    'total_matches': 6,
-                },
+                defaults={'competition': competition_code, **self.season_defaults()},
             )
             if season.competition != competition_code:
                 self.stderr.write(self.style.ERROR(
@@ -329,6 +353,7 @@ class Command(BaseCommand):
             skipped_team_names = set()
             skipped_matchups = 0
             matchups = 0
+            history_observations = []
 
             for game, filter_matchday in games:
                 teams_info = game.get('teams') or []
@@ -339,9 +364,17 @@ class Command(BaseCommand):
                 home = self.upsert_team(home_info, associations, teams)
                 away = self.upsert_team(away_info, associations, teams)
                 if home is None:
-                    skipped_team_names.add(home_info.get('name') or '?')
+                    skipped_team_names.add(
+                        self.unresolved_team_label(
+                            home_info.get('name') or '?', home_info.get('country_id')
+                        )
+                    )
                 if away is None:
-                    skipped_team_names.add(away_info.get('name') or '?')
+                    skipped_team_names.add(
+                        self.unresolved_team_label(
+                            away_info.get('name') or '?', away_info.get('country_id')
+                        )
+                    )
                 if home is None or away is None or home.pk == away.pk:
                     skipped_matchups += 1
                     continue
@@ -359,6 +392,22 @@ class Command(BaseCommand):
                     'home_goals': int(scores[0]) if finished and len(scores) > 0 else None,
                     'away_goals': int(scores[1]) if finished and len(scores) > 1 else None,
                 }
+
+                # The triple is the model's own (season, home, away) identity;
+                # external_id is overwritten when a directed pair recurs (group
+                # + knockout), the very case history exists for. Collected for
+                # every game whose defaults we build, not only changed ones: the
+                # helper dedupes against history, so an unchanged fixture adds
+                # nothing and a missed flush is re-collected next run
+                # (belt-and-braces on the surrounding transaction).
+                history_observations.append({
+                    'subject': f'{season.pk}:{home_entry.pk}:{away_entry.pk}',
+                    'home_label': home.name,
+                    'away_label': away.name,
+                    'home_goals': defaults['home_goals'],
+                    'away_goals': defaults['away_goals'],
+                    'status': defaults['status'],
+                })
 
                 # QuerySet.update() skips Model.full_clean().
                 if SeasonMatchup.objects.filter(
@@ -382,6 +431,17 @@ class Command(BaseCommand):
                         ignore_conflicts=True,
                     )
                 matchups += 1
+
+            # Flushed once, before the run summary, inside the existing
+            # transaction: the live upsert and the history append commit
+            # together, so a crash cannot lose the previous value.
+            if history_observations:
+                record_result_history(
+                    history_observations,
+                    source='promiedos',
+                    competition=competition_code,
+                    season_name=season.name,
+                )
 
             if skipped_team_names:
                 self.stderr.write(self.style.WARNING(

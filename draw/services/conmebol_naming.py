@@ -121,6 +121,11 @@ PROMIEDOS_NATIONAL_TEAM_ID_MAP = {
     'f': 'FRA', 'fg': 'MKD', 'h': 'NED', 'hh': 'AZE', 'i': 'SCO',
     'ie': 'MNE', 'if': 'SRB', 'j': 'IRL', 'jb': 'MDA', 'jc': 'LUX',
     'je': 'SMR', 'jj': 'NIR',
+    # Added from the UEFA Nations League (league `habg`) sweep: 12 ids absent
+    # from the friendlies sweep, ~10-12 of 52 team instances per matchday.
+    'bab': 'LIE', 'bac': 'EST', 'caj': 'GIB', 'dd': 'SVK',
+    'ea': 'BUL', 'eb': 'LVA', 'ec': 'LTU', 'fh': 'BIH',
+    'g': 'ISR', 'hg': 'ALB', 'hi': 'GEO', 'jd': 'MLT',
     # AFC
     'bbe': 'IRQ', 'bbf': 'QAT', 'bbj': 'JOR', 'bcb': 'UZB', 'bcc': 'KSA',
     'bce': 'UAE', 'cbj': 'BAN', 'fa': 'SIN', 'ia': 'IND', 'de': 'JPN',
@@ -156,6 +161,9 @@ NATIONAL_TEAM_COUNTRY_BY_NAME = {
     'paises bajos': 'NED', 'azerbaiyan': 'AZE', 'escocia': 'SCO', 'montenegro': 'MNE',
     'serbia': 'SRB', 'irlanda': 'IRL', 'moldavia': 'MDA', 'luxemburgo': 'LUX',
     'san marino': 'SMR', 'irlanda del norte': 'NIR',
+    'liechtenstein': 'LIE', 'estonia': 'EST', 'gibraltar': 'GIB', 'eslovaquia': 'SVK',
+    'bulgaria': 'BUL', 'letonia': 'LVA', 'lituania': 'LTU', 'bosnia herzegovina': 'BIH',
+    'israel': 'ISR', 'albania': 'ALB', 'georgia': 'GEO', 'malta': 'MLT',
     # AFC
     'irak': 'IRQ', 'qatar': 'QAT', 'jordania': 'JOR', 'uzbekistan': 'UZB',
     'arabia saudita': 'KSA', 'emiratos arabes': 'UAE', 'bangladesh': 'BAN',

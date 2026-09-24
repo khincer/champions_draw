@@ -9,8 +9,9 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -2837,6 +2838,197 @@ class PromiedosFriendliesSyncTests(TestCase):
 		self.assertIsNone(CompactSeasonTeamSerializer(entry).data['domestic'])
 
 
+class PromiedosFixturesHistoryTests(TestCase):
+	"""The LIB/SUD matchup writer appends history alongside its upsert.
+
+	Offline: the network boundary (``fetch`` for the filter page and
+	``fetch_json`` for the games payload) is stubbed, mirroring
+	``PromiedosFriendliesSyncTests``.
+	"""
+
+	def _team(self, team_id, name, country_id):
+		return {'id': team_id, 'name': name, 'short_name': name[:3], 'country_id': country_id}
+
+	def _game(self, game_id, home, away, home_goals=None, away_goals=None):
+		finished = home_goals is not None and away_goals is not None
+		return {
+			'id': game_id,
+			'start_time': '22-09-2026 20:00',
+			'status': {
+				'short_name': 'Final' if finished else 'Prog.',
+				'name': 'Finalizado' if finished else 'Programado',
+			},
+			'game_time_status_to_display': 'Final' if finished else '',
+			'scores': [home_goals, away_goals] if finished else [],
+			'teams': [home, away],
+		}
+
+	def _payload(self, games):
+		return {'games': games}
+
+	def _filters_html(self):
+		blob = json.dumps({'props': {'pageProps': {'data': {'games': {'filters': [
+			{'key': '102_69_4_1', 'name': 'Fecha 1'},
+		]}}}}})
+		return f'<script id="__NEXT_DATA__" type="application/json">{blob}</script>'
+
+	def _run(self, games, **options):
+		from io import StringIO
+
+		from draw.management.commands.sync_promiedos_fixtures import Command
+
+		options.setdefault('competition', 'lib')
+		out, err = StringIO(), StringIO()
+		with mock.patch.object(Command, 'fetch', return_value=self._filters_html()), \
+				mock.patch.object(Command, 'fetch_json', return_value=self._payload(games)):
+			call_command('sync_promiedos_fixtures', stdout=out, stderr=err, **options)
+		return out.getvalue(), err.getvalue()
+
+	def _home_and_away(self):
+		return (
+			self._team('t1', 'Flamengo', 'cb'),
+			self._team('t2', 'Boca Juniors', 'ba'),
+		)
+
+	def test_changed_score_appends_history_keyed_by_the_triple(self):
+		home, away = self._home_and_away()
+
+		self._run([self._game('g1', home, away, 1, 0)])
+		self._run([self._game('g1', home, away, 2, 0)])
+
+		rows = ResultHistory.objects.filter(source='promiedos')
+		self.assertEqual(rows.count(), 2)
+		self.assertEqual(
+			set(rows.values_list('home_goals', 'away_goals')),
+			{(1, 0), (2, 0)},
+		)
+		season = Season.objects.get()
+		matchup = SeasonMatchup.objects.get()
+		row = rows.order_by('id').first()
+		self.assertEqual(row.subject, f'{season.pk}:{matchup.home_team_id}:{matchup.away_team_id}')
+		self.assertEqual((row.competition, row.season_name), ('LIB', 'Libertadores 2026'))
+		self.assertEqual((row.home_label, row.away_label), ('Flamengo', 'Boca Juniors'))
+		self.assertEqual(row.status, 'FINISHED')
+
+	def test_unchanged_rerun_appends_nothing(self):
+		home, away = self._home_and_away()
+		games = [self._game('g1', home, away, 1, 0)]
+
+		self._run(games)
+		self._run(games)
+
+		self.assertEqual(ResultHistory.objects.filter(source='promiedos').count(), 1)
+
+	def test_subject_is_the_triple_not_the_external_id(self):
+		home, away = self._home_and_away()
+
+		self._run([self._game('g1', home, away, 1, 0)])
+
+		season = Season.objects.get()
+		matchup = SeasonMatchup.objects.get()
+		row = ResultHistory.objects.get()
+		self.assertEqual(matchup.external_id, 'promiedos:g1')
+		self.assertEqual(row.subject, f'{season.pk}:{matchup.home_team_id}:{matchup.away_team_id}')
+		self.assertNotEqual(row.subject, matchup.external_id)
+
+
+class PromiedosFriendliesHistoryTests(TestCase):
+	"""The FRN writer appends history alongside its upsert.
+
+	Offline: the date endpoint (``fetch_json``) is stubbed exactly as
+	``PromiedosFriendliesSyncTests`` does.
+	"""
+
+	def _team(self, team_id, name, country_id):
+		return {'id': team_id, 'name': name, 'short_name': name[:3], 'country_id': country_id}
+
+	def _game(self, game_id, home, away, scores=None):
+		return {
+			'id': game_id,
+			'start_time': '22-09-2026 20:00',
+			'status': (
+				{'short_name': 'Final', 'name': 'Finalizado'} if scores
+				else {'short_name': 'Prog.', 'name': 'Programado'}
+			),
+			'game_time_status_to_display': 'Final' if scores else '',
+			'scores': scores or [],
+			'teams': [home, away],
+		}
+
+	def _payload(self, games, league_id='fha'):
+		return {'leagues': [{'id': league_id, 'games': games}]}
+
+	def _run(self, responder, **options):
+		from io import StringIO
+
+		from draw.management.commands.sync_promiedos_friendlies import Command
+
+		options.setdefault('days_back', 0)
+		options.setdefault('days_ahead', 0)
+		out, err = StringIO(), StringIO()
+		with mock.patch.object(Command, 'fetch_json', side_effect=responder):
+			call_command('sync_promiedos_friendlies', stdout=out, stderr=err, **options)
+		return out.getvalue(), err.getvalue()
+
+	def _subject(self):
+		season = Season.objects.get(name=f'Friendlies {date.today().year}')
+		matchup = SeasonMatchup.objects.get(external_id='promiedos:g1')
+		return f'{season.pk}:{matchup.home_team_id}:{matchup.away_team_id}'
+
+	def test_changed_score_appends_history_keyed_by_triple(self):
+		home = self._team('t1', 'Argentina', 'ba')
+		away = self._team('t2', 'Inglaterra', 'b')
+
+		self._run(lambda url: self._payload([self._game('g1', home, away, [2, 1])]))
+		self._run(lambda url: self._payload([self._game('g1', home, away, [3, 1])]))
+
+		rows = ResultHistory.objects.filter(source='promiedos')
+		self.assertEqual(rows.count(), 2)
+		self.assertEqual(
+			set(rows.values_list('home_goals', 'away_goals')), {(2, 1), (3, 1)}
+		)
+
+		subject = self._subject()
+		# The triple is the model's own unique constraint; the external_id is
+		# overwritten when a directed pair recurs, so it must not be the key.
+		self.assertEqual(set(rows.values_list('subject', flat=True)), {subject})
+		self.assertNotIn('promiedos:g1', {r.subject for r in rows})
+
+		row = rows.order_by('id').first()
+		self.assertEqual(
+			(row.competition, row.season_name, row.home_label, row.away_label, row.status),
+			('FRN', f'Friendlies {date.today().year}', 'Argentina', 'Inglaterra', 'FINISHED'),
+		)
+
+	def test_unchanged_rerun_appends_nothing(self):
+		home = self._team('t1', 'Argentina', 'ba')
+		away = self._team('t2', 'Inglaterra', 'b')
+		games = [self._game('g1', home, away, [2, 1])]
+
+		self._run(lambda url: self._payload(games))
+		self._run(lambda url: self._payload(games))
+
+		rows = ResultHistory.objects.filter(source='promiedos')
+		self.assertEqual(rows.count(), 1)
+		self.assertEqual(list(rows.values_list('home_goals', 'away_goals')), [(2, 1)])
+
+	def test_unresolved_nation_appends_no_history(self):
+		games = [self._game(
+			'g1',
+			self._team('t1', 'Futbolandia', 'zzz'),
+			self._team('t2', 'Otrolandia', 'yyy'),
+			[1, 0],
+		)]
+
+		_, err = self._run(lambda url: self._payload(games))
+
+		# The nation never resolves, so the game stops before the upsert and is
+		# never collected: no matchup, and no history row either.
+		self.assertEqual(SeasonMatchup.objects.count(), 0)
+		self.assertEqual(ResultHistory.objects.count(), 0)
+		self.assertIn('skipped 1', err)
+
+
 class FriendliesUnresolvedNationTests(TestCase):
 	"""Resolution misses skip loudly but never fail the run (spec R10)."""
 
@@ -3041,4 +3233,300 @@ class ResultHistoryTests(TestCase):
 			),
 			[(1, 1), (3, 1)],
 		)
+
+
+class LeagueFixturesHistoryTests(TestCase):
+	"""The football-data league writer appends history alongside its upsert.
+
+	Offline: the network boundary (``Command._api_get``) and the 10 s
+	rate-limit sleep are patched. This command had no test class before, so the
+	stub is the minimum it needs: a ``League`` row, an ``API_FOOTBALL_DATA_KEY``
+	and a matches payload.
+	"""
+
+	MODULE = 'draw.management.commands.sync_league_fixtures'
+
+	def setUp(self):
+		self.league = League.objects.create(name='Premier League', code='PL', country='England')
+
+	def _payload(self, matches):
+		return {'matches': [
+			{
+				'id': match_id,
+				'homeTeam': {'name': home, 'shortName': home[:3]},
+				'awayTeam': {'name': away, 'shortName': away[:3]},
+				'score': {'fullTime': {'home': home_goals, 'away': away_goals}},
+				'status': 'FINISHED',
+				'utcDate': '2026-09-20T14:00:00Z',
+				'matchday': 5,
+			}
+			for match_id, home, away, home_goals, away_goals in matches
+		]}
+
+	def _run(self, matches, *, dry_run=False):
+		args = ['sync_league_fixtures', '--codes', 'PL']
+		if dry_run:
+			args.append('--dry-run')
+		with mock.patch(f'{self.MODULE}.Command._api_get', return_value=self._payload(matches)), \
+				mock.patch(f'{self.MODULE}.time.sleep'), \
+				mock.patch.dict('os.environ', {'API_FOOTBALL_DATA_KEY': 'test'}):
+			call_command(*args)
+
+	def _history(self):
+		return ResultHistory.objects.filter(source='football-data-league')
+
+	def test_changed_score_appends_history_keyed_by_match_id(self):
+		self._run([(555, 'Arsenal', 'Chelsea', 2, 1)])
+
+		self._run([(555, 'Arsenal', 'Chelsea', 3, 1)])
+
+		rows = self._history().filter(subject='555')
+		self.assertEqual(rows.count(), 2)
+		self.assertEqual(
+			set(rows.values_list('home_goals', 'away_goals')),
+			{(2, 1), (3, 1)},
+		)
+		row = rows.order_by('id').first()
+		self.assertEqual((row.competition, row.season_name), ('PL', ''))
+		self.assertEqual((row.home_label, row.away_label), ('Arsenal', 'Chelsea'))
+
+	def test_unchanged_rerun_appends_nothing(self):
+		self._run([(555, 'Arsenal', 'Chelsea', 2, 1)])
+
+		self._run([(555, 'Arsenal', 'Chelsea', 2, 1)])
+
+		self.assertEqual(
+			list(self._history().filter(subject='555').values_list('home_goals', 'away_goals')),
+			[(2, 1)],
+		)
+
+	def test_dry_run_writes_no_history(self):
+		self._run([(555, 'Arsenal', 'Chelsea', 2, 1)])
+
+		self._run([(555, 'Arsenal', 'Chelsea', 3, 1)], dry_run=True)
+
+		self.assertEqual(
+			list(self._history().filter(subject='555').values_list('home_goals', 'away_goals')),
+			[(2, 1)],
+		)
+
+	def _history_query_count(self, ctx):
+		table = ResultHistory._meta.db_table
+		return sum(1 for query in ctx.captured_queries if table in query['sql'])
+
+	def test_history_queries_do_not_scale_with_fixture_count(self):
+		"""R7/S7a: history is one bounded prefetch per league, never a query per row.
+
+		The assertion is on the history-related queries alone (those touching
+		``ResultHistory``): one prefetch plus one bulk insert, the same for one
+		fixture and for three. Absolute totals cannot show this — the per-fixture
+		upsert queries and the transaction savepoints scale with N.
+		"""
+		with CaptureQueriesContext(connection) as one:
+			self._run([(801, 'A', 'B', 1, 0)])
+		with CaptureQueriesContext(connection) as three:
+			self._run([(811, 'A', 'B', 1, 0), (812, 'C', 'D', 2, 0), (813, 'E', 'F', 3, 0)])
+
+		self.assertEqual(self._history_query_count(one), 2)
+		self.assertEqual(self._history_query_count(three), 2)
+
+	def test_sync_leagues_appends_no_history_rows(self):
+		"""R5/S5b: standings are not results, so sync_leagues emits no history."""
+		LeagueStanding.objects.create(
+			league=self.league, season_year=2026, position=1, team_name='Arsenal',
+			played=9, won=7, draw=1, lost=1, goals_for=18, goals_against=6,
+			goal_difference=12, points=22,
+		)
+		competition = {
+			'emblem': 'https://crests.football-data.org/PL.png',
+			'plan': 'TIER_ONE',
+			'currentSeason': {'startDate': '2026-08-01'},
+		}
+		standings = {'standings': [{'type': 'TOTAL', 'table': [{
+			'position': 1, 'team': {'name': 'Arsenal', 'crest': ''},
+			'playedGames': 10, 'won': 8, 'draw': 1, 'lost': 1,
+			'goalsFor': 20, 'goalsAgainst': 5, 'goalDifference': 15, 'points': 25,
+		}]}]}
+
+		with mock.patch(
+			'draw.management.commands.sync_leagues.Command._api_get',
+			side_effect=[competition, standings],
+		), mock.patch('draw.management.commands.sync_leagues.time.sleep'), \
+				mock.patch.dict('os.environ', {'API_FOOTBALL_DATA_KEY': 'test'}):
+			call_command('sync_leagues', '--league', 'PL')
+
+		self.assertEqual(ResultHistory.objects.count(), 0)
+		self.assertEqual(
+			LeagueStanding.objects.get(league=self.league, season_year=2026).points,
+			25,
+		)
+
+class NationsLeagueUnresolvedNationTests(TestCase):
+	"""An unmapped nation skips its matchup but never fails the run (R10/S10b).
+
+	Offline: the two network boundaries (`fetch` for the filter page and
+	`fetch_json` for the games payload) are stubbed.
+	"""
+
+	def _team(self, team_id, name, country_id):
+		return {'id': team_id, 'name': name, 'short_name': name[:3], 'country_id': country_id}
+
+	def _game(self, game_id, home, away):
+		return {
+			'id': game_id,
+			'start_time': '22-09-2026 20:00',
+			'status': {'short_name': 'Prog.', 'name': 'Programado'},
+			'game_time_status_to_display': '',
+			'scores': [],
+			'teams': [home, away],
+		}
+
+	def _filters_html(self):
+		payload = {'props': {'pageProps': {'data': {'games': {'filters': [
+			{'key': '7016_5_1_1', 'name': 'Fecha 1'},
+		]}}}}}
+		return (
+			'<div id="root"></div>'
+			'<script id="__NEXT_DATA__" type="application/json">'
+			f'{json.dumps(payload)}'
+			'</script>'
+		)
+
+	def _run(self, games):
+		from io import StringIO
+
+		from draw.management.commands.sync_promiedos_nations_league import Command
+
+		out, err = StringIO(), StringIO()
+		with mock.patch.object(Command, 'fetch', return_value=self._filters_html()), \
+				mock.patch.object(Command, 'fetch_json', return_value={'games': games}):
+			call_command(
+				'sync_promiedos_nations_league', '--competition', 'unl',
+				stdout=out, stderr=err,
+			)
+		return out.getvalue(), err.getvalue()
+
+	def test_unresolved_nation_skips_matchup_and_names_team_and_code(self):
+		games = [self._game(
+			'g1', self._team('t1', 'Futbolandia', 'zzz'), self._team('t2', 'Otrolandia', 'yyy'),
+		)]
+
+		out, err = self._run(games)
+
+		# The warning names both the team and the opaque country_id, and the run
+		# still succeeds (no exception, the season is created).
+		self.assertIn('Futbolandia', err)
+		self.assertIn('zzz', err)
+		self.assertIn('Otrolandia', err)
+		self.assertIn('yyy', err)
+		self.assertEqual(SeasonMatchup.objects.count(), 0)
+		season = Season.objects.get(name='Nations League 2026')
+		self.assertEqual(season.competition, 'UNL')
+
+	def test_resolvable_matchup_imports_beside_an_unresolved_one(self):
+		games = [
+			self._game('g1', self._team('t1', 'España', 'c'), self._team('t2', 'Inglaterra', 'b')),
+			self._game('g2', self._team('t3', 'Futbolandia', 'zzz'), self._team('t4', 'Otrolandia', 'yyy')),
+		]
+
+		out, err = self._run(games)
+
+		self.assertEqual(SeasonMatchup.objects.count(), 1)
+		matchup = SeasonMatchup.objects.get()
+		self.assertEqual(matchup.external_id, 'promiedos:g1')
+		self.assertEqual(matchup.matchday, 1)
+		self.assertIn('zzz', err)
+
+
+class NationsLeagueNeverSeededTests(TestCase):
+	def test_nations_league_season_cannot_be_seeded(self):
+		season = Season.objects.create(name='Nations League 2026', competition='UNL')
+		association = Association.objects.create(name='Spain', code='ESP')
+		for index in range(5):
+			team = Team.objects.create(
+				name=f'Nation {index}', short_name=f'N{index}', association=association,
+			)
+			SeasonTeam.objects.create(
+				season=season, team=team, uefa_club_coefficient=Decimal('0.000'),
+			)
+
+		with self.assertRaises(SeedingError):
+			seed_season_entries(season)
+
+
+class NationsLeagueCompetitionMetaTests(APITestCase):
+	def test_unl_is_served_and_labelled(self):
+		from .views import COMPETITION_META, NON_UCL_COMPETITIONS
+
+		self.assertIn('UNL', COMPETITION_META)
+		self.assertIn('UNL', NON_UCL_COMPETITIONS)
+		self.assertEqual(COMPETITION_META['UNL']['label'], 'Nations League')
+		self.assertEqual(COMPETITION_META['UNL']['country'], 'International')
+
+	def test_group_standings_return_derived_groups_not_404(self):
+		season = Season.objects.create(name='Nations League 2026', competition='UNL')
+		association = Association.objects.create(name='Spain', code='ESP')
+		entries = []
+		for index in range(4):
+			team = Team.objects.create(
+				name=f'Nation {index}', short_name=f'N{index}', association=association,
+			)
+			entries.append(SeasonTeam.objects.create(
+				season=season, team=team, uefa_club_coefficient=Decimal('0.000'),
+			))
+		SeasonMatchup.objects.create(
+			season=season, home_team=entries[0], away_team=entries[1], matchday=1,
+		)
+		SeasonMatchup.objects.create(
+			season=season, home_team=entries[2], away_team=entries[3], matchday=1,
+		)
+
+		resp = self.client.get(f'/api/seasons/{season.pk}/group-standings/')
+
+		self.assertEqual(resp.status_code, 200)
+		groups = resp.json()['groups']
+		self.assertEqual(len(groups), 2)
+		self.assertEqual({len(group['standings']) for group in groups}, {2})
+
+	def test_lib_guard_is_unchanged(self):
+		# S11c: the guard change is a superset of the old literal, so a LIB
+		# season with no matchups still returns 200 with empty groups.
+		season = Season.objects.create(name='Libertadores 2026', competition='LIB')
+
+		resp = self.client.get(f'/api/seasons/{season.pk}/group-standings/')
+
+		self.assertEqual(resp.status_code, 200)
+		self.assertEqual(resp.json(), {'season_id': season.pk, 'groups': []})
+
+
+class NationsLeagueTeamMapTests(TestCase):
+	"""The 12 codes the `habg` sweep found missing resolve to their ISO-3 codes."""
+
+	CODES = {
+		'bab': 'LIE', 'bac': 'EST', 'caj': 'GIB', 'dd': 'SVK',
+		'ea': 'BUL', 'eb': 'LVA', 'ec': 'LTU', 'fh': 'BIH',
+		'g': 'ISR', 'hg': 'ALB', 'hi': 'GEO', 'jd': 'MLT',
+	}
+
+	NAMES = {
+		'Liechtenstein': 'LIE', 'Estonia': 'EST', 'Gibraltar': 'GIB',
+		'Eslovaquia': 'SVK', 'Bulgaria': 'BUL', 'Letonia': 'LVA',
+		'Lituania': 'LTU', 'Bosnia Herzegovina': 'BIH', 'Israel': 'ISR',
+		'Albania': 'ALB', 'Georgia': 'GEO', 'Malta': 'MLT',
+	}
+
+	def _resolve(self, name, country_id):
+		from draw.management.commands.sync_promiedos_nations_league import Command
+
+		return Command().resolve_association_code({'name': name, 'country_id': country_id})
+
+	def test_ids_resolve_to_iso3(self):
+		for country_id, code in self.CODES.items():
+			with self.subTest(country_id=country_id):
+				self.assertEqual(self._resolve('', country_id), code)
+
+	def test_names_resolve_to_iso3_with_no_id(self):
+		for name, code in self.NAMES.items():
+			with self.subTest(name=name):
+				self.assertEqual(self._resolve(name, None), code)
 
