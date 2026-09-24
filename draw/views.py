@@ -772,11 +772,12 @@ class LeagueMatchPredictionAPIView(APIView):
 		)
 		last_completed = completed_matchdays[-1] if completed_matchdays else None
 
-		open_matchdays = sorted(
-			md for md in qs.filter(kickoff__gt=now).values_list('matchday', flat=True).distinct()
-			if md is not None
-		)
-		next_matchday = open_matchdays[0] if open_matchdays else None
+		# The next matchday is the one after the last completed one, NOT the lowest
+		# matchday holding an unplayed fixture. La Liga carries a rescheduled
+		# matchday-6 fixture with a future kickoff while matchdays 6 and 7 are both
+		# already played, so the kickoff-only rule picked matchday 6 and offered that
+		# single stray fixture while hiding the real next matchday.
+		next_matchday = (last_completed + 1) if last_completed is not None else None
 
 		# Fall back to the old rolling window when the league carries no matchday
 		# information at all. Scoping strictly would hide every fixture instead,
@@ -792,7 +793,14 @@ class LeagueMatchPredictionAPIView(APIView):
 		in_play = qs.filter(kickoff__lte=now).exclude(status='FINISHED').order_by('kickoff')
 
 		if next_matchday is not None:
-			upcoming = qs.filter(matchday=next_matchday, kickoff__gt=now).order_by('kickoff')
+			# Everything still open up to and including the next matchday, so a
+			# rescheduled fixture from an earlier matchday stays predictable instead
+			# of vanishing. Later matchdays are excluded: those are not on offer yet.
+			upcoming = (
+				qs.filter(kickoff__gt=now)
+				.exclude(matchday__gt=next_matchday)
+				.order_by('kickoff')
+			)
 		else:
 			upcoming = qs.filter(kickoff__gt=now).order_by('kickoff')[:30]
 
