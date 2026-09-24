@@ -2147,9 +2147,15 @@ select:focus,
 .homepage-carousel .home-game-card { flex: 0 0 280px; scroll-snap-align: start; }
 .homepage-carousel .home-game-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
-/* Competition filter: a segmented control that wraps rather than widening the
-   page. Focus ring and aria-pressed come from the shared `.segment-control`. */
-.homepage-filter { flex-wrap: wrap; margin-bottom: 0; }
+/* Competition filter: a segmented control kept to ONE scrollable row. It used to
+   wrap, which with a dozen competitions stacked three or four rows of 44px pills
+   between the greeting and the content. Same horizontal-scroll idiom as
+   .homepage-carousel. `display: flex` (not the shared `inline-flex`) is load
+   bearing: an inline-level box shrink-wraps to its content, so with `nowrap` its
+   width would be the full row and `overflow-x` would never scroll.
+   Focus ring and aria-pressed come from the shared `.segment-control`. */
+.homepage-filter { display: flex; flex-wrap: nowrap; overflow-x: auto; min-width: 0; margin-bottom: 0; padding-bottom: 6px; }
+.homepage-filter button { flex: 0 0 auto; }
 .homepage-filter-label { display: inline-flex; align-items: center; gap: var(--space-2); }
 .homepage-filter-emblem { width: 18px; height: 18px; object-fit: contain; }
 
@@ -4039,4 +4045,22 @@ dialog.match-detail-view {
     opacity: 1;
     transform: none;
   }
+}
+
+/* Homepage header on narrow screens. `.home-intro` is a two-column grid, so the
+   greeting and the quick actions each get half the width; inside that half the
+   actions wrap and stack instead of reading as a row. Drop to one column and let
+   the actions run as a single horizontal scroll row, the same idiom as
+   `.homepage-filter` and `.homepage-carousel`. `justify-content` flips from
+   `end` to `start` because right-aligning is wrong once it is the full width. */
+@media (max-width: 760px) {
+  .home-intro { grid-template-columns: 1fr; }
+  .home-quick-actions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    justify-content: start;
+    min-width: 0;
+    padding-bottom: 6px;
+  }
+  .home-quick-actions > * { flex: 0 0 auto; }
 }
