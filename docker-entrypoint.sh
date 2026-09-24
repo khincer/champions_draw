@@ -19,7 +19,7 @@ set -e
 
 case "${SERVICE_ROLE:-}" in
   cron-leagues)
-    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_promiedos_fixtures, sync_promiedos_friendlies, sync_match_history"
+    echo "[entrypoint] SERVICE_ROLE=cron-leagues -> sync_leagues, sync_promiedos_fixtures, sync_promiedos_friendlies, sync_promiedos_nations_league, sync_match_history"
     # Standings and season-level data only. All of it changes slowly, so this
     # stays a daily job. Fixtures and results moved to cron-results because they
     # change constantly: group these by change rate, not by the word "league".
@@ -39,6 +39,14 @@ case "${SERVICE_ROLE:-}" in
     # INACTIVE 'Friendlies <year>' season on purpose (see the command's
     # docstring); never --set-active it.
     python manage.py sync_promiedos_friendlies
+    # UEFA Nations League: same Promiedos source and filter route as the CONMEBOL
+    # syncs above, but a national-team competition. It must run through its own
+    # subclass -- never `sync_promiedos_fixtures --competition unl`, which would
+    # create the season with CONMEBOL metadata. Placed here beside the friendlies
+    # pull by source and change rate. The change-rate comment above says group by
+    # change rate, not by the word "league"; a UNL *result*-refresh path would
+    # belong in cron-results. That tension is recorded here, not resolved.
+    python manage.py sync_promiedos_nations_league --competition unl
     # Rule 6 (no third consecutive season with the same home team in a pairing)
     # reads SeasonMatchupHistory for the two seasons before the active one. If
     # nothing populates that table the constraint is silently a no-op, so this
