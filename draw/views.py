@@ -1,7 +1,7 @@
 import json
 from collections import Counter
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import django
 from django.shortcuts import get_object_or_404
@@ -911,7 +911,10 @@ class HomepageMatchesAPIView(APIView):
 						if m.status == 'FINISHED' and m.home_goals is not None and m.away_goals is not None
 						else None
 					),
-					'closed': m.status == 'FINISHED',
+					# Kickoff-based, matching every other real-fixture path.
+					# Deriving this from FINISHED made an in-play match look open,
+					# so the homepage never started its live-score poll.
+					'closed': datetime.now(timezone.utc) >= (m.kickoff - timedelta(minutes=10)),
 					'status': m.status,
 				})
 		try:
