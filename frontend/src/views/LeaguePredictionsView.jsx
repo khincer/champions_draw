@@ -414,7 +414,7 @@ export default function LeaguePredictionsView({
                     <article className="matchday">
                       <div className="matchday-head">
                         <strong id="picks-inplay-heading">In play</strong>
-                        <span>Read-only &middot; awaiting result</span>
+                        <span>Awaiting result</span>
                       </div>
                       <div className="fixture-list">
                         {inPlay.map(renderInPlayRow)}
@@ -427,7 +427,6 @@ export default function LeaguePredictionsView({
                   <article className="matchday">
                     <div className="matchday-head">
                       <strong id="picks-finished-heading">Recent results</strong>
-                      <span>Read-only</span>
                     </div>
                     <div className="fixture-list">
                       {finished.length ? (
