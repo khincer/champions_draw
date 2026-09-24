@@ -3613,6 +3613,36 @@ dialog.name-dialog {
 .playing-as:hover { color: var(--ink); }
 .playing-as strong { color: var(--ink); }
 
+/* Competition cards on the real-draw page. The page body swaps to whichever is
+   active, so they behave as tabs that happen to be laid out as cards. */
+.real-competition-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.real-competition-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--sh-card);
+}
+.real-competition-card:hover { border-color: var(--blue); }
+.real-competition-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.real-competition-card.is-active { border-color: var(--green-ink); box-shadow: var(--sh-card-strong); }
+.real-competition-card:disabled { opacity: 0.5; cursor: not-allowed; }
+.real-competition-season { color: var(--muted); font-size: var(--font-small); }
+
 .match-detail-back {
   align-self: flex-start;
 }

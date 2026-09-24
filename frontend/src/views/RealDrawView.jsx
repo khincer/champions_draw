@@ -48,6 +48,14 @@ function verdictFor(pred, result) {
 
 const VERDICT_LABEL = { exact: 'Exact', outcome: 'Outcome', miss: 'Miss' };
 
+/* The competitions this page serves, in the order the cards render. Order is
+   deliberate: the Champions League is the one with predictions and share. */
+const REAL_COMPETITIONS = [
+  { code: 'UCL', label: 'Champions League' },
+  { code: 'LIB', label: 'Libertadores' },
+  { code: 'SUD', label: 'Sudamericana' },
+];
+
 export default function RealDrawView({
   seasonId,
   setSeasonId,
@@ -180,6 +188,22 @@ export default function RealDrawView({
 
   const matchdays = useMemo(() => groupBy(data?.matchups || [], 'matchday'), [data]);
 
+  /* Newest season per competition, so a card always opens the current one rather
+     than whichever the global selector happened to hold. */
+  const seasonByCompetition = useMemo(() => {
+    const newest = new Map();
+    for (const season of seasons || []) {
+      const held = newest.get(season.competition);
+      if (!held || String(season.name) > String(held.name)) newest.set(season.competition, season);
+    }
+    return newest;
+  }, [seasons]);
+
+  const selectedSeason = (seasons || []).find((s) => String(s.id) === String(seasonId));
+  const selectedCompetition = selectedSeason?.competition;
+  const selectedCompetitionLabel =
+    REAL_COMPETITIONS.find((c) => c.code === selectedCompetition)?.label;
+
   const anyAwaiting = useMemo(
     () => Boolean(data && data.matchups && data.matchups.some((f) => f.closed && !f.result)),
     [data],
@@ -282,9 +306,9 @@ export default function RealDrawView({
       </dialog>
       <div className="command-band">
         <div>
-          <h1>Official UCL real draw</h1>
+          <h1>{selectedCompetitionLabel || 'International'}</h1>
           <p>
-            Predict the real league-phase fixtures. Predictions close 10 minutes before kickoff.
+            Real league-phase fixtures. Predictions close 10 minutes before kickoff.
           </p>
         </div>
         <div className="draw-controls">
@@ -299,17 +323,28 @@ export default function RealDrawView({
           >
             Playing as <strong>{(playerName || '').trim() || 'Guest'}</strong>
           </button>
-          <label className="seed-input">
-            <span>Season year</span>
-            <select value={seasonId} onChange={(event) => setSeasonId(event.currentTarget.value)}>
-              {seasons.map((season) => (
-                <option key={season.id} value={season.id}>
-                  {season.name}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
+      </div>
+      <div className="real-competition-cards" role="group" aria-label="Competition">
+        {REAL_COMPETITIONS.map(({ code, label }) => {
+          const season = seasonByCompetition.get(code);
+          const active = selectedCompetition === code;
+          return (
+            <button
+              key={code}
+              type="button"
+              className={`real-competition-card${active ? ' is-active' : ''}`}
+              aria-pressed={active}
+              disabled={!season}
+              onClick={() => { if (season) setSeasonId(String(season.id)); }}
+            >
+              <strong>{label}</strong>
+              <span className="real-competition-season">
+                {season ? season.name : 'Not available'}
+              </span>
+            </button>
+          );
+        })}
       </div>
       {fixturesStatus === 'error' ? (
         <ErrorState
