@@ -514,13 +514,14 @@ def parse_bool(value) -> bool:
 # feed: it doubles as the serve list and the label source, so a competition
 # cannot be served-but-unlabelled. CONMEBOL seasons carry no emblem in their own
 # data, so the api-sports crests stand in — the same convention the team-logo
-# backfill uses. Friendlies (FRN) and the Nations League (UNL) have no crest of
-# their own, hence None.
+# backfill uses. The Nations League has its own crest, same api-sports convention
+# as the CONMEBOL rows above. The friendlies are a fixture bucket rather than a
+# competition, so they genuinely have none, hence None.
 COMPETITION_META = {
 	'LIB': {'label': 'Libertadores', 'country': 'CONMEBOL', 'emblem_url': 'https://media.api-sports.io/football/leagues/13.png'},
 	'SUD': {'label': 'Sudamericana', 'country': 'CONMEBOL', 'emblem_url': 'https://media.api-sports.io/football/leagues/11.png'},
 	'FRN': {'label': 'International Friendlies', 'country': 'International', 'emblem_url': None},
-	'UNL': {'label': 'Nations League', 'country': 'International', 'emblem_url': None},
+	'UNL': {'label': 'Nations League', 'country': 'International', 'emblem_url': 'https://media.api-sports.io/football/leagues/5.png'},
 }
 
 # Non-UCL seasons surfaced by the league list and the homepage feed. Derived from
