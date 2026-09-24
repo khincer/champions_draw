@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { ArrowLeft, ChevronDown, Globe, Home, Plane, RefreshCw } from 'lucide-preact';
+import { ArrowLeft, Globe, Home, Plane, RefreshCw } from 'lucide-preact';
 import Button from '../components/Button';
 import Crest from '../components/Crest';
 import LeagueFixtureRow from '../components/LeagueFixtureRow';
@@ -89,7 +89,6 @@ export default function TeamsBrowser({
 }) {
   const [standingsReq, setStandingsReq] = useState({ status: 'idle', error: '' });
   const [fixturesReq, setFixturesReq] = useState({ status: 'idle', error: '' });
-  const [showNextMatches, setShowNextMatches] = useState(false);
   const [leaguePhase, setLeaguePhase] = useState('group');
   const [seasonMatchups, setSeasonMatchups] = useState([]);
   const playoffTies = useMemo(() => pairPlayoffTies(seasonMatchups), [seasonMatchups]);
@@ -101,6 +100,38 @@ export default function TeamsBrowser({
      fixture. So FRN skips the toggle and the group tables entirely and renders
      its fixtures. */
   const gamesOnly = selectedLeague?.kind === 'season' && selectedLeague?.code === 'FRN';
+
+  /* Matchday navigation for the league view. `toMiniRow` already carries the
+     matchday through, so this groups client-side and needs no extra request. */
+  const fixtureMatchdays = useMemo(() => {
+    const all = [...(leagueMatches.finished || []), ...(leagueMatches.upcoming || [])];
+    const byMatchday = new Map();
+    for (const m of all) {
+      if (m.matchday == null) continue;
+      if (!byMatchday.has(m.matchday)) byMatchday.set(m.matchday, []);
+      byMatchday.get(m.matchday).push(m);
+    }
+    return [...byMatchday.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([matchday, games]) => ({ matchday, games }));
+  }, [leagueMatches]);
+
+  /* Opens on the most recently played matchday, so the view starts on results
+     rather than on a future matchday with no scores. */
+  const latestPlayedMatchday = useMemo(() => {
+    const played = fixtureMatchdays.filter((entry) => entry.games.some((m) => m.result));
+    if (played.length) return played[played.length - 1].matchday;
+    return fixtureMatchdays.length ? fixtureMatchdays[0].matchday : null;
+  }, [fixtureMatchdays]);
+
+  const [activeMatchday, setActiveMatchday] = useState(null);
+
+  useEffect(() => {
+    setActiveMatchday(latestPlayedMatchday);
+  }, [latestPlayedMatchday]);
+
+  const activeMatchdayGames =
+    fixtureMatchdays.find((entry) => entry.matchday === activeMatchday)?.games || [];
 
   async function loadStandings(league) {
     if (!league) return;
@@ -286,7 +317,7 @@ export default function TeamsBrowser({
           </div>
 
           <aside>
-            <h3 className="panel-title">Last Results</h3>
+            <h3 className="panel-title">Fixtures</h3>
             {fixturesReq.status === 'loading' || fixturesReq.status === 'idle' ? (
               <Skeleton rows={3} label="Loading fixtures" variant="fixture" />
             ) : fixturesReq.status === 'error' ? (
@@ -295,33 +326,32 @@ export default function TeamsBrowser({
                 detail={fixturesReq.error}
                 onRetry={() => loadFixtures(selectedLeague)}
               />
-            ) : leagueMatches.finished && leagueMatches.finished.length ? (
-              <div className="fixture-mini-list">
-                {leagueMatches.finished.map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
-              </div>
+            ) : fixtureMatchdays.length ? (
+              <>
+                <div className="matchday-nav-row" role="group" aria-label="Matchday">
+                  {fixtureMatchdays.map(({ matchday }) => (
+                    <button
+                      key={matchday}
+                      type="button"
+                      className={`matchday-nav-btn${matchday === activeMatchday ? ' is-active' : ''}`}
+                      aria-pressed={matchday === activeMatchday}
+                      onClick={() => setActiveMatchday(matchday)}
+                    >
+                      {matchday}
+                    </button>
+                  ))}
+                </div>
+                <div className="fixture-mini-list">
+                  {activeMatchdayGames.map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
+                </div>
+              </>
             ) : (
               <EmptyState
-                title="No finished matches yet"
-                text="Results appear here once this competition has played fixtures. Refresh to check again."
+                title="No fixtures yet"
+                text="Fixtures appear here once this competition has played. Refresh to check again."
                 action={<Button onClick={() => loadFixtures(selectedLeague)}>Refresh</Button>}
               />
             )}
-            <button
-              className="next-matches-toggle"
-              onClick={() => setShowNextMatches((v) => !v)}
-            >
-              <ChevronDown size={16} className={showNextMatches ? '' : 'arrow-closed'} />
-              Next matches
-            </button>
-            {showNextMatches ? (
-              fixturesReq.status === 'loading' || fixturesReq.status === 'idle' ? (
-                <Skeleton rows={2} label="Loading fixtures" variant="fixture" />
-              ) : fixturesReq.status === 'error' ? null : leagueMatches.upcoming && leagueMatches.upcoming.length ? (
-                <div className="fixture-mini-list" style={{ marginTop: 8 }}>
-                  {leagueMatches.upcoming.map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
-                </div>
-              ) : <p className="muted small">No upcoming matches.</p>
-            ) : null}
           </aside>
         </div>
         )}

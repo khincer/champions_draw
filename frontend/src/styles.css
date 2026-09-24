@@ -2164,6 +2164,27 @@ select:focus,
 /* A competition with no crest of its own (FRN, UNL) renders a globe in the same
    slot the crest would occupy. */
 .league-card-globe { color: var(--muted); }
+
+/* Matchday navigation in the league view: one button per matchday, opening on
+   the most recently played one. Wraps rather than scrolling -- a league runs to
+   38 matchdays and a scroll strip would hide most of them. */
+.matchday-nav-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: var(--space-3); }
+.matchday-nav-btn {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--font-small);
+  font-weight: 800;
+  cursor: pointer;
+}
+.matchday-nav-btn:hover { color: var(--ink); }
+.matchday-nav-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.matchday-nav-btn.is-active { background: var(--surface); color: var(--green-ink); box-shadow: var(--sh-card-strong); }
 .league-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px; transition: border-color 0.15s; }
 .league-card:hover { border-color: var(--green-primary); }
 .league-card img { height: 40px; }
