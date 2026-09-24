@@ -22,7 +22,7 @@ const QUICK_ACTIONS = [
    translated. Translating the key itself would break the lookup. */
 const BUCKET_LABELS = { Tomorrow: 'home.tomorrow', Today: 'home.today', Yesterday: 'home.yesterday' };
 
-function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef }) {
+function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFocusRef, compact = false }) {
   const { t, formatDay, formatTime } = useI18n();
   const result = match.result;
   const eligible = result || (match.kickoff && new Date(match.kickoff) <= new Date());
@@ -30,24 +30,34 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
   const statusLabel = t(result ? 'home.final' : match.closed ? 'home.live' : 'home.kickoff');
   return (
     <article
-      className="home-game-card"
+      className={`home-game-card${compact ? ' home-game-card--compact' : ''}`}
       aria-label={t('home.versus', { home: match.home_team.name, away: match.away_team.name })}
     >
       <header className="home-game-card-header">
         <div>
           <p className="hub-eyebrow">{match.competition || 'Champions League'}</p>
-          <p className="hub-date">{formatDay(match.kickoff)}</p>
+          {!compact && <p className="hub-date">{formatDay(match.kickoff)}</p>}
         </div>
-        <span className={`hub-status ${status === 'finished' ? 'hub-final' : status === 'live' ? 'hub-live' : 'hub-upcoming'}`}>
-          {status === 'live' && <span className="live-dot" aria-hidden="true" />}
-          {statusLabel}
-        </span>
+        {/* The "Final" bullet is dropped in the compact strip: every card there
+            is finished by definition, so it labelled nothing. The aria-label
+            above still names both teams, which is the part a screen reader needs. */}
+        {!compact && (
+          <span className={`hub-status ${status === 'finished' ? 'hub-final' : status === 'live' ? 'hub-live' : 'hub-upcoming'}`}>
+            {status === 'live' && <span className="live-dot" aria-hidden="true" />}
+            {statusLabel}
+          </span>
+        )}
       </header>
       <div className="hub-matchup">
         <div className="hub-team">
           <Crest team={match.home_team} size="md" />
-          <p className="hub-team-name">{match.home_team.name}</p>
-          {match.home_team.short_name && <p className="hub-team-short">{match.home_team.short_name}</p>}
+          {!compact && <p className="hub-team-name">{match.home_team.name}</p>}
+          {/* Promiedos gives national teams a short_name identical to the name
+              ('Japón'/'Japón'), so the card printed the same label twice. Only
+              show a short label that actually shortens something. */}
+          {!compact && match.home_team.short_name && match.home_team.short_name !== match.home_team.name && (
+            <p className="hub-team-short">{match.home_team.short_name}</p>
+          )}
         </div>
         <div className="hub-score-area">
           {result ? (
@@ -65,14 +75,17 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
           ) : (
             <p className="hub-kickoff">{formatTime(match.kickoff)}</p>
           )}
-          <p className="hub-score-caption">{t(status === 'finished' ? 'home.result' : status === 'live' ? 'home.live' : 'home.kickoff')}</p>
+          {!compact && <p className="hub-score-caption">{t(status === 'finished' ? 'home.result' : status === 'live' ? 'home.live' : 'home.kickoff')}</p>}
         </div>
         <div className="hub-team">
           <Crest team={match.away_team} size="md" />
-          <p className="hub-team-name">{match.away_team.name}</p>
-          {match.away_team.short_name && <p className="hub-team-short">{match.away_team.short_name}</p>}
+          {!compact && <p className="hub-team-name">{match.away_team.name}</p>}
+          {!compact && match.away_team.short_name && match.away_team.short_name !== match.away_team.name && (
+            <p className="hub-team-short">{match.away_team.short_name}</p>
+          )}
         </div>
       </div>
+      {!compact && (
       <footer className="home-game-card-footer">
         {/* Friendlies (and any matchday-less row) carry matchday: null, which
             interpolated straight into "Matchday null". Only label a real one. */}
@@ -91,6 +104,7 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
           <span aria-hidden="true">↗</span>
         )}
       </footer>
+      )}
     </article>
   );
 }
@@ -245,6 +259,7 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
                       onOpenMatch={onOpenMatch}
                       seasonId={seasonId}
                       detailReturnFocusRef={detailReturnFocusRef}
+                      compact
                     />
                   ))}
                 </div>

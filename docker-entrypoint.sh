@@ -47,11 +47,6 @@ case "${SERVICE_ROLE:-}" in
     # change rate, not by the word "league"; a UNL *result*-refresh path would
     # belong in cron-results. That tension is recorded here, not resolved.
     python manage.py sync_promiedos_nations_league --competition unl
-    # Newly promoted nations arrive from the syncs above with an empty logo_url,
-    # and nothing else ever fills it -- Palestina and Nueva Zelanda rendered
-    # crestless until this was run by hand. Idempotent and cheap: it only looks at
-    # teams that have no logo yet, so it is a no-op once they are covered.
-    python manage.py backfill_national_flags
     # Rule 6 (no third consecutive season with the same home team in a pairing)
     # reads SeasonMatchupHistory for the two seasons before the active one. If
     # nothing populates that table the constraint is silently a no-op, so this
@@ -79,6 +74,12 @@ case "${SERVICE_ROLE:-}" in
     python manage.py sync_promiedos_fixtures --competition sud
     python manage.py sync_promiedos_nations_league --competition unl
     python manage.py sync_promiedos_friendlies
+    # Immediately after the syncs that create teams, not on the daily job. A new
+    # nation arrives with an empty logo_url and nothing else fills it, so on a
+    # daily cadence every deploy left them crestless for up to a day -- which is
+    # exactly what happened on the first production deploy of this. Idempotent and
+    # cheap: it only looks at teams with no logo, and is a no-op once covered.
+    python manage.py backfill_national_flags
     python manage.py sync_league_fixtures
     ;;
   *)
