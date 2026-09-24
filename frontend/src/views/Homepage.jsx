@@ -74,7 +74,9 @@ function HomeMatchCard({ match, liveScore, onOpenMatch, seasonId, detailReturnFo
         </div>
       </div>
       <footer className="home-game-card-footer">
-        <span>{t('home.matchday', { number: match.matchday })}</span>
+        {/* Friendlies (and any matchday-less row) carry matchday: null, which
+            interpolated straight into "Matchday null". Only label a real one. */}
+        <span>{match.matchday != null ? t('home.matchday', { number: match.matchday }) : ''}</span>
         {match.openable && eligible ? (
           <button
             className="hub-open-match"
@@ -212,7 +214,7 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
             detail={matchesError}
             onRetry={onRetryMatches}
           />
-        ) : inRange.length ? (
+        ) : inRange.length || latestResults.length ? (
           <>
             {latestResults.length > 0 && (
               <section role="region" aria-label={t('a11y.latestResults')} className="homepage-results">
