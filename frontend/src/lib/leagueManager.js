@@ -20,6 +20,14 @@ export function initialMatchday(sections) {
     ?? null;
 }
 
+export function adjacentMatchdays(sections, number) {
+  const index = sections.findIndex((section) => section.number === number);
+  return {
+    previous: sections[index - 1]?.number ?? null,
+    next: index < 0 ? null : sections[index + 1]?.number ?? null,
+  };
+}
+
 export function parseScore(home, away) {
   if (![home, away].every((value) => /^\d{1,3}$/.test(value))) return null;
   return { home_goals: Number(home), away_goals: Number(away) };

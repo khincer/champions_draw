@@ -122,6 +122,32 @@
   gap: var(--space-2);
 }
 
+.lm-matchday-nav {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+.lm-matchday-nav .button:first-child {
+  justify-self: start;
+}
+
+.lm-matchday-nav .button:last-child {
+  justify-self: end;
+}
+
+.lm-matchday-current {
+  color: var(--ink);
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .league-manager .lm-progress {
   width: auto;
   color: var(--muted);
@@ -241,11 +267,25 @@
 .lm-fixture-line {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
+  text-align: center;
   overflow-wrap: anywhere;
 }
 
-.lm-fixture-line strong:last-child {
-  text-align: right;
+.league-manager .lm-score-action {
+  display: inline-grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 44px;
+  max-width: 8rem;
+  line-height: 1.1;
+  white-space: normal;
+}
+
+.lm-score-action-result {
+  color: var(--ink);
+  font-size: 1.125rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .lm-goals {
@@ -287,6 +327,21 @@
 .league-manager .lm-table .tbl-name {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.league-manager .lm-standings .lm-table .tbl-pos {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.league-manager .lm-standings .lm-table tbody tr:first-child .tbl-pos {
+  color: var(--blue-dark);
+}
+
+.league-manager .lm-standings .lm-table .tbl-pts {
+  color: var(--blue-dark);
+  font-size: 1rem;
+  font-weight: 800;
 }
 
 @media (max-width: 850px) {
@@ -336,6 +391,17 @@
   }
 }
 
+@media (max-width: 480px) {
+  .lm-matchday-nav {
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+  }
+
+  .league-manager .lm-matchday-nav .button {
+    padding-inline: var(--space-2);
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 360px) {
   .lm-panel {
     padding: var(--space-3);
@@ -343,5 +409,13 @@
 
   .lm-goals {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .league-manager .lm-score-action {
+    padding-inline: var(--space-2);
+  }
+
+  .league-manager .lm-score-action {
+    max-width: 5.75rem;
   }
 }

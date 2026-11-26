@@ -4,7 +4,7 @@ import StandingsTable from '../components/StandingsTable';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import { useI18n } from '../i18n';
 import { apiFetch } from '../lib/api';
-import { initialMatchday, isRecordedScore, matchdaySections, parseScore, parseTeamList } from '../lib/leagueManager.js';
+import { adjacentMatchdays, initialMatchday, isRecordedScore, matchdaySections, parseScore, parseTeamList } from '../lib/leagueManager.js';
 import './leagueManager.css';
 
 const BASE = '/league-manager';
@@ -221,6 +221,8 @@ function FixtureResult({ fixture, home, away, onScore, busy, scoreError }) {
   const firstGoal = useRef(null);
   const restoreFocus = useRef(false);
   const scored = isRecordedScore(fixture);
+  const scoreLabel = scored ? `${fixture.home_goals} – ${fixture.away_goals}` : t('fixtures.versus');
+  const actionLabel = t(scored ? 'leagueManager.editFixture' : 'leagueManager.enterFixture', { home, away });
 
   useEffect(() => {
     if (editing) firstGoal.current?.focus();
@@ -248,7 +250,21 @@ function FixtureResult({ fixture, home, away, onScore, busy, scoreError }) {
     <li className="lm-fixture">
       <div className="lm-fixture-line">
         <strong>{home}</strong>
-        <span className="lm-score">{scored ? `${fixture.home_goals} – ${fixture.away_goals}` : t('fixtures.versus')}</span>
+        {onScore && !editing ? (
+          <button
+            ref={editButton}
+            className="button secondary lm-score-action"
+            type="button"
+            disabled={busy}
+            onClick={() => setEditing(true)}
+            aria-label={scored ? `${actionLabel}: ${scoreLabel}` : actionLabel}
+          >
+            {scored && <span className="lm-score-action-result">{scoreLabel}</span>}
+            <span>{t(scored ? 'leagueManager.editScore' : 'leagueManager.enterScore')}</span>
+          </button>
+        ) : (
+          <span className="lm-score">{scoreLabel}</span>
+        )}
         <strong>{away}</strong>
       </div>
       {editing ? (
@@ -273,18 +289,7 @@ function FixtureResult({ fixture, home, away, onScore, busy, scoreError }) {
             <Button disabled={busy} onClick={close}>{t('leagueManager.cancel')}</Button>
           </div>
         </form>
-      ) : onScore ? (
-        <button
-          ref={editButton}
-          className="button secondary"
-          type="button"
-          disabled={busy}
-          onClick={() => setEditing(true)}
-          aria-label={t(scored ? 'leagueManager.editFixture' : 'leagueManager.enterFixture', { home, away })}
-        >
-          {t(scored ? 'leagueManager.editScore' : 'leagueManager.enterScore')}
-        </button>
-      ) : !scored ? <p className="lm-muted">{t('leagueManager.unplayed')}</p> : null}
+      ) : !onScore && !scored ? <p className="lm-muted">{t('leagueManager.unplayed')}</p> : null}
     </li>
   );
 }
@@ -296,6 +301,7 @@ function Schedule({ league, onScore, busy, failedFixtureId, scoreError }) {
   const [matchday, setMatchday] = useState(() => onScore ? initialMatchday(schedule) : 1);
   const [changedTeams, setChangedTeams] = useState([]);
   const selected = schedule.find(({ number }) => number === matchday) || schedule[0];
+  const { previous, next } = adjacentMatchdays(schedule, selected?.number);
   const SectionTitle = onScore ? 'h3' : 'h2';
   const recorded = league.fixtures.filter(isRecordedScore).length;
   const total = league.fixtures.length;
@@ -340,12 +346,17 @@ function Schedule({ league, onScore, busy, failedFixtureId, scoreError }) {
         </div>
         {selected ? (
           <>
-            <label className="lm-control">
-              {t('leagueManager.matchday')}
-              <select value={selected.number} disabled={busy} onChange={(e) => setMatchday(Number(e.currentTarget.value))}>
-                {schedule.map(({ number }) => <option key={number} value={number}>{t('home.matchday', { number })}</option>)}
-              </select>
-            </label>
+            <nav className="lm-matchday-nav" aria-label={t('leagueManager.matchday')}>
+              <Button disabled={busy || previous == null} onClick={() => setMatchday(previous)}>
+                {t('leagueManager.previousMatchday')}
+              </Button>
+              <p className="lm-matchday-current" aria-live="polite">
+                {t('home.matchday', { number: formatNumber(selected.number) })}
+              </p>
+              <Button disabled={busy || next == null} onClick={() => setMatchday(next)}>
+                {t('leagueManager.nextMatchday')}
+              </Button>
+            </nav>
             {selected.bye && <p className="lm-bye">{t('leagueManager.bye', { team: selected.bye.name })}</p>}
             <ul className="lm-fixture-list">
               {selected.fixtures.map((fixture) => (
