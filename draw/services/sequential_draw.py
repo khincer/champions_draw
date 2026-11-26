@@ -14,15 +14,9 @@ import random
 from collections import Counter, defaultdict
 from itertools import combinations
 
-from django.db import transaction
-from django.utils import timezone
-
 from draw.models import (
-    DrawMethodChoices,
-    DrawStatusChoices,
     Season,
     SeasonDraw,
-    SeasonMatchup,
 )
 from draw.services.draw import (
     DrawError,
@@ -35,6 +29,7 @@ from draw.services.draw import (
     compute_forbidden_directions,
     normalize_edge,
     orient_draw_edges,
+    save_generated_draw,
     schedule_matchdays,
     validate_directed_draw,
     validate_draw_inputs,
@@ -75,32 +70,7 @@ def generate_sequential_season_draw(
             last_error = exc
             continue
 
-        with transaction.atomic():
-            if reset:
-                from draw.services.interactive_draw import cancel_running_sessions
-
-                cancel_running_sessions(season)
-                SeasonMatchup.objects.filter(season=season).delete()
-            elif SeasonMatchup.objects.filter(season=season).exists():
-                raise DrawError('Season already has generated matchups. Use reset=true to replace them.')
-
-            SeasonMatchup.objects.bulk_create(
-                SeasonMatchup(
-                    season=season,
-                    home_team_id=home_id,
-                    away_team_id=away_id,
-                    matchday=matchday_assignments[normalize_edge(home_id, away_id)],
-                )
-                for home_id, away_id in directed_edges
-            )
-
-            draw_record.status = DrawStatusChoices.COMPLETED
-            draw_record.matchups_created = len(directed_edges)
-            draw_record.error_message = ''
-            draw_record.completed_at = timezone.now()
-            draw_record.method = DrawMethodChoices.SEQUENTIAL
-            draw_record.save(update_fields=['status', 'matchups_created', 'error_message', 'completed_at', 'method'])
-
+        save_generated_draw(season, draw_record, directed_edges, matchday_assignments, reset=reset)
         return build_summary(season, draw_record, entries, directed_edges)
 
     detail = f' Last error: {last_error}' if last_error else ''

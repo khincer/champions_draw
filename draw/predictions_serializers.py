@@ -15,7 +15,18 @@ class MatchPredictionSerializer(serializers.ModelSerializer):
 class MatchPredictionWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = MatchPrediction
+        fields = ['home_goals', 'away_goals']
+
+
+class MatchPredictionSyncRowSerializer(MatchPredictionWriteSerializer):
+    matchup = serializers.IntegerField(min_value=1)
+
+    class Meta(MatchPredictionWriteSerializer.Meta):
         fields = ['matchup', 'home_goals', 'away_goals']
+
+
+class MatchPredictionSyncSerializer(serializers.Serializer):
+    predictions = MatchPredictionSyncRowSerializer(many=True, default=list)
 
 
 class PlayoffPredictionSerializer(serializers.ModelSerializer):
