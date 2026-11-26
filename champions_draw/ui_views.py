@@ -9,8 +9,13 @@ from django.views.decorators.http import require_GET
 
 @require_GET
 @ensure_csrf_cookie
-def public_app(request):
-    return serve_frontend_index()
+def public_app(request, share_id=None):
+    response = serve_frontend_index()
+    if share_id is not None:
+        response['Referrer-Policy'] = 'no-referrer'
+        response['X-Robots-Tag'] = 'noindex'
+        response['Cache-Control'] = 'no-store'
+    return response
 
 
 @require_GET

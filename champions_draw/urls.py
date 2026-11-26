@@ -21,5 +21,7 @@ from .ui_views import console_app, public_app
 urlpatterns = [
     path('api/', include('draw.urls')),
     path('console/', console_app, name='console-app'),
+    path('league-manager/', public_app, name='league-manager-app'),
+    path('league-manager/share/<uuid:share_id>/', public_app, name='league-manager-share-app'),
     path('', public_app, name='public-app'),
 ]

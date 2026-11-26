@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { Home, LayoutGrid, Menu, Swords, Target, Trophy, UserRound, X } from 'lucide-preact';
+import { ClipboardList, Home, LayoutGrid, Menu, Swords, Target, Trophy, UserRound, X } from 'lucide-preact';
 import LanguageMenu from './LanguageMenu';
 import { LOCALE_OPTIONS, useI18n } from '../i18n';
 
@@ -105,6 +105,10 @@ export default function MobileNav({ view, onSelectView, overlayOpen, tabs }) {
         </div>
         <div className="mobile-nav-drawer-views" role="group" aria-label={t('nav.views')}>
           {VIEWS.map(renderItem)}
+          <a className="mobile-nav-item league-manager-nav-link" href="/league-manager/">
+            <ClipboardList size={20} aria-hidden="true" />
+            <span className="mobile-nav-label">{t('nav.leagueManager')}</span>
+          </a>
         </div>
         <div className="mobile-nav-drawer-section">
           <LanguageMenu

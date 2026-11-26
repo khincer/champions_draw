@@ -54,6 +54,14 @@ const VARIANTS = {
     banded: true,
     rowBase: 'table-row',
   },
+  managed: {
+    table: 'league-table lm-table',
+    columns: ['pos', 'team', 'points', 'played', 'goalDiff', 'won', 'drawn', 'lost', 'goalsFor', 'goalsAgainst'],
+    header: { pos: '', team: 'tbl-team', pts: '' },
+    cell: { pos: 'tbl-pos', team: 'tbl-team', pts: 'tbl-pts' },
+    banded: false,
+    rowBase: 'table-row',
+  },
   sidebar: {
     table: 'sidebar-table',
     columns: ['pos', 'team', 'points'],
@@ -75,6 +83,7 @@ function resolveTeam(row, nameMode) {
 }
 
 function TeamCell({ team, variant }) {
+  if (variant === 'managed') return <span className="tbl-name">{team.name}</span>;
   if (variant === 'standings') {
     return (
       <div className="standings-team">
@@ -113,7 +122,7 @@ export default function StandingsTable({
   const { t } = useI18n();
   const spec = VARIANTS[variant];
   const columns = spec.columns.map((key) =>
-    key === 'played' ? { ...CELLS.played, header: playedHeader } : CELLS[key],
+    key === 'played' && variant !== 'managed' ? { ...CELLS.played, header: playedHeader } : CELLS[key],
   );
 
   const table = (
@@ -122,7 +131,9 @@ export default function StandingsTable({
         <tr>
           {columns.map((column) => (
             <th className={column.slot ? spec.header[column.slot] : ''} key={column.header}>
-              {column.labelKey ? t(column.labelKey) : column.header}
+              {variant === 'managed' && !column.labelKey && column.header !== '#'
+                ? t(`leagueManager.stat${column.header}`)
+                : column.labelKey ? t(column.labelKey) : column.header}
             </th>
           ))}
         </tr>
