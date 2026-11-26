@@ -293,7 +293,7 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(SeasonDraw.objects.filter(season=self.season, status=DrawStatusChoices.COMPLETED).count(), 2)
 		self.assert_draw_constraints(self.season)
 
-	def test_draw_reset_deletes_season_predictions(self):
+	def test_draw_reset_refuses_to_replace_another_players_saved_predictions(self):
 		seed_season_entries(self.season)
 		self.client.post(
 			reverse('draw:season-draw', args=[self.season.pk]),
@@ -328,15 +328,51 @@ class DrawApiTests(APITestCase):
 
 		response = self.client.post(
 			reverse('draw:season-draw', args=[self.season.pk]),
-			{'seed': 'pred-test-2', 'reset': True},
+			{'seed': 'pred-test-2', 'reset': True, 'player_name': 'Grace'},
 			format='json',
 		)
 
+		self.assertEqual(response.status_code, 409)
+		self.assertEqual(response.data['code'], 'draw_has_saved_predictions')
+		self.assertTrue(Prediction.objects.filter(pk=prediction.pk).exists())
+		self.assertTrue(MatchPrediction.objects.filter(prediction=prediction, matchup=matchup, home_goals=2).exists())
+		self.assertTrue(PlayoffPrediction.objects.filter(prediction=prediction).exists())
+		self.assertTrue(KnockoutPrediction.objects.filter(prediction=prediction).exists())
+		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 144)
+
+	def test_draw_reset_keeps_official_picks_on_success_and_failure(self):
+		seed_season_entries(self.season)
+		home, away = self.entries[:2]
+		prediction = Prediction.objects.create(season=self.season, player_name='Ada')
+		official = RealFixturePrediction.objects.create(
+			prediction=prediction, home_team=home, away_team=away,
+			matchday=1, home_goals=2, away_goals=1,
+		)
+		url = reverse('draw:season-draw', args=[self.season.pk])
+
+		for method, expected_status in [('unknown', 400), ('sat', 200)]:
+			with self.subTest(method=method):
+				response = self.client.post(url, {
+					'method': method, 'seed': 'official-picks', 'reset': True, 'player_name': 'Ada',
+				}, format='json')
+				self.assertEqual(response.status_code, expected_status)
+				self.assertTrue(RealFixturePrediction.objects.filter(pk=official.pk, home_goals=2, away_goals=1).exists())
+
+	def test_identical_draw_reset_keeps_matchup_ids_and_saved_scores(self):
+		seed_season_entries(self.season)
+		url = reverse('draw:season-draw', args=[self.season.pk])
+		payload = {'seed': 'same-schedule', 'method': 'sequential', 'reset': True, 'player_name': 'Ada'}
+		first = self.client.post(url, payload, format='json')
+		self.assertEqual(first.status_code, 200)
+		ids = [matchup['id'] for matchup in first.data['matchups']]
+		prediction = Prediction.objects.create(season=self.season, player_name='Ada')
+		saved = MatchPrediction.objects.create(prediction=prediction, matchup_id=ids[0], home_goals=0, away_goals=0)
+
+		response = self.client.post(url, payload, format='json')
+
 		self.assertEqual(response.status_code, 200)
-		self.assertEqual(Prediction.objects.filter(season=self.season).count(), 0)
-		self.assertEqual(MatchPrediction.objects.count(), 0)
-		self.assertEqual(PlayoffPrediction.objects.count(), 0)
-		self.assertEqual(KnockoutPrediction.objects.count(), 0)
+		self.assertEqual([matchup['id'] for matchup in response.data['matchups']], ids)
+		self.assertTrue(MatchPrediction.objects.filter(pk=saved.pk, home_goals=0, away_goals=0).exists())
 
 	def test_generate_draw_management_command_creates_matchups_and_metadata(self):
 		seed_season_entries(self.season)
@@ -997,12 +1033,12 @@ class InteractiveDrawTests(TestCase):
 		self.assertEqual(InteractiveDrawPick.objects.filter(draw=draw).count(), 1)
 		self.assertEqual(current_pot(resumed), 1)
 
-	def test_reset_clears_picks_matchups_and_stale_predictions(self):
+	def test_reset_clears_unscored_picks_and_matchups(self):
 		draw = start_or_resume(season=self.season, draw_seed='manual-1')
 		pick_team(season=self.season, draw=draw, season_team_id=self.pot_entries(1)[0].pk)
 		matchup = SeasonMatchup.objects.filter(season=self.season).first()
 		prediction = Prediction.objects.create(season=self.season, player_name='Ada')
-		MatchPrediction.objects.create(prediction=prediction, matchup=matchup, home_goals=1, away_goals=0)
+		MatchPrediction.objects.create(prediction=prediction, matchup=matchup)
 
 		fresh = start_or_resume(season=self.season, draw_seed='manual-1', reset=True)
 
@@ -1010,6 +1046,7 @@ class InteractiveDrawTests(TestCase):
 		self.assertEqual(InteractiveDrawPick.objects.filter(draw=fresh).count(), 0)
 		self.assertEqual(SeasonMatchup.objects.filter(season=self.season).count(), 0)
 		self.assertEqual(MatchPrediction.objects.count(), 0)
+		self.assertTrue(Prediction.objects.filter(pk=prediction.pk).exists())
 		self.assertEqual(current_pot(fresh), 1)
 		self.assertEqual(
 			SeasonDraw.objects.filter(
@@ -1019,6 +1056,26 @@ class InteractiveDrawTests(TestCase):
 			).count(),
 			1,
 		)
+
+	def test_reset_keeps_a_running_session_with_saved_scores(self):
+		draw = start_or_resume(season=self.season, draw_seed='manual-1')
+		pick_team(season=self.season, draw=draw, season_team_id=self.pot_entries(1)[0].pk)
+		matchup = SeasonMatchup.objects.filter(season=self.season).first()
+		prediction = Prediction.objects.create(season=self.season, player_name='Ada')
+		saved = MatchPrediction.objects.create(prediction=prediction, matchup=matchup, home_goals=1, away_goals=0)
+
+		response = self.client.post(
+			reverse('draw:season-draw', args=[self.season.pk]),
+			{'method': 'interactive', 'seed': 'manual-2', 'reset': True},
+			format='json',
+		)
+
+		self.assertEqual(response.status_code, 409)
+		self.assertEqual(response.data['code'], 'draw_has_saved_predictions')
+		self.assertTrue(MatchPrediction.objects.filter(pk=saved.pk, matchup=matchup).exists())
+		self.assertEqual(InteractiveDrawPick.objects.filter(draw=draw).count(), 1)
+		draw.refresh_from_db()
+		self.assertEqual(draw.status, DrawStatusChoices.RUNNING)
 
 	def test_only_one_running_interactive_session_per_season(self):
 		first = start_or_resume(season=self.season, draw_seed='manual-1')

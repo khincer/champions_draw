@@ -30,6 +30,7 @@ from draw.services.draw import (
     POT_COUNT,
     POT_SIZE,
     build_draw_graph,
+    clear_draw_matchups,
     compute_forbidden_directions,
     normalize_edge,
     normalize_player_name,
@@ -58,6 +59,7 @@ def start_or_resume(
     normalized_player_name = normalize_player_name(player_name)
 
     with transaction.atomic():
+        Season.objects.select_for_update().get(pk=season.pk)
         running = list(
             SeasonDraw.objects.select_for_update().filter(
                 season=season,
@@ -66,14 +68,16 @@ def start_or_resume(
             )
         )
 
-        if reset:
-            SeasonMatchup.objects.filter(season=season).delete()
-            for draw in running:
-                draw.delete()
-        elif running:
+        if running and not reset:
             return running[0]
 
         _validate_interactive_season(season)
+
+        if reset:
+            clear_draw_matchups(season)
+            cancel_running_sessions(season)
+        elif SeasonMatchup.objects.filter(season=season).exists():
+            raise DrawError('Season already has generated matchups. Use reset=true to replace them.')
 
         return SeasonDraw.objects.create(
             season=season,
@@ -115,7 +119,12 @@ def pick_team(*, season: Season, draw: SeasonDraw, season_team_id: int) -> PickR
         raise DrawError('Season team not found.')
 
     with transaction.atomic():
-        draw = SeasonDraw.objects.select_for_update().get(pk=draw.pk)
+        Season.objects.select_for_update().get(pk=season.pk)
+        draw = SeasonDraw.objects.select_for_update().filter(
+            pk=draw.pk, season=season, status=DrawStatusChoices.RUNNING,
+        ).first()
+        if draw is None:
+            raise DrawError('This interactive draw is no longer running.')
 
         opponents = assign_opponents_for_pick(season=season, draw=draw, season_team=season_team)
         if opponents is None:

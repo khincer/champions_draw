@@ -5,12 +5,14 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from z3 import Bool, If, Solver, Sum, is_true, sat
 
 from draw.models import (
-    DrawMethodChoices,
     DrawStatusChoices,
+    MatchPrediction,
+    Prediction,
     Season,
     SeasonDraw,
     SeasonMatchup,
@@ -32,6 +34,10 @@ DEFAULT_MAX_ATTEMPTS = 100
 
 class DrawError(ValueError):
     """Raised when a Champions League draw cannot be generated."""
+
+
+class DrawScheduleProtectedError(DrawError):
+    """Replacing the shared fixtures would invalidate saved predictions."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +94,9 @@ def generate_season_draw(
             reset=reset,
             max_attempts=max_attempts,
         )
+    except DrawScheduleProtectedError:
+        draw_record.delete()
+        raise
     except DrawError as exc:
         draw_record.status = DrawStatusChoices.FAILED
         draw_record.error_message = str(exc)
@@ -129,36 +138,69 @@ def _generate_season_draw(
             last_error = exc
             continue
 
-        with transaction.atomic():
-            if reset:
-                from draw.services.interactive_draw import cancel_running_sessions
-
-                cancel_running_sessions(season)
-                SeasonMatchup.objects.filter(season=season).delete()
-            elif SeasonMatchup.objects.filter(season=season).exists():
-                raise DrawError('Season already has generated matchups. Use reset=true to replace them.')
-
-            SeasonMatchup.objects.bulk_create(
-                SeasonMatchup(
-                    season=season,
-                    home_team_id=home_id,
-                    away_team_id=away_id,
-                    matchday=matchday_assignments[normalize_edge(home_id, away_id)],
-                )
-                for home_id, away_id in directed_edges
-            )
-
-            draw_record.status = DrawStatusChoices.COMPLETED
-            draw_record.matchups_created = len(directed_edges)
-            draw_record.error_message = ''
-            draw_record.completed_at = timezone.now()
-            draw_record.method = DrawMethodChoices.SAT
-            draw_record.save(update_fields=['status', 'matchups_created', 'error_message', 'completed_at', 'method'])
-
+        save_generated_draw(season, draw_record, directed_edges, matchday_assignments, reset=reset)
         return build_summary(season, draw_record, entries, directed_edges)
 
     detail = f' Last error: {last_error}' if last_error else ''
     raise DrawError(f'Unable to generate a valid draw after {max_attempts} attempts for seed {draw_record.draw_seed}.{detail}')
+
+
+def clear_draw_matchups(season: Season) -> None:
+    """Clear only an unscored schedule; callers must hold the season write lock."""
+    fixtures = SeasonMatchup.objects.filter(season=season)
+    match_scores = MatchPrediction.objects.filter(matchup__season=season).filter(
+        Q(home_goals__isnull=False) | Q(away_goals__isnull=False)
+    )
+    bracket_progress = Prediction.objects.filter(season=season).filter(
+        Q(is_league_complete=True)
+        | Q(is_playoffs_complete=True)
+        | Q(is_knockout_complete=True)
+        | Q(playoff_predictions__isnull=False)
+        | Q(knockout_predictions__isnull=False)
+    )
+    if match_scores.exists() or bracket_progress.exists():
+        raise DrawScheduleProtectedError(
+            'This season already has saved predictions. Open Fixtures to use the existing draw.'
+        )
+    fixtures.delete()
+
+
+def save_generated_draw(
+    season: Season,
+    draw_record: SeasonDraw,
+    directed_edges: list[tuple[int, int]],
+    matchday_assignments: dict[tuple[int, int], int],
+    *,
+    reset: bool,
+) -> None:
+    from draw.services.interactive_draw import cancel_running_sessions
+
+    schedule = [
+        (home_id, away_id, matchday_assignments[normalize_edge(home_id, away_id)])
+        for home_id, away_id in directed_edges
+    ]
+    with transaction.atomic():
+        Season.objects.select_for_update().get(pk=season.pk)
+        existing = set(SeasonMatchup.objects.filter(season=season).order_by().values_list(
+            'home_team_id', 'away_team_id', 'matchday',
+        ))
+        if existing and not reset:
+            raise DrawError('Season already has generated matchups. Use reset=true to replace them.')
+
+        if existing != set(schedule):
+            if reset:
+                clear_draw_matchups(season)
+                cancel_running_sessions(season)
+            SeasonMatchup.objects.bulk_create(
+                SeasonMatchup(season=season, home_team_id=home_id, away_team_id=away_id, matchday=matchday)
+                for home_id, away_id, matchday in schedule
+            )
+
+        draw_record.status = DrawStatusChoices.COMPLETED
+        draw_record.matchups_created = len(schedule)
+        draw_record.error_message = ''
+        draw_record.completed_at = timezone.now()
+        draw_record.save(update_fields=['status', 'matchups_created', 'error_message', 'completed_at'])
 
 
 def validate_draw_inputs(season: Season, entries: list[SeasonTeam], *, reset: bool) -> None:

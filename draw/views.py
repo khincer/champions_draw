@@ -55,7 +55,7 @@ from .serializers import (
 	_normalize_team_name,
 	serialize_league_match,
 )
-from .services.draw import DrawError, generate_season_draw
+from .services.draw import DrawError, DrawScheduleProtectedError, generate_season_draw
 from .services.interactive_draw import pick_team, start_or_resume
 from .services.match_details import (
 	build_header,
@@ -218,28 +218,27 @@ class SeasonDrawAPIView(APIView):
 		method = str(request.data.get('method', 'sat'))
 		reset = parse_bool(request.data.get('reset', False))
 
-		if reset:
-			Prediction.objects.filter(season=season).delete()
-
-		if method == 'interactive':
-			try:
+		try:
+			if method == 'interactive':
 				draw = start_or_resume(
 					season=season,
 					draw_seed=draw_seed,
 					player_name=player_name,
 					reset=reset,
 				)
-			except DrawError as exc:
-				return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-			return Response(interactive_state(season, draw), status=status.HTTP_200_OK)
+				return Response(interactive_state(season, draw), status=status.HTTP_200_OK)
 
-		try:
 			summary = generate_season_draw(
 				season,
 				draw_seed=draw_seed,
 				player_name=player_name,
 				reset=reset,
 				method=method,
+			)
+		except DrawScheduleProtectedError as exc:
+			return Response(
+				{'code': 'draw_has_saved_predictions', 'detail': str(exc)},
+				status=status.HTTP_409_CONFLICT,
 			)
 		except DrawError as exc:
 			return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
