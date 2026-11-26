@@ -1,5 +1,11 @@
+from uuid import uuid4
+
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Greatest, Least
+
+from .services.league_manager import MAX_GOALS, MAX_TEAMS
 
 
 class CompetitionChoices(models.TextChoices):
@@ -691,3 +697,73 @@ class TeamStatLeader(models.Model):
 
 	def __str__(self) -> str:
 		return f'{self.team.name} {self.competition} {self.metric}: {self.player_name} ({self.value})'
+
+
+class ManagedLeague(models.Model):
+	owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='managed_leagues')
+	name = models.CharField(max_length=100)
+	share_id = models.UUIDField(default=uuid4, unique=True, editable=False)
+	generated_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+	class Meta:
+		ordering = ['-id']
+
+	def __str__(self) -> str:
+		return self.name
+
+
+class ManagedLeagueTeam(models.Model):
+	league = models.ForeignKey(ManagedLeague, on_delete=models.CASCADE, related_name='teams')
+	name = models.CharField(max_length=80)
+
+	class Meta:
+		ordering = ['id']
+		constraints = [
+			models.UniqueConstraint(fields=['league', 'name'], name='managed_league_team_name_unique'),
+		]
+
+	def __str__(self) -> str:
+		return self.name
+
+
+class ManagedLeagueFixture(models.Model):
+	league = models.ForeignKey(ManagedLeague, on_delete=models.CASCADE, related_name='fixtures')
+	matchday = models.PositiveSmallIntegerField()
+	home_team = models.ForeignKey(ManagedLeagueTeam, on_delete=models.CASCADE, related_name='+')
+	away_team = models.ForeignKey(ManagedLeagueTeam, on_delete=models.CASCADE, related_name='+')
+	home_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+	away_goals = models.PositiveSmallIntegerField(null=True, blank=True)
+
+	class Meta:
+		ordering = ['matchday', 'id']
+		constraints = [
+			models.UniqueConstraint(
+				'league', Least('home_team_id', 'away_team_id'), Greatest('home_team_id', 'away_team_id'),
+				name='managed_league_fixture_pair_unique',
+			),
+			models.CheckConstraint(
+				condition=~models.Q(home_team=models.F('away_team')),
+				name='managed_league_fixture_distinct_teams',
+			),
+			models.CheckConstraint(
+				condition=models.Q(matchday__range=(1, MAX_TEAMS - 1)),
+				name='managed_league_fixture_matchday_range',
+			),
+			models.CheckConstraint(
+				condition=(
+					models.Q(home_goals__isnull=True, away_goals__isnull=True)
+					| models.Q(
+						home_goals__isnull=False, away_goals__isnull=False,
+						home_goals__range=(0, MAX_GOALS), away_goals__range=(0, MAX_GOALS),
+					)
+				),
+				name='managed_league_fixture_valid_scores',
+			),
+		]
+
+	def clean(self):
+		super().clean()
+		if self.league_id and ManagedLeagueTeam.objects.filter(
+			league_id=self.league_id, pk__in=[self.home_team_id, self.away_team_id],
+		).count() != 2:
+			raise ValidationError('Both fixture teams must belong to this league.')

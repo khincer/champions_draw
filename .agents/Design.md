@@ -1,10 +1,12 @@
 # Champions Draw — Design System
 
-> **Status:** Initial implementation guide
+> **Status:** Historical — the design direction is implemented; the shipped token scale in `frontend/src/styles.css` is authoritative (see the token naming note below).
 > **Reference:** OneSports — Football Dashboard (Figma Community)
 > **Project:** Champions Draw
 >
 > **Note:** The supplied Figma file could not be inspected directly from this environment. This document defines an implementation-ready football dashboard design direction inspired by the reference title and intended for validation against the actual Figma screens. Replace any inferred values with exact Figma measurements when screenshots or exported assets are available.
+
+> **Token naming note:** the `--color-*` names proposed in §3.2 were superseded during implementation. The shipped token layer lives in `frontend/src/styles.css` and uses shorter names (`--bg`, `--surface`, `--ink`, `--muted`, `--line`, `--green-primary`, `--blue`, `--status-ink`, `--green-ink`, …). Treat `frontend/src/styles.css` as authoritative for token names and values; the rest of this document still describes the design *intent* (principles, layout, component contracts).
 
 ## 1. Product direction
 

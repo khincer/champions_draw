@@ -1,10 +1,12 @@
 import { render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import './styles.css';
+import './league-manager-entry.css';
 import CareerApp, { hasSavedCareer } from './views/CareerApp';
 import PredictionApp from './views/PredictionApp';
 import DrawAnimationStage from './views/DrawAnimationStage';
 import Homepage from './views/Homepage';
+import LeagueManager from './views/LeagueManager';
 import InteractiveDraft from './views/InteractiveDraft';
 import MatchDetailView from './views/MatchDetailView';
 import MatchdayBoard from './views/MatchdayBoard';
@@ -17,6 +19,7 @@ import TeamDetailPage from './views/TeamDetailPage';
 import TeamInspector from './views/TeamInspector';
 import TeamsBrowser from './views/TeamsBrowser';
 import Button from './components/Button';
+import LanguageMenu from './components/LanguageMenu';
 import MessageBar from './components/MessageBar';
 import MobileNav from './components/MobileNav';
 import { EmptyState, ErrorState, Skeleton } from './components/States';
@@ -28,7 +31,7 @@ import { clearLocal, loadLocal } from './lib/predictionStorage';
 import { apiFetch } from './lib/api';
 import { inHomeRange } from './lib/format';
 import { groupBy } from './lib/groupBy';
-import { I18nProvider, useI18n } from './i18n';
+import { I18nProvider, LOCALE_OPTIONS, useI18n } from './i18n';
 
 const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
 
@@ -581,9 +584,27 @@ function App() {
   );
 }
 
+function LeagueManagerEntry({ shareId }) {
+  const { locale, setLocale, t } = useI18n();
+  return (
+    <>
+      <a className="skip-link" href="#main-content">{t('a11y.skipToMainContent')}</a>
+      <nav className="workspace league-manager-shell-nav" aria-label={t('a11y.primaryNav')}>
+        <a href="/">{t('nav.home')}</a>
+        <LanguageMenu items={LOCALE_OPTIONS} value={locale} onChange={setLocale} label={t('settings.language')} />
+      </nav>
+      <main id="main-content" tabIndex={-1}>
+        <LeagueManager shareId={shareId} />
+      </main>
+    </>
+  );
+}
+
+const leagueManagerPath = window.location.pathname.match(/^\/league-manager\/(?:share\/([0-9a-f-]+)\/)?$/i);
+
 render(
   <I18nProvider>
-    <App />
+    {leagueManagerPath ? <LeagueManagerEntry shareId={leagueManagerPath[1] ?? null} /> : <App />}
   </I18nProvider>,
   document.getElementById('app'),
 );

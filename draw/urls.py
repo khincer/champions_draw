@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import include, path
 
 from .predictions_views import (
     KnockoutBracketAPIView,
@@ -38,6 +38,7 @@ from .views import (
 app_name = 'draw'
 
 urlpatterns = [
+    path('league-manager/', include('draw.league_manager_urls')),
     path('seasons/', SeasonListAPIView.as_view(), name='season-list'),
     path('seasons/<int:pk>/seed/', SeasonSeedingAPIView.as_view(), name='season-seed'),
     path('seasons/<int:pk>/draw/', SeasonDrawAPIView.as_view(), name='season-draw'),

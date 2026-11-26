@@ -68,7 +68,7 @@ class DrawApiTests(APITestCase):
 		self.assertEqual(seeded_entries[-1].seeding_position, 36)
 
 	def test_seed_endpoint_assigns_pots_and_returns_payload(self):
-		User.objects.create_user(username='operator', password='password')
+		User.objects.create_user(username='operator', password='password', is_staff=True)
 		self.client.login(username='operator', password='password')
 
 		response = self.client.post(reverse('draw:season-seed', args=[self.season.pk]))
@@ -220,8 +220,8 @@ class DrawApiTests(APITestCase):
 
 		self.assertIn(response.status_code, [401, 403])
 
-	def test_seed_endpoint_accepts_authenticated_user(self):
-		User.objects.create_user(username='operator', password='password')
+	def test_seed_endpoint_accepts_staff_user(self):
+		User.objects.create_user(username='operator', password='password', is_staff=True)
 		self.client.login(username='operator', password='password')
 
 		response = self.client.post(reverse('draw:season-seed', args=[self.season.pk]))

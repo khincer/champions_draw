@@ -1,4 +1,4 @@
-import { Home, LayoutGrid, Swords, Target, Trophy, UserRound } from 'lucide-preact';
+import { ClipboardList, Home, LayoutGrid, Swords, Target, Trophy, UserRound } from 'lucide-preact';
 import championsLeagueLogoUrl from '../../assets/uefa-champions-league-logo.svg';
 import LanguageMenu from '../LanguageMenu';
 import { LOCALE_OPTIONS, useI18n } from '../../i18n';
@@ -59,6 +59,10 @@ export default function SiteNav({ view, setView, setActiveTab }) {
           <LayoutGrid size={18} />
           {t('nav.leagues')}
         </button>
+        <a className="site-nav-link league-manager-nav-link" href="/league-manager/">
+          <ClipboardList size={18} aria-hidden="true" />
+          {t('nav.leagueManager')}
+        </a>
       </div>
       <div className="site-nav-footer">
         <LanguageMenu

@@ -1,0 +1,23 @@
+.league-manager-shell-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.league-manager-shell-nav > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--blue-dark);
+}
+
+.league-manager-nav-link {
+  text-decoration: none;
+}
+
+.league-manager-nav-link:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}

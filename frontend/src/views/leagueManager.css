@@ -1,0 +1,347 @@
+.league-manager {
+  display: grid;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: 78rem;
+  min-width: 0;
+  margin-inline: auto;
+  padding: clamp(12px, 3vw, 28px);
+}
+
+.league-manager :is(h1, h2, h3, p) {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.lm-header {
+  padding-block: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.lm-header h1 {
+  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  letter-spacing: -.025em;
+}
+
+.lm-header p {
+  margin-top: var(--space-2);
+  color: var(--muted);
+}
+
+.lm-competition {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  align-items: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.lm-panel {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.lm-panel :is(h2, h3) {
+  font-size: var(--font-h3);
+}
+
+.lm-account {
+  width: min(100%, 28rem);
+}
+
+.lm-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.lm-owner-toolbar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2) var(--space-4);
+}
+
+.league-manager .lm-league-switcher {
+  flex: 1 1 12rem;
+  max-width: 24rem;
+}
+
+.lm-owner-toolbar small {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
+
+.lm-create {
+  width: min(100%, 38rem);
+}
+
+.lm-share summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.lm-share summary::-webkit-details-marker {
+  display: none;
+}
+
+.lm-share .lm-share-content {
+  position: absolute;
+  z-index: 3;
+  inset-block-start: calc(100% + var(--space-2));
+  inset-inline-end: 0;
+  width: min(23rem, 100%);
+}
+
+.lm-share[open] summary {
+  background: var(--surface-soft);
+  border-color: var(--blue);
+}
+
+.lm-scoreboard {
+  grid-template-columns: minmax(0, 1fr) minmax(25rem, .95fr);
+  grid-template-areas: "scores standings";
+}
+
+.lm-score-entry {
+  grid-area: scores;
+}
+
+.lm-score-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.league-manager .lm-progress {
+  width: auto;
+  color: var(--muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.lm-progress progress {
+  width: 100%;
+  min-width: 7rem;
+  height: .375rem;
+  accent-color: var(--blue);
+}
+
+.lm-standings {
+  grid-area: standings;
+  position: sticky;
+  top: var(--space-2);
+  z-index: 2;
+}
+
+.lm-standings .lm-table-scroll {
+  max-height: min(34rem, 75dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.lm-standings .lm-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.lm-form {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  min-width: 0;
+}
+
+.league-manager label {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.league-manager :is(input, textarea, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--muted);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 400;
+}
+
+.league-manager textarea {
+  resize: vertical;
+}
+
+.league-manager :focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.league-manager :is(.button, a) {
+  min-height: 44px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.league-manager a {
+  display: inline-flex;
+  align-items: center;
+  color: var(--blue-dark);
+  text-decoration: underline;
+  text-underline-offset: .18em;
+}
+
+.league-manager :is(.lm-muted, .lm-panel > p) {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.lm-fixture-list {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.lm-fixture {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.lm-fixture-line, .lm-goals {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+
+.lm-fixture-line {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+.lm-fixture-line strong:last-child {
+  text-align: right;
+}
+
+.lm-goals {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lm-score {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lm-bye, .lm-notice {
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 2px solid var(--green);
+  background: var(--surface-soft);
+}
+
+.lm-table-scroll {
+  overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.league-manager .lm-table {
+  width: 100%;
+  min-width: 25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.league-manager .lm-table :is(th, td) {
+  padding-inline: var(--space-2);
+  white-space: nowrap;
+}
+
+.league-manager .lm-table .tbl-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 850px) {
+  .lm-competition {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lm-scoreboard {
+    grid-template-areas: "standings" "scores";
+  }
+
+  .lm-standings.lm-panel {
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .lm-standings .lm-table-scroll {
+    max-height: min(22dvh, 8.5rem);
+    min-height: 3rem;
+  }
+
+  .league-manager .lm-standings .lm-table {
+    min-width: 0;
+  }
+
+  .lm-standings .lm-table tr > :nth-child(n + 4) {
+    display: none;
+  }
+
+  .league-manager .lm-standings .lm-table th.tbl-team,
+  .league-manager .lm-standings .lm-table td.tbl-team {
+    width: 100%;
+  }
+
+  .lm-score-entry :is(button, input, select) {
+    scroll-margin-block-start: calc(min(22dvh, 8.5rem) + 4rem);
+  }
+}
+
+@media (max-width: 850px) and (max-height: 460px) {
+  .lm-standings .lm-table-scroll {
+    max-height: 15dvh;
+  }
+
+  .lm-score-entry :is(button, input, select) {
+    scroll-margin-block-start: calc(15dvh + 4rem);
+  }
+}
+
+@media (max-width: 360px) {
+  .lm-panel {
+    padding: var(--space-3);
+  }
+
+  .lm-goals {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
