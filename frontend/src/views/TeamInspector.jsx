@@ -1,10 +1,12 @@
 import { Home, Plane, Users } from 'lucide-preact';
 import Crest from '../components/Crest';
 import { StateMessage } from '../components/States';
+import { useI18n } from '../i18n';
 
 export default function TeamInspector({ team, teams, selectedTeamId, setSelectedTeamId, matchups, interactive = false, revealedOpponentIds = new Set() }) {
+  const { t } = useI18n();
   if (!team) {
-    return <aside className="inspector"><StateMessage icon={Users} title="No team selected" text="Choose a team from a pot." /></aside>;
+    return <aside className="inspector"><StateMessage icon={Users} title={t('draw.noTeamSelected')} text={t('draw.chooseTeam')} /></aside>;
   }
   const visibleMatchups =
     interactive && revealedOpponentIds.size
@@ -17,7 +19,7 @@ export default function TeamInspector({ team, teams, selectedTeamId, setSelected
   return (
     <aside className="inspector">
       <label className="team-picker">
-        <span>Inspect team</span>
+        <span>{t('draw.inspectTeam')}</span>
         <select value={selectedTeamId || ''} onChange={(event) => setSelectedTeamId(Number(event.currentTarget.value))}>
           {teams.map((entry) => (
             <option value={entry.id} key={entry.id}>
@@ -30,10 +32,10 @@ export default function TeamInspector({ team, teams, selectedTeamId, setSelected
         <Crest team={team} size="lg" />
         <span>{team.association.name}</span>
         <h2>{team.name}</h2>
-        <p>Pot {team.pot} - Seed {team.seeding_position} - Coeff. {team.uefa_club_coefficient}</p>
+        <p>{t('draw.inspectorMeta', { pot: team.pot, seed: team.seeding_position, coeff: team.uefa_club_coefficient })}</p>
       </div>
       <div className="opponent-list">
-        <strong>Opponents</strong>
+        <strong>{t('draw.opponents')}</strong>
         {visibleMatchups.length ? (
           visibleMatchups
             .sort((a, b) => a.matchday - b.matchday)
@@ -47,7 +49,7 @@ export default function TeamInspector({ team, teams, selectedTeamId, setSelected
                   <strong>{opponent.name}</strong>
                   <em className="home-away">
                     {isHome ? <Home size={12} /> : <Plane size={12} />}
-                    <span>Pot {opponent.pot}</span>
+                    <span>{t('draw.pot', { pot: opponent.pot })}</span>
                   </em>
                 </div>
               );
@@ -55,8 +57,8 @@ export default function TeamInspector({ team, teams, selectedTeamId, setSelected
         ) : (
           <p className="muted">
             {interactive
-              ? 'Pick this team in the interactive draw to lock its opponents.'
-              : 'Run a simulation to inspect this team\'s eight fixtures.'}
+              ? t('draw.pickToLock')
+              : t('draw.runToInspect')}
           </p>
         )}
       </div>

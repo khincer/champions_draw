@@ -3,30 +3,30 @@ import { StateMessage } from '../components/States';
 import { useI18n } from '../i18n';
 
 const STATUS_CUE = {
-  completed: { Icon: Check, label: 'Completed' },
-  failed: { Icon: X, label: 'Failed' },
-  running: { Icon: Loader, label: 'Running' },
+  completed: { Icon: Check, labelKey: 'draw.completed' },
+  failed: { Icon: X, labelKey: 'draw.failed' },
+  running: { Icon: Loader, labelKey: 'draw.runningStatus' },
 };
 
 function cueFor(status) {
   if (STATUS_CUE[status]) return STATUS_CUE[status];
-  return { Icon: Loader, label: status ? status[0].toUpperCase() + status.slice(1) : 'Pending' };
+  return { Icon: Loader, labelKey: 'draw.pending' };
 }
 
 export default function PlayersRuns({ draws }) {
-  const { formatDate } = useI18n();
+  const { t, formatDate } = useI18n();
   return (
     <section className="history-list">
       {draws.length ? (
         draws.map((draw) => {
           const status = String(draw.status || 'pending').toLowerCase();
-          const { Icon, label } = cueFor(status);
+          const { Icon, labelKey } = cueFor(status);
           return (
             <article className="history-row" key={draw.id}>
               <span className={`status-dot ${status}`} aria-hidden="true">
                 <Icon size={10} strokeWidth={3.5} />
               </span>
-              <span className="sr-only">{label}</span>
+              <span className="sr-only">{t(labelKey)}</span>
               <div>
                 <strong>{draw.player_name || 'Guest player'}</strong>
                 <span>{draw.draw_seed} · {draw.method} - {draw.status} - {draw.matchups_created} fixtures - {formatDate(draw.completed_at)}</span>
@@ -36,7 +36,7 @@ export default function PlayersRuns({ draws }) {
           );
         })
       ) : (
-        <StateMessage icon={History} title="No player runs yet" text="Run the first simulation and it will appear here." />
+        <StateMessage icon={History} title={t('draw.noRuns')} text={t('draw.noRunsText')} />
       )}
     </section>
   );

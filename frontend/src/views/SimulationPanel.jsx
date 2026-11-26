@@ -1,5 +1,6 @@
 import { Play } from 'lucide-preact';
 import Button from '../components/Button';
+import { useI18n } from '../i18n';
 
 export default function SimulationPanel({
   playerName,
@@ -12,28 +13,26 @@ export default function SimulationPanel({
   working,
   generateDraw,
 }) {
+  const { t } = useI18n();
   return (
     <section className="command-band">
       <div>
-        <h2 className="command-band-title">Run your Champions League simulation</h2>
-        <p>
-          Enter your player name, choose a season, and publish a league-phase prediction. Every run is saved so other
-          players can compare fixtures, pots, and outcomes.
-        </p>
+        <h2 className="command-band-title">{t('draw.simulationTitle')}</h2>
+        <p>{t('draw.simulationText')}</p>
       </div>
       <div className="draw-controls">
         <label className="seed-input">
-          <span>Player name</span>
+          <span>{t('draw.playerName')}</span>
           <input
             value={playerName}
             maxLength={80}
-            placeholder="Your name"
+            placeholder={t('picks.yourName')}
             onInput={(event) => setPlayerName(event.currentTarget.value)}
           />
         </label>
         <label className="seed-input">
-          <span>Season year</span>
-          <select value={selectedSeasonId} onChange={(event) => setSelectedSeasonId(event.currentTarget.value)}>
+          <span>{t('draw.seasonYear')}</span>
+          <select disabled={working} value={selectedSeasonId} onChange={(event) => setSelectedSeasonId(event.currentTarget.value)}>
             {seasons.map((season) => (
               <option key={season.id} value={season.id}>
                 {season.name}
@@ -42,15 +41,15 @@ export default function SimulationPanel({
           </select>
         </label>
         <label className="seed-input">
-          <span>Draw method</span>
+          <span>{t('draw.drawMethod')}</span>
           <select value={drawMethod} onChange={(event) => setDrawMethod(event.currentTarget.value)}>
-            <option value="sequential">Sequential (UEFA-style)</option>
-            <option value="interactive">Interactive (pick by pick)</option>
+            <option value="sequential">{t('draw.sequential')}</option>
+            <option value="interactive">{t('draw.interactive')}</option>
           </select>
         </label>
         <Button variant="primary" disabled={working || !selectedSeasonId} onClick={() => generateDraw()}>
           <Play size={16} />
-          {working ? 'Running' : 'Run simulation'}
+          {working ? t('draw.running') : t('draw.runSimulation')}
         </Button>
       </div>
     </section>

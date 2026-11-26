@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import Crest from '../components/Crest';
 import { ErrorState } from '../components/States';
 import { apiFetch } from '../lib/api';
+import errorText from '../lib/errorText';
+import { useI18n } from '../i18n';
 
-const STATUS_LABEL = { FINISHED: 'Final', IN_PLAY: 'Live', SCHEDULED: 'Kickoff' };
+const STATUS_LABEL = { FINISHED: 'matchDetail.final', IN_PLAY: 'matchDetail.live', SCHEDULED: 'matchDetail.kickoff' };
 
 export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack }) {
+  const { t, locale } = useI18n();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -29,7 +32,7 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
     setLoading(true);
     apiFetch(detailUrl)
       .then((payload) => { if (!cancelled) setData(payload); })
-      .catch((err) => { if (!cancelled) setError(err.message); })
+      .catch((err) => { if (!cancelled) setError(err.code || 'unknown'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [detailUrl, reloadToken]);
@@ -68,8 +71,8 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
   const header = data?.header;
   const score = status === 'IN_PLAY' && liveScore ? liveScore : header?.score;
   const dialogName = header
-    ? `Match details: ${header.home_team.name} versus ${header.away_team.name}`
-    : 'Match details';
+    ? t('matchDetail.dialogName', { home: header.home_team.name, away: header.away_team.name })
+    : t('matchDetail.dialogNameFallback');
 
   function trapTab(event) {
     if (event.key !== 'Tab') return;
@@ -107,12 +110,12 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
         className="back-button match-detail-back"
         onClick={onBack}
       >
-        ← Back
+        ← {t('matchDetail.back')}
       </button>
 
       {loading && (
         <div className="match-detail-skeleton">
-          <span className="match-detail-sr" role="status">Loading match details</span>
+          <span className="match-detail-sr" role="status">{t('matchDetail.loading')}</span>
           <div className="md-skel md-skel-score" />
           <div className="md-skel md-skel-line" />
           <div className="md-skel md-skel-line" />
@@ -121,10 +124,10 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
 
       {!loading && error && (
         <ErrorState
-          title="Couldn't load match details"
-          detail={error}
+          title={t('matchDetail.loadFailed')}
+          detail={errorText(t, error)}
           onRetry={() => setReloadToken((token) => token + 1)}
-          retryLabel="Retry match details"
+          retryLabel={t('matchDetail.retry')}
         />
       )}
 
@@ -139,7 +142,7 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
               <span
                 className={`match-detail-score${status === 'IN_PLAY' ? ' live' : ''}`}
                 aria-live="polite"
-                aria-label={score ? `${score.home_goals} to ${score.away_goals}` : 'No score yet'}
+                aria-label={score ? t('matchDetail.scoreLabel', { home: score.home_goals, away: score.away_goals }) : t('matchDetail.noScore')}
               >
                 {score ? (
                   <>
@@ -160,10 +163,10 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
               <span className="matchday-chip">MD{header.matchday}</span>
               <span className={`match-detail-pill ${(status || '').toLowerCase()}`}>
                 {status === 'IN_PLAY' && <span className="live-dot" aria-hidden="true" />}
-                {STATUS_LABEL[status] || status}
+                {t(STATUS_LABEL[status] || 'matchDetail.final')}
               </span>
               <time className="match-detail-kickoff" dateTime={header.kickoff}>
-                {new Date(header.kickoff).toLocaleString()}
+                {new Date(header.kickoff).toLocaleString(locale)}
               </time>
             </div>
           </header>
@@ -171,18 +174,18 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
           <div className="match-detail-body">
             {data.detail ? (
               <section className="match-detail-info" aria-labelledby="match-detail-info-title">
-                <h2 id="match-detail-info-title">Match Information</h2>
+                <h2 id="match-detail-info-title">{t('matchDetail.matchInformation')}</h2>
                 {('venue' in data.detail || data.detail.half_time) && (
                   <dl className="match-detail-facts">
                     {'venue' in data.detail && (
                       <>
-                        <dt>Venue</dt>
-                        <dd>{data.detail.venue || 'Not available'}</dd>
+                        <dt>{t('matchDetail.venue')}</dt>
+                        <dd>{data.detail.venue || t('matchDetail.notAvailable')}</dd>
                       </>
                     )}
                     {data.detail.half_time && (
                       <>
-                        <dt>Half-time</dt>
+                        <dt>{t('matchDetail.halfTime')}</dt>
                         <dd>
                           {data.detail.half_time.home_goals} : {data.detail.half_time.away_goals}
                         </dd>
@@ -190,7 +193,7 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
                     )}
                   </dl>
                 )}
-                <h3>Referees</h3>
+                <h3>{t('matchDetail.referees')}</h3>
                 {data.detail.referees?.length ? (
                   <ul className="match-detail-referees">
                     {data.detail.referees.map((referee, index) => (
@@ -201,17 +204,17 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
                     ))}
                   </ul>
                 ) : (
-                  <p className="muted">No referee information available.</p>
+                  <p className="muted">{t('matchDetail.noReferees')}</p>
                 )}
                 {'odds' in data.detail && (
                   <>
-                    <h3>Odds</h3>
+                    <h3>{t('matchDetail.odds')}</h3>
                     <table className="match-detail-odds">
                       <thead>
                         <tr>
-                          <th scope="col">Home</th>
-                          <th scope="col">Draw</th>
-                          <th scope="col">Away</th>
+                          <th scope="col">{t('matchDetail.home')}</th>
+                          <th scope="col">{t('matchDetail.draw')}</th>
+                          <th scope="col">{t('matchDetail.away')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -227,7 +230,7 @@ export default function MatchDetailView({ fixtureId, seasonId, leagueId, onBack 
               </section>
             ) : (
               <p className="match-detail-note">
-                {data.detail_error || 'Match details are not available.'}
+                {data.detail_error || t('matchDetail.detailsUnavailable')}
               </p>
             )}
 

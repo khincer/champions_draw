@@ -198,15 +198,18 @@ export default function Homepage({ matches, matchesStatus, matchesError, onRetry
   return (
     <div className="homepage">
       <header className="home-intro">
-        <p className="home-greeting">{name ? t('home.welcomeBack', { name }) : t('home.welcome')}</p>
+        <div>
+          <h1 className="home-greeting">{t('home.title')}</h1>
+          {name && <p className="home-intro-sub">{t('home.welcomeBack', { name })}</p>}
+        </div>
         <section className="home-quick-actions" aria-label={t('a11y.quickActions')}>
-        {QUICK_ACTIONS.map(({ key, labelKey, icon: Icon }) => (
-          <Button key={key} variant="secondary" onClick={() => onNavigate(key)}>
-            <Icon size={16} aria-hidden="true" />
-            {t(labelKey)}
-          </Button>
-        ))}
-      </section>
+          {QUICK_ACTIONS.map(({ key, labelKey, icon: Icon }) => (
+            <Button key={key} variant="secondary" onClick={() => onNavigate(key)}>
+              <Icon size={16} aria-hidden="true" />
+              {t(labelKey)}
+            </Button>
+          ))}
+        </section>
       </header>
 
       <div className="home-live-slot">

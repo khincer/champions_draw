@@ -2,7 +2,6 @@ import { render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import './styles.css';
 import './league-manager-entry.css';
-import CareerApp, { hasSavedCareer } from './views/CareerApp';
 import PredictionApp from './views/PredictionApp';
 import DrawAnimationStage from './views/DrawAnimationStage';
 import Homepage from './views/Homepage';
@@ -27,10 +26,12 @@ import AppFooter from './components/shell/AppFooter';
 import SiteNav from './components/shell/SiteNav';
 import ViewTabs from './components/shell/ViewTabs';
 import WorkspaceHeader from './components/shell/WorkspaceHeader';
-import { clearLocal, loadLocal } from './lib/predictionStorage';
+import { loadLocal } from './lib/predictionStorage';
 import { apiFetch } from './lib/api';
 import { inHomeRange } from './lib/format';
 import { groupBy } from './lib/groupBy';
+import { selectOfficialSeasonId, selectSimulatorSeasonId, simulatorSeasons } from './lib/seasonSelection';
+import { getTheme, setTheme } from './lib/theme';
 import { I18nProvider, LOCALE_OPTIONS, useI18n } from './i18n';
 
 const PLAYER_STORAGE_KEY = 'champions_draw_player_name';
@@ -70,6 +71,7 @@ function errorText(t, value) {
 function App() {
   const { t } = useI18n();
   const [view, setView] = useState('home');
+  const [theme, setThemeState] = useState(getTheme);
   const [homeMatches, setHomeMatches] = useState([]);
   const [homeMatchesStatus, setHomeMatchesStatus] = useState('idle');
   const [homeMatchesError, setHomeMatchesError] = useState('');
@@ -85,16 +87,18 @@ function App() {
   const [viewTeam, setViewTeam] = useState(null);
 
   const [seasons, setSeasons] = useState([]);
+  const [officialSeasonId, setOfficialSeasonId] = useState('');
   const [selectedSeasonId, setSelectedSeasonId] = useState('');
+  const eligibleSeasons = useMemo(() => simulatorSeasons(seasons), [seasons]);
   const [seasonState, setSeasonState] = useState(null);
+  const seasonStateRequest = useRef(0);
   const [seasonStateStatus, setSeasonStateStatus] = useState('idle');
   const [seasonStateError, setSeasonStateError] = useState('');
   const [activeTab, setActiveTab] = useState('home');
   const [selectedTeamId, setSelectedTeamId] = useState(null);
   const [teamDetailId, setTeamDetailId] = useState(null);
   const [playerName, setPlayerName] = useState(readStoredPlayerName);
-  const [drawSeed, setDrawSeed] = useState('prediction-1');
-  const [drawMethod, setDrawMethod] = useState('sat');
+  const [drawMethod, setDrawMethod] = useState('sequential');
   const [interactiveState, setInteractiveState] = useState(null);
   const [revealedOpponentIds, setRevealedOpponentIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
@@ -104,7 +108,6 @@ function App() {
   const [drawError, setDrawError] = useState('');
   const [notice, setNotice] = useState('');
   const [predictionApi] = useState({});
-  const [careerAvailable, setCareerAvailable] = useState(() => hasSavedCareer());
   const [matchDetail, setMatchDetail] = useState(null);
   const detailReturnFocusRef = useRef(null);
   const detailOpenerRef = useRef(null);
@@ -129,12 +132,30 @@ function App() {
     if (next === 'workspace') setActiveTab('simulate');
   }
 
+  function switchSimulatorSeason(nextId) {
+    if (nextId === selectedSeasonId) return;
+    seasonStateRequest.current += 1;
+    setSeasonState(null);
+    setSeasonStateStatus('idle');
+    setInteractiveState(null);
+    setRevealedOpponentIds(new Set());
+    setSelectedTeamId(null);
+    setTeamDetailId(null);
+    setDrawError('');
+    setNotice('');
+    setSelectedSeasonId(nextId);
+  }
+
+  function toggleTheme() {
+    setThemeState(setTheme(theme === 'dark' ? 'light' : 'dark'));
+  }
+
   useEffect(() => {
     loadInitialData();
   }, []);
 
   useEffect(() => {
-    if (view !== 'home' || !selectedSeasonId) return undefined;
+    if (view !== 'home') return undefined;
     loadRealMatches();
     const timer = window.setInterval(() => {
       /* Only a match that has already kicked off can be awaiting a result.
@@ -146,10 +167,10 @@ function App() {
       )) loadRealMatches();
     }, 60_000);
     return () => window.clearInterval(timer);
-  }, [view, selectedSeasonId]);
+  }, [view]);
 
   useEffect(() => {
-    if (view !== 'home' || !selectedSeasonId) return undefined;
+    if (view !== 'home') return undefined;
     const anyAwaiting = homeMatchesRef.current.some((m) => m.closed && !m.result);
     if (!anyAwaiting) return undefined;
     const pollLive = async () => {
@@ -179,7 +200,7 @@ function App() {
     pollLive();
     const timer = window.setInterval(pollLive, 30_000);
     return () => window.clearInterval(timer);
-  }, [view, selectedSeasonId, homeMatches]);
+  }, [view, homeMatches]);
 
   useEffect(() => {
     if ((view === 'teams' || view === 'picks') && leaguesStatus === 'idle') loadLeagues();
@@ -221,9 +242,8 @@ function App() {
     try {
       const seasonPayload = await apiFetch('/seasons/');
       setSeasons(seasonPayload);
-      
-      const activeSeason = seasonPayload[0];
-      if (activeSeason) setSelectedSeasonId(String(activeSeason.id));
+      setSelectedSeasonId((current) => selectSimulatorSeasonId(seasonPayload, current));
+      setOfficialSeasonId((current) => selectOfficialSeasonId(seasonPayload, current));
     } catch (err) {
       setError(err.code);
     } finally {
@@ -259,11 +279,13 @@ function App() {
   }
 
   async function loadSeasonState(seasonId) {
+    const request = ++seasonStateRequest.current;
     setError('');
     setSeasonStateStatus('loading');
     setSeasonStateError('');
     try {
       const payload = await apiFetch(`/ui/seasons/${seasonId}/state/`);
+      if (request !== seasonStateRequest.current) return null;
       setSeasonState(payload);
       setSeasonStateStatus('success');
       if (!selectedTeamId && payload.teams.length) {
@@ -271,26 +293,26 @@ function App() {
       }
       return payload;
     } catch (err) {
+      if (request !== seasonStateRequest.current) return null;
       setSeasonStateStatus('error');
       setSeasonStateError(err.code);
       return null;
     }
   }
 
-  async function generateDraw({ fresh = false } = {}) {
-    if (!selectedSeasonId) return;
+  async function generateDraw() {
+    const season = eligibleSeasons.find((item) => String(item.id) === selectedSeasonId);
+    if (!season || working) return;
     setActiveTab('simulate');
     setDrawAnimation({ isActive: true, phase: 'pots', revealedCount: 0 });
     setWorking(true);
     setDrawError('');
     setNotice('');
     try {
-      const season = seasons.find((s) => String(s.id) === String(selectedSeasonId));
-      const seed = season ? season.name : `prediction-${Date.now()}`;
+      const seed = season.name;
       const normalizedPlayer = playerName.trim() || 'Guest player';
       writeStoredPlayerName(normalizedPlayer);
       setPlayerName(normalizedPlayer);
-      setDrawSeed(seed);
 
       const payload = await apiFetch(`/seasons/${selectedSeasonId}/draw/`, {
         method: 'POST',
@@ -301,11 +323,6 @@ function App() {
           method: drawMethod,
         }),
       });
-
-      // A fresh simulation must not inherit the previous run's predictions:
-      // the draw seed never changes, so loadLocal's
-      // drawSeed-mismatch discard can't tell them apart.
-      clearLocal(selectedSeasonId, normalizedPlayer);
 
       if (drawMethod === 'interactive') {
         setDrawAnimation({ isActive: false, phase: 'idle', revealedCount: 0 });
@@ -358,7 +375,7 @@ function App() {
     );
   }, [selectedTeam, interactiveState, seasonState]);
 
-  const latestDraw = seasonState?.draws?.[0];
+  const latestDraw = seasonState?.draws?.find(({ status }) => status === 'COMPLETED');
   const latestDrawSeed = latestDraw?.draw_seed;
   const teamPredictions = useMemo(
     () => (latestDrawSeed ? (loadLocal(selectedSeasonId, playerName, latestDrawSeed).matchPredictions || {}) : {}),
@@ -370,7 +387,7 @@ function App() {
   return (
     <div className="app-layout">
       <a className="skip-link" href="#main-content">{t('a11y.skipToMainContent')}</a>
-      <SiteNav view={view} setView={setView} setActiveTab={setActiveTab} />
+      <SiteNav view={view} setView={setView} setActiveTab={setActiveTab} theme={theme} onToggleTheme={toggleTheme} />
       <main className="app-main" id="main-content" aria-label={t('a11y.mainContent')} tabIndex={-1}>
         <div hidden={!!matchDetail}>
         {view === 'home' && (
@@ -385,7 +402,7 @@ function App() {
               onOpenMatch={openMatch}
               onNavigate={selectView}
               playerName={playerName}
-              seasonId={selectedSeasonId}
+              seasonId={officialSeasonId}
               detailReturnFocusRef={detailReturnFocusRef}
             />
             <AppFooter />
@@ -417,8 +434,8 @@ function App() {
         {view === 'real' && (
           <RealDrawView
             seasons={seasons}
-            seasonId={selectedSeasonId}
-            setSeasonId={setSelectedSeasonId}
+            seasonId={officialSeasonId}
+            setSeasonId={setOfficialSeasonId}
             playerName={playerName}
             setPlayerName={setPlayerName}
             apiFetch={apiFetch}
@@ -443,7 +460,7 @@ function App() {
             <h1 className="view-heading">{t('shell.workspaceTitle')}</h1>
             {loading ? (
               <Skeleton rows={6} label={t('shell.loadingPredictionLab')} />
-            ) : !seasons.length ? (
+            ) : !eligibleSeasons.length ? (
               error ? (
                 <ErrorState title={t('states.seasonsLoadFailed')} detail={errorText(t, error)} onRetry={loadInitialData} />
               ) : (
@@ -484,9 +501,9 @@ function App() {
                     <SimulationPanel
                       playerName={playerName}
                       setPlayerName={setPlayerName}
-                      seasons={seasons}
+                      seasons={eligibleSeasons}
                       selectedSeasonId={selectedSeasonId}
-                      setSelectedSeasonId={setSelectedSeasonId}
+                      setSelectedSeasonId={switchSimulatorSeason}
                       drawMethod={drawMethod}
                       setDrawMethod={setDrawMethod}
                       working={working}
@@ -497,6 +514,7 @@ function App() {
 
                 {activeTab === 'predict' ? (
                   <PredictionApp
+                    key={JSON.stringify([selectedSeasonId, playerName.trim(), latestDraw?.id ?? latestDrawSeed ?? ''])}
                     seasonId={selectedSeasonId}
                     playerName={playerName}
                     seasonState={seasonState}
@@ -577,6 +595,8 @@ function App() {
       <MobileNav
         view={view}
         onSelectView={selectView}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         overlayOpen={!!matchDetail}
         tabs={view === 'workspace' ? <ViewTabs activeTab={activeTab} setActiveTab={setActiveTab} /> : null}
       />

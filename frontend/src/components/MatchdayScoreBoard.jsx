@@ -3,6 +3,7 @@ import Button from './Button';
 import ScoreInput from './ScoreInput';
 import { groupBy } from '../lib/groupBy';
 import { predictMatch } from '../lib/matchOdds';
+import { useI18n } from '../i18n';
 
 export default function MatchdayScoreBoard({
   matchups,
@@ -15,6 +16,7 @@ export default function MatchdayScoreBoard({
   onRandomize,
   onPredict,
 }) {
+  const { t } = useI18n();
   const byMatchday = groupBy(matchups || [], 'matchday');
   const md = String(currentMatchday);
   const fixtures = byMatchday[md] || [];
@@ -36,7 +38,7 @@ export default function MatchdayScoreBoard({
           disabled={currentMatchday <= 1}
           onClick={() => onMatchdayChange(currentMatchday - 1)}
         >
-          ← Previous
+          {t('predict.previous')}
         </Button>
 
         <div className="matchday-dots">
@@ -55,8 +57,8 @@ export default function MatchdayScoreBoard({
                 key={day}
                 className={`md-dot ${currentMatchday === day ? 'md-active' : ''} ${isDayComplete ? 'md-done' : ''}`}
                 onClick={() => onMatchdayChange(day)}
-                title={`Matchday ${day} (${dayScored}/${dayFixtures.length})`}
-                aria-label={`Matchday ${day}, ${dayScored} of ${dayFixtures.length} scored`}
+                title={t('predict.matchdayTitle', { day, scored: dayScored, total: dayFixtures.length })}
+                aria-label={t('predict.matchdayAria', { day, scored: dayScored, total: dayFixtures.length })}
               >
                 {day}
               </button>
@@ -68,7 +70,7 @@ export default function MatchdayScoreBoard({
           disabled={currentMatchday >= 8}
           onClick={() => onMatchdayChange(currentMatchday + 1)}
         >
-          Next →
+          {t('predict.next')}
         </Button>
       </div>
 
@@ -76,19 +78,19 @@ export default function MatchdayScoreBoard({
         <article className="matchday-card">
           <div className="matchday-card-head">
             <div>
-              <strong>Matchday {md}</strong>
-              <span className="muted">{scored}/{totalFixtures} scored</span>
+              <strong>{t('predict.matchday', { md })}</strong>
+              <span className="muted">{t('predict.scoredCount', { n: scored, m: totalFixtures })}</span>
             </div>
             <div className="matchday-head-actions">
               <Button onClick={() => onPredict(currentMatchday)}>
-                Predict
+                {t('predict.predict')}
               </Button>
               <Button onClick={() => onRandomize(currentMatchday)}>
-                Randomize
+                {t('predict.randomize')}
               </Button>
               {isComplete && (
                 <Button variant="primary" disabled={isSaving} onClick={onSave}>
-                  {isSaving ? 'Saving...' : 'Save Matchday'}
+                  {isSaving ? t('predict.saving') : t('predict.saveMatchday')}
                 </Button>
               )}
             </div>
@@ -132,13 +134,13 @@ export default function MatchdayScoreBoard({
                       <span><b>1</b> {Math.round(odds.pHome * 100)}%</span>
                       <span><b>X</b> {Math.round(odds.pDraw * 100)}%</span>
                       <span><b>2</b> {Math.round(odds.pAway * 100)}%</span>
-                      <span className="muted">pred. {odds.modal_score[0]}–{odds.modal_score[1]}</span>
+                      <span className="muted">{t('predict.predicted')} {odds.modal_score[0]}–{odds.modal_score[1]}</span>
                     </div>
                   </div>
                 );
               })
             ) : (
-              <span className="empty-row">No fixtures yet. Run a simulation first.</span>
+              <span className="empty-row">{t('predict.noFixtures')}</span>
             )}
           </div>
         </article>

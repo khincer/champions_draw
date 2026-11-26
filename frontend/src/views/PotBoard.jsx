@@ -1,13 +1,15 @@
 import Crest from '../components/Crest';
+import { useI18n } from '../i18n';
 
 export default function PotBoard({ pots, selectedTeamId, setSelectedTeamId, onTeamClick }) {
+  const { t } = useI18n();
   return (
     <section className="pot-grid">
       {['1', '2', '3', '4'].map((pot) => (
         <article className="pot-panel" key={pot}>
           <div className="pot-head">
-            <strong>Pot {pot}</strong>
-            <span>{pots[pot]?.length || 0} teams</span>
+            <strong>{t('draw.pot', { pot })}</strong>
+            <span>{t('draw.teamCount', { count: pots[pot]?.length || 0 })}</span>
           </div>
           {(pots[pot] || []).map((team) => (
             <button

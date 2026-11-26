@@ -6,6 +6,8 @@ import LeagueFixtureRow from './LeagueFixtureRow';
 import StandingsTable from './StandingsTable';
 import { EmptyState, ErrorState, Skeleton } from './States';
 import { apiFetch } from '../lib/api';
+import errorText from '../lib/errorText';
+import { useI18n } from '../i18n';
 import { buildLeaderboards, groupSquad } from '../lib/teamProfile';
 import { normTeamName } from '../lib/teams';
 
@@ -13,6 +15,7 @@ export default function TeamPage({
   team, league, standings, matches, leagues,
   standingsReq, fixturesReq, onRetryStandings, onRetryFixtures, onBack, onRefresh,
 }) {
+  const { t } = useI18n();
   const [ucl, setUcl] = useState(null);
   const [uclReq, setUclReq] = useState({ status: 'idle', error: '' });
   const uclTokenRef = useRef(0);
@@ -35,7 +38,7 @@ export default function TeamPage({
     } catch (err) {
       if (token !== uclTokenRef.current) return;
       setUcl(null);
-      setUclReq({ status: 'error', error: err.message });
+      setUclReq({ status: 'error', error: err.code || 'unknown' });
     }
   }
 
@@ -65,7 +68,7 @@ export default function TeamPage({
     } catch (err) {
       if (token !== teamTokenRef.current) return;
       setTeamData(null);
-      setTeamReq({ status: 'error', error: err.message });
+      setTeamReq({ status: 'error', error: err.code || 'unknown' });
     }
   }
 
@@ -101,10 +104,10 @@ export default function TeamPage({
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button className="back-button" onClick={onBack}>
           <ArrowLeft size={16} />
-          Back to {league ? league.name : 'league'}
+          {t('nav.backToLeague', { league: league ? league.name : '' })}
         </button>
         <button className="back-button" onClick={onRefresh}>
-          <RefreshCw size={14} /> Refresh
+          <RefreshCw size={14} /> {t('states.refresh')}
         </button>
       </div>
       <div className="team-page-header">
@@ -117,14 +120,14 @@ export default function TeamPage({
       <div className="standings-layout">
         <div>
           <h3 className="panel-title">
-            {isUcl ? 'Champions League table' : `League table — ${league ? league.name : ''}`}
+            {isUcl ? t('teams.championsLeagueTable') : t('teams.leagueTable', { league: league ? league.name : '' })}
           </h3>
           {standingsReq && (standingsReq.status === 'loading' || standingsReq.status === 'idle') ? (
-            <Skeleton rows={5} label="Loading league table" />
+            <Skeleton rows={5} label={t('teams.loadingLeagueTable')} />
           ) : standingsReq && standingsReq.status === 'error' ? (
             <ErrorState
-              title="League table could not load"
-              detail={standingsReq.error}
+              title={t('teams.leagueTableLoadFailed')}
+              detail={errorText(t, standingsReq.error)}
               onRetry={onRetryStandings}
             />
           ) : standing ? (
@@ -136,49 +139,49 @@ export default function TeamPage({
             />
           ) : (
             <EmptyState
-              title={`No table row for ${team.name}`}
-              text={`This team has no entry in the ${league ? league.name : 'league'} table. Refresh to check again.`}
-              action={<Button onClick={onRetryStandings}>Refresh</Button>}
+              title={t('teams.noTableRow', { team: team.name })}
+              text={t('teams.noTableRowText', { league: league ? league.name : '' })}
+              action={<Button onClick={onRetryStandings}>{t('states.refresh')}</Button>}
             />
           )}
 
           {fixturesReq && (fixturesReq.status === 'loading' || fixturesReq.status === 'idle') ? (
             <>
-              <h3 className="panel-title">Fixtures</h3>
-              <Skeleton rows={3} label="Loading fixtures" variant="fixture" />
+              <h3 className="panel-title">{t('teams.fixtures')}</h3>
+              <Skeleton rows={3} label={t('teams.loadingFixtures')} variant="fixture" />
             </>
           ) : fixturesReq && fixturesReq.status === 'error' ? (
             <>
-              <h3 className="panel-title">Fixtures</h3>
+              <h3 className="panel-title">{t('teams.fixtures')}</h3>
               <ErrorState
-                title="Fixtures could not load"
-                detail={fixturesReq.error}
+                title={t('teams.fixturesLoadFailed')}
+                detail={errorText(t, fixturesReq.error)}
                 onRetry={onRetryFixtures}
               />
             </>
           ) : (finished.length || upcoming.length) ? (
             <>
-              <h3 className="panel-title">Fixtures</h3>
+              <h3 className="panel-title">{t('teams.fixtures')}</h3>
               {finished.length ? (
                 <div className="fixture-mini-list">
-                  <div className="fixture-mini-heading">Recent results</div>
+                  <div className="fixture-mini-heading">{t('teams.recentResults')}</div>
                   {finished.slice(0, 6).map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
                 </div>
               ) : null}
               {upcoming.length ? (
                 <div className="fixture-mini-list">
-                  <div className="fixture-mini-heading">Upcoming</div>
+                  <div className="fixture-mini-heading">{t('teams.upcoming')}</div>
                   {upcoming.slice(0, 6).map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
                 </div>
               ) : null}
             </>
           ) : (
             <>
-              <h3 className="panel-title">Fixtures</h3>
+              <h3 className="panel-title">{t('teams.fixtures')}</h3>
               <EmptyState
-                title="No fixtures yet"
-                text="This team has no results or scheduled matches in this competition. Refresh to check again."
-                action={<Button onClick={onRetryFixtures}>Refresh</Button>}
+                title={t('teams.noFixtures')}
+                text={t('teams.noTeamFixturesText')}
+                action={<Button onClick={onRetryFixtures}>{t('states.refresh')}</Button>}
               />
             </>
           )}
@@ -187,28 +190,28 @@ export default function TeamPage({
         <aside>
           {!isUcl ? (
             <div className="panel-card">
-              <h3 className="panel-title">Champions League</h3>
+              <h3 className="panel-title">{t('teams.championsLeague')}</h3>
               {uclReq.status === 'loading' || uclReq.status === 'idle' ? (
-                <Skeleton rows={3} label="Checking Champions League data" />
+                <Skeleton rows={3} label={t('teams.checkingChampionsLeague')} />
               ) : uclReq.status === 'error' ? (
                 <ErrorState
-                  title="Champions League data could not load"
-                  detail={uclReq.error}
+                  title={t('teams.championsLeagueLoadFailed')}
+                  detail={errorText(t, uclReq.error)}
                   onRetry={() => uclLeague && loadUcl(uclLeague)}
                 />
               ) : ucl ? (
                 uclStanding ? (
                   <div className="ucl-card">
                     <div className="ucl-card-row">
-                      <span>Position</span>
+                      <span>{t('teams.position')}</span>
                       <b>{uclStanding.position}</b>
                     </div>
                     <div className="ucl-card-row">
-                      <span>Points</span>
+                      <span>{t('teams.points')}</span>
                       <b>{uclStanding.points}</b>
                     </div>
                     <div className="ucl-card-row">
-                      <span>Record</span>
+                      <span>{t('teams.record')}</span>
                       <b>
                         {uclStanding.won ?? uclStanding.wins}W · {uclStanding.draw ?? uclStanding.draws}D ·{' '}
                         {uclStanding.lost ?? uclStanding.losses}L
@@ -216,18 +219,18 @@ export default function TeamPage({
                     </div>
                   </div>
                 ) : (
-                  <p className="muted small">Not in this UCL season.</p>
+                  <p className="muted small">{t('teams.notInUcl')}</p>
                 )
               ) : null}
               {uclFinished.length ? (
                 <div className="fixture-mini-list">
-                  <div className="fixture-mini-heading">UCL results</div>
+                  <div className="fixture-mini-heading">{t('teams.uclResults')}</div>
                   {uclFinished.slice(0, 4).map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
                 </div>
               ) : null}
               {uclUpcoming.length ? (
                 <div className="fixture-mini-list">
-                  <div className="fixture-mini-heading">UCL upcoming</div>
+                  <div className="fixture-mini-heading">{t('teams.uclUpcoming')}</div>
                   {uclUpcoming.slice(0, 4).map((m) => <LeagueFixtureRow key={m.id} m={m} />)}
                 </div>
               ) : null}
@@ -235,30 +238,30 @@ export default function TeamPage({
           ) : null}
 
           <div className="panel-card">
-            <h3 className="panel-title">Honours</h3>
+            <h3 className="panel-title">{t('teams.honours')}</h3>
             <p className="muted small">
-              Trophy history is not synced yet.
+              {t('teams.trophyHistoryNotSynced')}
             </p>
           </div>
           <div className="panel-card">
-            <h3 className="panel-title">Squad</h3>
+            <h3 className="panel-title">{t('teams.squad')}</h3>
             {teamReq.status === 'loading' || teamReq.status === 'idle' ? (
-              <Skeleton rows={3} label="Loading squad" />
+              <Skeleton rows={3} label={t('teams.loadingSquad')} />
             ) : teamReq.status === 'error' ? (
               <ErrorState
-                title="Team data could not load"
-                detail={teamReq.error}
+                title={t('teams.teamDataLoadFailed')}
+                detail={errorText(t, teamReq.error)}
                 onRetry={loadTeamProfile}
               />
             ) : !found ? (
               <EmptyState
-                title={`${team.name} is not in the database`}
-                text="This team has no club record yet."
+                title={t('teams.notInDatabase', { team: team.name })}
+                text={t('teams.noClubRecord')}
               />
             ) : !profile && !squad.length && !statLeaders.length ? (
               <EmptyState
-                title="Player data not synced yet"
-                text="This team has no squad or player stats on record yet."
+                title={t('teams.playerDataNotSynced')}
+                text={t('teams.noSquadOnRecord')}
               />
             ) : squadGroups.length ? (
               squadGroups.map((group) => (
@@ -275,46 +278,46 @@ export default function TeamPage({
                 </div>
               ))
             ) : (
-              <p className="muted small">No squad players on record.</p>
+              <p className="muted small">{t('teams.noSquadPlayers')}</p>
             )}
           </div>
           {profile ? (
             <div className="panel-card">
-              <h3 className="panel-title">Profile</h3>
+              <h3 className="panel-title">{t('teams.profile')}</h3>
               <div className="ucl-card">
                 {profile.stadium_name ? (
                   <div className="ucl-card-row">
-                    <span>Stadium</span>
+                    <span>{t('teams.stadium')}</span>
                     <b>{profile.stadium_name}</b>
                   </div>
                 ) : null}
                 {profile.stadium_capacity ? (
                   <div className="ucl-card-row">
-                    <span>Capacity</span>
+                    <span>{t('teams.capacity')}</span>
                     <b>{profile.stadium_capacity}</b>
                   </div>
                 ) : null}
                 {profile.stadium_city ? (
                   <div className="ucl-card-row">
-                    <span>Stadium city</span>
+                    <span>{t('teams.stadiumCity')}</span>
                     <b>{profile.stadium_city}</b>
                   </div>
                 ) : null}
                 {profile.founded ? (
                   <div className="ucl-card-row">
-                    <span>Founded</span>
+                    <span>{t('teams.founded')}</span>
                     <b>{profile.founded}</b>
                   </div>
                 ) : null}
                 {profile.nickname ? (
                   <div className="ucl-card-row">
-                    <span>Nickname</span>
+                    <span>{t('teams.nickname')}</span>
                     <b>{profile.nickname}</b>
                   </div>
                 ) : null}
                 {profile.primary_color ? (
                   <div className="ucl-card-row">
-                    <span>Colours</span>
+                    <span>{t('teams.colours')}</span>
                     <b
                       className="color-swatch"
                       style={{ background: profile.primary_color, color: profile.text_color || '#FFFFFF' }}
@@ -327,7 +330,7 @@ export default function TeamPage({
             </div>
           ) : null}
           <div className="panel-card">
-            <h3 className="panel-title">Top players</h3>
+            <h3 className="panel-title">{t('teams.topPlayers')}</h3>
             {leaderboards.length ? (
               leaderboards.map((competition) => (
                 <div className="fixture-mini-list" key={competition.competition}>
@@ -347,7 +350,7 @@ export default function TeamPage({
                 </div>
               ))
             ) : (
-              <p className="muted small">No leaderboard data synced yet.</p>
+              <p className="muted small">{t('teams.noLeaderboardData')}</p>
             )}
           </div>
         </aside>
