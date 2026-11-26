@@ -10,6 +10,16 @@ export function matchdaySections(teams, fixtures) {
   });
 }
 
+export function isRecordedScore({ home_goals, away_goals }) {
+  return home_goals != null && away_goals != null;
+}
+
+export function initialMatchday(sections) {
+  return sections.find(({ fixtures }) => fixtures.some((fixture) => !isRecordedScore(fixture)))?.number
+    ?? sections.at(-1)?.number
+    ?? null;
+}
+
 export function parseScore(home, away) {
   if (![home, away].every((value) => /^\d{1,3}$/.test(value))) return null;
   return { home_goals: Number(home), away_goals: Number(away) };

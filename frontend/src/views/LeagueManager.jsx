@@ -4,7 +4,7 @@ import StandingsTable from '../components/StandingsTable';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import { useI18n } from '../i18n';
 import { apiFetch } from '../lib/api';
-import { matchdaySections, parseScore, parseTeamList } from '../lib/leagueManager.js';
+import { initialMatchday, isRecordedScore, matchdaySections, parseScore, parseTeamList } from '../lib/leagueManager.js';
 import './leagueManager.css';
 
 const BASE = '/league-manager';
@@ -195,30 +195,32 @@ function ShareLink({ shareId }) {
   }
 
   return (
-    <section className="lm-panel lm-share">
-      <h3>{t('leagueManager.shareTitle')}</h3>
-      <p>{t('leagueManager.shareHelp')}</p>
-      <label>
-        {t('leagueManager.shareLink')}
-        <input ref={field} type="url" readOnly value={url} />
-      </label>
-      <div className="lm-actions">
-        <Button onClick={copy}>{t('leagueManager.copyLink')}</Button>
-        <a href={url}>{t('leagueManager.openLink')}</a>
+    <details className="lm-share">
+      <summary className="button secondary">{t('leagueManager.share')}</summary>
+      <div className="lm-panel lm-share-content">
+        <p>{t('leagueManager.shareHelp')}</p>
+        <label>
+          {t('leagueManager.shareLink')}
+          <input ref={field} type="url" readOnly value={url} />
+        </label>
+        <div className="lm-actions">
+          <Button onClick={copy}>{t('leagueManager.copyLink')}</Button>
+          <a href={url}>{t('leagueManager.openLink')}</a>
+        </div>
+        {copyState && <p role="status">{t(`leagueManager.${copyState}`)}</p>}
       </div>
-      {copyState && <p role="status">{t(`leagueManager.${copyState}`)}</p>}
-    </section>
+    </details>
   );
 }
 
-function FixtureResult({ fixture, home, away, onScore, busy }) {
+function FixtureResult({ fixture, home, away, onScore, busy, scoreError }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const editButton = useRef(null);
   const firstGoal = useRef(null);
   const restoreFocus = useRef(false);
-  const scored = fixture.home_goals != null && fixture.away_goals != null;
+  const scored = isRecordedScore(fixture);
 
   useEffect(() => {
     if (editing) firstGoal.current?.focus();
@@ -262,6 +264,7 @@ function FixtureResult({ fixture, home, away, onScore, busy }) {
             </label>
           </div>
           {invalid && <ManagerError action="invalidScore" />}
+          {scoreError && !invalid && <ManagerError error={scoreError} />}
           <div className="lm-actions">
             <Button type="submit" variant="primary" disabled={busy}>{t('leagueManager.saveScore')}</Button>
             {scored && <Button disabled={busy} onClick={async () => { if (await onScore(fixture.id, CLEARED_SCORE)) close(); }}>
@@ -286,18 +289,55 @@ function FixtureResult({ fixture, home, away, onScore, busy }) {
   );
 }
 
-function Schedule({ league, onScore, busy }) {
-  const { t } = useI18n();
+function Schedule({ league, onScore, busy, failedFixtureId, scoreError }) {
+  const { t, formatNumber } = useI18n();
   const schedule = useMemo(() => matchdaySections(league.teams, league.fixtures), [league.teams, league.fixtures]);
   const teams = useMemo(() => new Map(league.teams.map(({ id, name }) => [id, name])), [league.teams]);
-  const [matchday, setMatchday] = useState(1);
+  const [matchday, setMatchday] = useState(() => onScore ? initialMatchday(schedule) : 1);
+  const [changedTeams, setChangedTeams] = useState([]);
   const selected = schedule.find(({ number }) => number === matchday) || schedule[0];
   const SectionTitle = onScore ? 'h3' : 'h2';
+  const recorded = league.fixtures.filter(isRecordedScore).length;
+  const total = league.fixtures.length;
+  const progressLabel = t('leagueManager.resultsRecorded', {
+    recorded: formatNumber(recorded),
+    total: formatNumber(total),
+  });
+
+  useEffect(() => {
+    if (!changedTeams.length) return undefined;
+    const timer = setTimeout(() => setChangedTeams([]), 2000);
+    return () => clearTimeout(timer);
+  }, [changedTeams]);
+
+  async function saveScore(fixture, score) {
+    const saved = await onScore(fixture.id, score);
+    if (saved) setChangedTeams([fixture.home_team_id, fixture.away_team_id]);
+    return saved;
+  }
+
+  const standings = (
+    <aside className={onScore ? 'lm-panel lm-standings' : 'lm-panel'} aria-label={t('leagueManager.standings')}>
+      <SectionTitle>{t('leagueManager.standings')}</SectionTitle>
+      <div className="lm-table-scroll" role="region" aria-label={t('leagueManager.standings')} tabIndex={0}>
+        <StandingsTable rows={league.standings} variant="managed" highlight={(row) => changedTeams.includes(row.team_id)} />
+      </div>
+    </aside>
+  );
 
   return (
-    <div className="lm-competition">
-      <section className="lm-panel">
-        <SectionTitle>{t('leagueManager.fixtures')}</SectionTitle>
+    <div className={onScore ? 'lm-competition lm-scoreboard' : 'lm-competition'}>
+      {onScore && standings}
+      <section className={onScore ? 'lm-panel lm-score-entry' : 'lm-panel'}>
+        <div className="lm-score-header">
+          <SectionTitle>{t(onScore ? 'leagueManager.scoresToEnter' : 'leagueManager.fixtures')}</SectionTitle>
+          {onScore && total > 0 && (
+            <label className="lm-progress">
+              <span>{progressLabel}</span>
+              <progress value={recorded} max={total} />
+            </label>
+          )}
+        </div>
         {selected ? (
           <>
             <label className="lm-control">
@@ -314,20 +354,16 @@ function Schedule({ league, onScore, busy }) {
                   fixture={fixture}
                   home={teams.get(fixture.home_team_id)}
                   away={teams.get(fixture.away_team_id)}
-                  onScore={onScore}
+                  onScore={onScore ? (id, score) => saveScore(fixture, score) : undefined}
                   busy={busy}
+                  scoreError={failedFixtureId === fixture.id ? scoreError : undefined}
                 />
               ))}
             </ul>
           </>
         ) : <EmptyState title={t('leagueManager.noFixtures')} />}
       </section>
-      <section className="lm-panel">
-        <SectionTitle>{t('leagueManager.standings')}</SectionTitle>
-        <div className="lm-table-scroll" role="region" aria-label={t('leagueManager.standings')} tabIndex={0}>
-          <StandingsTable rows={league.standings} variant="managed" />
-        </div>
-      </section>
+      {!onScore && standings}
     </div>
   );
 }
@@ -335,18 +371,24 @@ function Schedule({ league, onScore, busy }) {
 function OwnerLeagues({ account, onSignOut }) {
   const { t } = useI18n();
   const leagues = useRead('/leagues/');
-  const [leagueId, setLeagueId] = useState(null);
+  const [selectedLeagueId, setSelectedLeagueId] = useState(null);
+  const [creating, setCreating] = useState(false);
   const [rosterDirty, setRosterDirty] = useState(false);
   const [notice, setNotice] = useState('');
-  const league = useRead(leagueId ? `/leagues/${leagueId}/` : null);
+  const [scoreFixtureId, setScoreFixtureId] = useState(null);
+  const items = leagues.value?.leagues ?? [];
+  const leagueId = selectedLeagueId ?? (items.find(({ generated }) => generated) ?? items[0])?.id;
+  const league = useRead(leagueId && !creating ? `/leagues/${leagueId}/` : null);
   const detail = league.value;
   const action = useAction();
 
-  function select(id) {
+  function changeWorkspace(id, create = false) {
     action.clear();
     setRosterDirty(false);
     setNotice('');
-    setLeagueId(id);
+    setScoreFixtureId(null);
+    setSelectedLeagueId(id);
+    setCreating(create);
   }
 
   const withLeague = (suffix, method, body, fallback, message) => action.run(async () => {
@@ -358,25 +400,60 @@ function OwnerLeagues({ account, onSignOut }) {
 
   return (
     <>
-      <div className="lm-account-bar">
-        <p>{t('leagueManager.signedInAs', { username: account.username })}</p>
-        <Button disabled={action.busy} onClick={() => action.run(onSignOut, 'logoutFailed')}>{t('leagueManager.signOut')}</Button>
-      </div>
-      {action.error && <ManagerError error={action.error} />}
-      {notice && <p className="lm-notice" role="status">{t(`leagueManager.${notice}`)}</p>}
-      {leagueId ? (
-        <>
-          <div><Button disabled={action.busy} onClick={() => { select(null); leagues.retry(); }}>{t('leagueManager.backToLeagues')}</Button></div>
-          {detail ? (
+      <header className="lm-owner-toolbar">
+        {items.length > 0 && (
+          <label className="lm-league-switcher">
+            {t('leagueManager.myLeagues')}
+            <select value={creating ? '' : leagueId} disabled={action.busy} onChange={(event) => changeWorkspace(Number(event.currentTarget.value))}>
+              {creating && <option value="" disabled>{t('leagueManager.createLeague')}</option>}
+              {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+        )}
+        <div className="lm-actions">
+          {detail?.generated && <ShareLink key={detail.share_id} shareId={detail.share_id} />}
+          {items.length > 0 && !creating && (
+            <Button disabled={action.busy} onClick={() => changeWorkspace(leagueId, true)}>
+              {t('leagueManager.createLeague')}
+            </Button>
+          )}
+          <Button disabled={action.busy} onClick={() => {
+            setScoreFixtureId(null);
+            action.run(onSignOut, 'logoutFailed');
+          }}>{t('leagueManager.signOut')}</Button>
+        </div>
+        <small className="lm-muted">{t('leagueManager.signedInAs', { username: account.username })}</small>
+      </header>
+      {action.error && scoreFixtureId == null && <ManagerError error={action.error} />}
+      <p className={notice ? 'lm-notice' : 'sr-only'} role="status">{notice && t(`leagueManager.${notice}`)}</p>
+      {leagues.status === 'error' ? <ManagerError error={leagues.error} onRetry={leagues.retry} />
+        : leagues.status !== 'ready' ? <Skeleton />
+          : creating || !leagueId ? (
+            <section className="lm-panel lm-create">
+              <h2>{t('leagueManager.createLeague')}</h2>
+              {!items.length && <p>{t('leagueManager.noLeaguesHelp')}</p>}
+              <RosterForm busy={action.busy} onSave={(body) => action.run(async () => {
+                const added = await request('/leagues/', 'POST', body);
+                leagues.setValue({ leagues: [added, ...items] });
+                changeWorkspace(added.id);
+              }, 'createFailed')} />
+              {items.length > 0 && <div><Button disabled={action.busy} onClick={() => changeWorkspace(leagueId)}>{t('leagueManager.cancel')}</Button></div>}
+            </section>
+          ) : detail ? (
             <>
-              <h2 className="lm-league-title">{detail.name}</h2>
+              <h2>{detail.name}</h2>
               {detail.generated ? (
-                <>
-                  <ShareLink key={detail.share_id} shareId={detail.share_id} />
-                  <Schedule key={leagueId} league={detail} busy={action.busy} onScore={(id, score) =>
-                    withLeague(`fixtures/${id}/result/`, 'PUT', score, 'saveFailed', score.home_goals == null ? 'scoreCleared' : 'scoreSaved')
-                  } />
-                </>
+                <Schedule
+                  key={leagueId}
+                  league={detail}
+                  busy={action.busy}
+                  failedFixtureId={scoreFixtureId}
+                  scoreError={action.error}
+                  onScore={(id, score) => {
+                    setScoreFixtureId(id);
+                    return withLeague(`fixtures/${id}/result/`, 'PUT', score, 'saveFailed', score.home_goals == null ? 'scoreCleared' : 'scoreSaved');
+                  }}
+                />
               ) : (
                 <div className="lm-competition">
                   <section className="lm-panel">
@@ -397,33 +474,6 @@ function OwnerLeagues({ account, onSignOut }) {
               )}
             </>
           ) : league.status === 'error' ? <ManagerError error={league.error} onRetry={league.retry} /> : <Skeleton />}
-        </>
-      ) : (
-        <div className="lm-competition">
-          <section className="lm-panel">
-            <h2>{t('leagueManager.myLeagues')}</h2>
-            {leagues.status === 'error' ? <ManagerError error={leagues.error} onRetry={leagues.retry} />
-              : leagues.status !== 'ready' ? <Skeleton />
-                : leagues.value.leagues.length ? (
-                  <ul className="lm-league-list">
-                    {leagues.value.leagues.map((item) => (
-                      <li key={item.id}>
-                        <Button disabled={action.busy} onClick={() => select(item.id)}>{item.name}</Button>
-                        <span className="lm-muted">{t(item.generated ? 'leagueManager.generated' : 'leagueManager.draft')}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <EmptyState title={t('leagueManager.noLeagues')} text={t('leagueManager.noLeaguesHelp')} />}
-          </section>
-          <section className="lm-panel">
-            <h2>{t('leagueManager.createLeague')}</h2>
-            <RosterForm busy={action.busy} onSave={(body) => action.run(async () => {
-              const added = await request('/leagues/', 'POST', body);
-              setLeagueId(added.id);
-            }, 'createFailed')} />
-          </section>
-        </div>
-      )}
     </>
   );
 }

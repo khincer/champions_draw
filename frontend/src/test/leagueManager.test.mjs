@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { matchdaySections, parseScore, parseTeamList } from '../lib/leagueManager.js';
+import * as leagueManager from '../lib/leagueManager.js';
 
 test('a five-team matchday exposes the absent team as its bye', () => {
   const teams = [1, 2, 3, 4, 5].map((id) => ({ id, name: `Team ${id}` }));
@@ -21,6 +22,37 @@ test('a score distinguishes zero from a missing goal', () => {
   assert.deepEqual(parseScore('0', '0'), { home_goals: 0, away_goals: 0 });
   assert.deepEqual(parseScore('999', '1'), { home_goals: 999, away_goals: 1 });
   for (const invalid of ['', '1000', '-1', '1.5', '1e2']) assert.equal(parseScore(invalid, '0'), null);
+});
+
+test('the scoring dashboard opens the first matchday with an unrecorded score', () => {
+  const sections = [
+    { number: 1, fixtures: [{ home_goals: 0, away_goals: 0 }] },
+    { number: 2, fixtures: [{ home_goals: 1, away_goals: null }] },
+    { number: 3, fixtures: [{ home_goals: null, away_goals: null }] },
+  ];
+  assert.equal(leagueManager.initialMatchday(sections), 2);
+});
+
+test('a completed schedule opens its last matchday for corrections', () => {
+  const sections = [
+    { number: 2, fixtures: [{ home_goals: 0, away_goals: 1 }] },
+    { number: 3, fixtures: [{ home_goals: 1, away_goals: 0 }] },
+  ];
+  assert.equal(leagueManager.initialMatchday(sections), 3);
+});
+
+test('an empty schedule has no initial matchday', () => {
+  assert.equal(leagueManager.initialMatchday([]), null);
+});
+
+test('recorded results include scoreless draws but exclude cleared and partial scores', () => {
+  const fixtures = [
+    { home_goals: 0, away_goals: 0 },
+    { home_goals: 3, away_goals: 1 },
+    { home_goals: null, away_goals: null },
+    { home_goals: null, away_goals: 2 },
+  ];
+  assert.equal(fixtures.filter(leagueManager.isRecordedScore).length, 2);
 });
 
 test('team entry trims one team per line and flags duplicate and invalid counts', () => {
