@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import Crest from '../components/Crest';
 import { ErrorState } from '../components/States';
+import errorText from '../lib/errorText';
+import { useI18n } from '../i18n';
 
 export default function InteractiveDraft({ seasonId, state, setState, apiFetch, selectedTeamId, setSelectedTeamId, onComplete, onReveal }) {
+  const { t } = useI18n();
   const { teams, matchups, picks, current_pot, auto_finalized } = state;
   const pickedIds = new Set((picks || []).map((pick) => pick.season_team_id));
   const pickedTeams = (picks || [])
@@ -75,7 +78,7 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
         return;
       }
     } catch (err) {
-      setError({ message: err.message, team });
+      setError({ message: err.code || 'unknown', team });
     } finally {
       pickingRef.current = false;
       setPickingId(null);
@@ -108,30 +111,32 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
     <section className="interactive-stage">
       <div className="draw-animation-head">
         <div>
-          <h2>{auto_finalized ? 'Draw complete!' : `Interactive draw — Pot ${current_pot || '?'}`}</h2>
+          <h2>{auto_finalized ? t('draw.complete') : t('draw.interactivePot', { pot: current_pot || '?' })}</h2>
           <p>
-            {pickedTeams.length} of 36 teams picked. Choose one team; all of its matchups are locked in immediately.
+            {t('draw.pickedProgress', { picked: pickedTeams.length })}
           </p>
         </div>
-        <span className="draw-pulse" />
+        {!auto_finalized && (
+          <span className={pickingId ? 'draw-pulse draw-pulse-active' : 'draw-pulse'} aria-hidden="true" />
+        )}
       </div>
 
       {error && (
         <ErrorState
-          title="That pick could not be locked in"
-          detail={`${error.message}. The draw is unchanged — retry to pick ${error.team.name}.`}
+          title={t('draw.pickFailed')}
+          detail={t('draw.pickErrorText', { error: errorText(t, error.message), team: error.team.name })}
           onRetry={() => commitPick(error.team)}
-          retryLabel="Retry pick"
+          retryLabel={t('draw.retryPick')}
         />
       )}
 
       <div className="interactive-head">
-        <strong>{current_pot ? `Pot ${current_pot} on the clock` : 'All teams picked'}</strong>
+        <strong>{current_pot ? t('draw.potOnClock', { pot: current_pot }) : t('draw.allPicked')}</strong>
         <span role="status">
           {pickingId
-            ? 'Locking in your pick…'
+            ? t('draw.lockingPick')
             : activeTeam
-              ? `${activeTeam.name} selected`
+              ? t('draw.teamSelected', { name: activeTeam.name })
               : ''}
         </span>
       </div>
@@ -140,8 +145,8 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
         {pots.map((pot) => (
           <article className="pot-panel" key={pot}>
             <div className="pot-head">
-              <strong>Pot {pot}</strong>
-              <span>{onClock === pot ? 'on the clock' : ''}</span>
+              <strong>{t('draw.pot', { pot })}</strong>
+              <span>{onClock === pot ? t('draw.onClock') : ''}</span>
             </div>
             {potTeams(pot).map((team) => {
               const isPicked = pickedIds.has(team.id);
@@ -168,27 +173,27 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
       </div>
 
       <div className="picked-row">
-        <strong>Picked</strong>
+        <strong>{t('draw.picked')}</strong>
         {pickedTeams.length ? (
           pickedTeams.map((team) => (
             <button
               className={`picked-chip ${activeId === team.id ? 'active' : ''}`}
               key={team.id}
               onClick={() => handlePick(team)}
-              title="Click to reveal opponents"
+              title={t('draw.clickToReveal')}
             >
               <Crest team={team} size="sm" />
               <b>{team.short_name}</b>
             </button>
           ))
         ) : (
-          <span className="muted">Teams you pick will appear here, one by one.</span>
+          <span className="muted">{t('draw.pickedAppear')}</span>
         )}
       </div>
 
       <div className="reveal-box">
         <h3>
-          {activeTeam ? `${activeTeam.name} — opponents` : 'Select a team'}
+          {activeTeam ? t('draw.teamOpponents', { name: activeTeam.name }) : t('draw.selectTeam')}
         </h3>
         <div className="reveal-badges">
           {activeTeam && revealedOpponents.length ? (
@@ -203,8 +208,8 @@ export default function InteractiveDraft({ seasonId, state, setState, apiFetch, 
           ) : (
             <span className="muted">
               {activeTeam && !pickedIds.has(activeTeam.id)
-                ? 'Pick this team to reveal its opponents.'
-                : 'Opponents will appear here, one by one.'}
+                ? t('draw.pickToReveal')
+                : t('draw.opponentsAppear')}
             </span>
           )}
         </div>

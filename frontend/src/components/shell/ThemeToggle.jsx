@@ -1,23 +1,21 @@
-import { useState } from 'preact/hooks';
 import { Moon, Sun } from 'lucide-preact';
 import { useI18n } from '../../i18n';
-import { getTheme, setTheme } from '../../lib/theme';
 
-export default function ThemeToggle() {
+export default function ThemeToggle({ theme, onToggle, className = 'site-nav-link', showLabel = false }) {
   const { t } = useI18n();
-  const [theme, setThemeState] = useState(getTheme);
   const isDark = theme === 'dark';
 
   return (
     <button
       type="button"
-      className="site-nav-link"
-      aria-label={t('settings.darkTheme')}
+      className={className}
+      aria-label={showLabel ? undefined : t('settings.darkTheme')}
       title={t('settings.darkTheme')}
       aria-pressed={isDark}
-      onClick={() => setThemeState(setTheme(isDark ? 'light' : 'dark'))}
+      onClick={onToggle}
     >
       {isDark ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
+      {showLabel ? t('settings.darkTheme') : null}
     </button>
   );
 }

@@ -6,21 +6,24 @@ import MatchdayScoreBoard from '../components/MatchdayScoreBoard';
 import PlayoffBracket from '../components/PlayoffBracket';
 import KnockoutBracket from '../components/KnockoutBracket';
 import { loadLocal, saveLocal } from '../lib/predictionStorage';
+import { buildMatchSyncRows } from '../lib/predictionSync';
 import { useReconciliation } from '../lib/useReconciliation';
 import { computeStandings, defenseNorm, eliminationBoost, expectedGoals, teamStrength } from '../lib/standingsCalc';
 import { predictMatch } from '../lib/matchOdds';
 import { ErrorState, Skeleton } from '../components/States';
+import errorText from '../lib/errorText';
+import { useI18n } from '../i18n';
 
 const SUB_TABS = [
-  ['scores', 'Score Matches'],
-  ['standings', 'Standings'],
-  ['playoffs', 'Playoffs'],
-  ['bracket', 'Bracket'],
+  { key: 'scores', labelKey: 'predict.scoreMatches' },
+  { key: 'standings', labelKey: 'predict.standings' },
+  { key: 'playoffs', labelKey: 'predict.playoffs' },
+  { key: 'bracket', labelKey: 'predict.bracket' },
 ];
 
 
 function saveFailureCopy(err) {
-  return `Save failed: ${err.message}. Your scores are still here — use Save Matchday to retry.`;
+  return err.code || 'unknown';
 }
 
 const STORAGE_STATE_KEY = 'champions_draw_prediction_state';
@@ -32,6 +35,7 @@ export default function PredictionApp({
   predictionApi,
   apiFetch,
 }) {
+  const { t } = useI18n();
   const latestDrawSeed = seasonState?.draws?.[0]?.draw_seed;
 
   const [subTab, setSubTab] = useState('scores');
@@ -47,6 +51,7 @@ export default function PredictionApp({
   const [createError, setCreateError] = useState('');
   const syncTimer = useRef(null);
   const writeInFlight = useRef(false);
+  const createRequest = useRef(0);
 
   // Restore matchday from localStorage
   const [currentMatchday, setCurrentMatchday] = useState(() => {
@@ -95,6 +100,7 @@ export default function PredictionApp({
 
   const createPrediction = useCallback(async () => {
     if (!seasonId || !playerName) return;
+    const request = ++createRequest.current;
     setCreateStatus('loading');
     setCreateError('');
     try {
@@ -102,6 +108,7 @@ export default function PredictionApp({
         method: 'POST',
         body: JSON.stringify({ season: Number(seasonId), player_name: playerName }),
       });
+      if (request !== createRequest.current) return;
       setRemotePrediction(pred);
 
       // Merge remote data into localData
@@ -128,13 +135,15 @@ export default function PredictionApp({
       }
       setCreateStatus('success');
     } catch (e) {
+      if (request !== createRequest.current) return;
       setCreateStatus('error');
-      setCreateError(e.message);
+      setCreateError(e.code || 'unknown');
     }
-  }, [seasonId, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [seasonId, playerName, latestDrawSeed, apiFetch]);
 
   useEffect(() => {
     createPrediction();
+    return () => { createRequest.current += 1; };
   }, [createPrediction]);
 
   // Periodic sync to backend
@@ -151,13 +160,7 @@ export default function PredictionApp({
     writeInFlight.current = true;
     setSyncing(true);
     try {
-      const predictions = Object.entries(validPredictions)
-        .filter(([_, v]) => v.home_goals != null || v.away_goals != null)
-        .map(([matchupId, v]) => ({
-          matchup: Number(matchupId),
-          home_goals: v.home_goals,
-          away_goals: v.away_goals,
-        }));
+      const predictions = buildMatchSyncRows(validPredictions);
 
       if (predictions.length > 0) {
         await apiFetch(`/predictions/${remotePrediction.id}/sync/`, {
@@ -180,13 +183,7 @@ export default function PredictionApp({
     writeInFlight.current = true;
     setSavingMatchday(true);
     try {
-      const predictions = Object.entries(validPredictions)
-        .filter(([_, v]) => v.home_goals != null && v.away_goals != null)
-        .map(([matchupId, v]) => ({
-          matchup: Number(matchupId),
-          home_goals: v.home_goals,
-          away_goals: v.away_goals,
-        }));
+      const predictions = buildMatchSyncRows(validPredictions, { completeOnly: true });
 
       await apiFetch(`/predictions/${remotePrediction.id}/sync/`, {
         method: 'POST',
@@ -269,7 +266,7 @@ export default function PredictionApp({
 
   const handleScoreChange = useCallback((matchupId, field, value, fixture) => {
     setLocalData((prev) => {
-      const existing = prev.matchPredictions[matchupId] || {};
+      const existing = { ...prev.matchPredictions[matchupId] };
       if (fixture) {
         existing.home_team_id = fixture.home_team.id;
         existing.away_team_id = fixture.away_team.id;
@@ -685,7 +682,7 @@ export default function PredictionApp({
     } catch (e) {
       setError({
         kind: 'playoffs',
-        message: `Failed to save playoffs: ${e.message}. Your picks are still here — use Save Playoffs to retry.`,
+        message: e.code || 'unknown',
       });
     } finally {
       setSavingPlayoffs(false);
@@ -704,7 +701,7 @@ export default function PredictionApp({
     } catch (e) {
       setError({
         kind: 'knockout',
-        message: `Failed to save knockout: ${e.message}. Your picks are still here — use Save Knockout to retry.`,
+        message: e.code || 'unknown',
       });
     } finally {
       setSavingKnockout(false);
@@ -714,7 +711,7 @@ export default function PredictionApp({
   if (createStatus === 'loading') {
     return (
       <div className="prediction-app">
-        <Skeleton rows={6} label="Starting your prediction sheet" />
+        <Skeleton rows={6} label={t('predict.startingSheet')} />
       </div>
     );
   }
@@ -723,31 +720,31 @@ export default function PredictionApp({
     return (
       <div className="prediction-app">
         <ErrorState
-          title="Your prediction sheet could not start"
-          detail={createError}
+          title={t('predict.startFailed')}
+          detail={errorText(t, createError)}
           onRetry={createPrediction}
-          retryLabel="Retry predictions"
+          retryLabel={t('predict.retryPredictions')}
         />
       </div>
     );
   }
 
   const writeError = error && {
-    matchday: { title: 'Predictions could not be saved', retry: handleSaveMatchday, retryLabel: 'Save Matchday' },
-    playoffs: { title: 'Playoff predictions could not be saved', retry: handleSavePlayoffs, retryLabel: 'Save Playoffs' },
-    knockout: { title: 'Knockout predictions could not be saved', retry: handleSaveKnockout, retryLabel: 'Save Knockout' },
+    matchday: { title: t('predict.saveFailed'), retry: handleSaveMatchday, retryLabel: t('predict.saveMatchday') },
+    playoffs: { title: t('predict.playoffsSaveFailed'), retry: handleSavePlayoffs, retryLabel: t('predict.savePlayoffs') },
+    knockout: { title: t('predict.knockoutSaveFailed'), retry: handleSaveKnockout, retryLabel: t('predict.saveKnockout') },
   }[error.kind];
 
   return (
     <div className="prediction-app">
       <SegmentControl
         className="view-tabs prediction-tabs"
-        label="Prediction sections"
+        label={t('predict.sections')}
         value={subTab}
         onChange={setSubTab}
-        items={SUB_TABS.map(([key, label]) => ({
+        items={SUB_TABS.map(({ key, labelKey }) => ({
           key,
-          label,
+          label: t(labelKey),
           disabled:
             key === 'playoffs'
             && matchups.length > 0
@@ -758,7 +755,7 @@ export default function PredictionApp({
       {writeError && (
         <ErrorState
           title={writeError.title}
-          detail={error.message}
+          detail={errorText(t, error.message)}
           onRetry={writeError.retry}
           retryLabel={writeError.retryLabel}
         />
@@ -770,15 +767,18 @@ export default function PredictionApp({
             <>
               <div className="command-band">
                 <div>
-                  <h2>Enter your League Phase predictions</h2>
-                  <p>Fill in scores for each fixture. The standings update live as you type.</p>
+                  <h2>{t('predict.enterLeaguePhase')}</h2>
+                  <p>{t('predict.enterLeaguePhaseText')}</p>
                 </div>
                 <span className="muted">
-                  {Object.values(validPredictions).filter(v => v.home_goals != null).length}/{matchups.length} scored
+                  {t('predict.scoredCount', {
+                    n: Object.values(validPredictions).filter(v => v.home_goals != null).length,
+                    m: matchups.length,
+                  })}
                 </span>
                 {leagueComplete && (
                   <Button onClick={() => setSubTab('playoffs')}>
-                    Continue to Playoffs →
+                    {t('predict.continuePlayoffs')}
                   </Button>
                 )}
               </div>
@@ -798,7 +798,7 @@ export default function PredictionApp({
 
           {subTab === 'standings' && (
             <div className="league-table-wrap">
-              <h3 className="section-title">League Phase Standings</h3>
+              <h3 className="section-title">{t('predict.leagueStandings')}</h3>
               <StandingsTable
                 rows={standings}
                 variant="league"
@@ -814,23 +814,23 @@ export default function PredictionApp({
             <>
               <div className="command-band">
                 <div>
-                  <h2>Playoff predictions</h2>
-                  <p>Score both legs of each two-legged tie. The lower seed hosts leg 1.</p>
+                  <h2>{t('predict.playoffPredictions')}</h2>
+                  <p>{t('predict.playoffPredictionsText')}</p>
                 </div>
                 <Button
                   variant="primary"
                   onClick={handleSavePlayoffs}
                   disabled={savingPlayoffs || !playoffMatchups.length}
                 >
-                  {savingPlayoffs ? 'Saving...' : 'Save Playoffs'}
+                  {savingPlayoffs ? t('predict.saving') : t('predict.savePlayoffs')}
                 </Button>
                 {playoffsComplete && (
                   <Button onClick={() => setSubTab('bracket')}>
-                    Continue to Knockout →
+                    {t('predict.continueKnockout')}
                   </Button>
                 )}
                 <Button onClick={handleRandomizePlayoffs} disabled={!playoffMatchups.length}>
-                  Randomize
+                  {t('predict.randomize')}
                 </Button>
               </div>
               <PlayoffBracket
@@ -844,24 +844,24 @@ export default function PredictionApp({
             <>
               <div className="command-band">
                 <div>
-                  <h2>Knockout predictions</h2>
-                  <p>Score each single-leg knockout match. Winners advance automatically.</p>
+                  <h2>{t('predict.knockoutPredictions')}</h2>
+                  <p>{t('predict.knockoutPredictionsText')}</p>
                 </div>
                 <Button
                   variant="primary"
                   onClick={handleSaveKnockout}
                   disabled={savingKnockout || !knockoutComplete}
                 >
-                  {savingKnockout ? 'Saving...' : 'Save Knockout'}
+                  {savingKnockout ? t('predict.saving') : t('predict.saveKnockout')}
                 </Button>
                 <Button
                   onClick={handleRandomizeKnockout}
                   disabled={!Object.values(knockoutBracket).some((round) => round.some((m) => m.home_team && m.away_team))}
                 >
-                  Randomize
+                  {t('predict.randomize')}
                 </Button>
                 {knockoutComplete && (
-                  <span className="muted">Knockout complete — champion crowned</span>
+                  <span className="muted">{t('predict.knockoutComplete')}</span>
                 )}
               </div>
               <KnockoutBracket
@@ -875,9 +875,12 @@ export default function PredictionApp({
         <aside className="inspector prediction-sidebar">
           <div className="sidebar-standings">
             <div className="sidebar-standings-header">
-              <strong>Live Standings</strong>
+              <strong>{t('predict.liveStandings')}</strong>
               <span className="muted">
-                {Object.values(validPredictions).filter(v => v.home_goals != null).length}/{matchups.length} played
+                {t('predict.playedCount', {
+                  n: Object.values(validPredictions).filter(v => v.home_goals != null).length,
+                  m: matchups.length,
+                })}
               </span>
             </div>
             <StandingsTable

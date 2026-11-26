@@ -63,9 +63,9 @@ function fixtureScore(fixture) {
   return [null, null];
 }
 
-function kickoffTime(value) {
-  if (!value) return 'TBD';
-  return new Intl.DateTimeFormat(undefined, {
+function kickoffTime(value, locale, t) {
+  if (!value) return t('picks.tbd');
+  return new Intl.DateTimeFormat(locale, {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
@@ -103,7 +103,7 @@ function drawBadge(ctx, team, x, y, isWinner, palette) {
 const KICKOFF_W = 56;
 const SCORE_W = 72;
 
-function drawFixtureRow(ctx, fixture, y, palette) {
+function drawFixtureRow(ctx, fixture, y, palette, locale, t) {
   const home = fixture.home_team;
   const away = fixture.away_team;
   const [hg, ag] = fixtureScore(fixture);
@@ -115,7 +115,7 @@ function drawFixtureRow(ctx, fixture, y, palette) {
   ctx.fillStyle = palette.muted;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(kickoffTime(fixture.kickoff), baseX, midY);
+  ctx.fillText(kickoffTime(fixture.kickoff, locale, t), baseX, midY);
 
   // Winner determination for this fixture.
   let winner = null; // null | 'home' | 'away'
@@ -143,7 +143,7 @@ function measureHeight(fixtures) {
   return h;
 }
 
-export async function buildPredictionsImage({ playerName, matchday = 1, fixtures = [], seasonName = '' }) {
+export async function buildPredictionsImage({ playerName, matchday = 1, fixtures = [], seasonName = '', t, locale }) {
   // Pre-load unique logo urls first; never call toBlob until these resolve.
   const urls = Array.from(new Set(
     fixtures.flatMap((f) => [f.home_team?.logo_url, f.away_team?.logo_url]).filter(Boolean),
@@ -171,17 +171,17 @@ export async function buildPredictionsImage({ playerName, matchday = 1, fixtures
   ctx.textBaseline = 'alphabetic';
   ctx.font = '800 22px Inter, ui-sans-serif, system-ui, sans-serif';
   ctx.fillStyle = palette.ink;
-  const title = seasonName ? `UCL League Phase ${seasonName}` : 'UCL League Phase';
+  const title = seasonName ? `${t('draw.shareTitle')} ${seasonName}` : t('draw.shareTitle');
   ctx.fillText(title, PAD, y);
 
   y += 8 + 19;
   ctx.font = '600 13px Inter, ui-sans-serif, system-ui, sans-serif';
   ctx.fillStyle = palette.muted;
-  ctx.fillText(`Matchday ${matchday} — Predictions · ${playerName || 'Guest'}`, PAD, y);
+  ctx.fillText(t('draw.shareMatchday', { matchday, player: playerName || t('realDraw.guest') }), PAD, y);
 
   y = PAD + 62 + 26;
   for (const fixture of fixtures) {
-    drawFixtureRow(ctx, fixture, y, palette);
+    drawFixtureRow(ctx, fixture, y, palette, locale, t);
     y += ROW_H;
   }
 
@@ -189,7 +189,7 @@ export async function buildPredictionsImage({ playerName, matchday = 1, fixtures
   ctx.textAlign = 'left';
   ctx.font = '600 11px Inter, ui-sans-serif, system-ui, sans-serif';
   ctx.fillStyle = palette.muted;
-  ctx.fillText('Made with the Champions Draw prediction game.', PAD, y);
+  ctx.fillText(t('draw.shareFooter'), PAD, y);
 
   return canvas;
 }

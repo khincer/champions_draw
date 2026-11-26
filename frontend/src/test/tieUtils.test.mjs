@@ -129,10 +129,3 @@ test('formatAggregate follows the locale instead of a hardcoded English label', 
   );
 });
 
-/* The transitional one-argument branch in lib/tieUtils.js keeps the caller that
-   D2 has not migrated yet (TeamsBrowser.jsx:59) working. Delete this test
-   together with that branch. */
-test('formatAggregate keeps the English label for a caller that passes no translator', () => {
-  assert.equal(formatAggregate({ home: 4, away: 3 }), 'agg 4–3');
-  assert.equal(formatAggregate(null), 'agg –');
-});

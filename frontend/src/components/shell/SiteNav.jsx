@@ -1,10 +1,10 @@
-import { ClipboardList, Home, LayoutGrid, Swords, Target, Trophy, UserRound } from 'lucide-preact';
+import { ClipboardList, Home, LayoutGrid, Swords, Target, Trophy } from 'lucide-preact';
 import championsLeagueLogoUrl from '../../assets/uefa-champions-league-logo.svg';
 import LanguageMenu from '../LanguageMenu';
 import { LOCALE_OPTIONS, useI18n } from '../../i18n';
 import ThemeToggle from './ThemeToggle';
 
-export default function SiteNav({ view, setView, setActiveTab }) {
+export default function SiteNav({ view, setView, setActiveTab, theme, onToggleTheme }) {
   const { t, locale, setLocale } = useI18n();
 
   return (
@@ -71,7 +71,7 @@ export default function SiteNav({ view, setView, setActiveTab }) {
           onChange={setLocale}
           label={t('settings.language')}
         />
-        <ThemeToggle />
+        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
       </div>
     </nav>
   );

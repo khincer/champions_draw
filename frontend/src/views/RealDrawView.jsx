@@ -13,13 +13,15 @@ import {
 } from '../lib/predictionStorage';
 import { computeStandings } from '../lib/standingsCalc';
 import { buildPredictionsImage } from '../lib/sharePredictionsImage';
+import errorText from '../lib/errorText';
+import { useI18n } from '../i18n';
 
 const SYNC_DELAY_MS = 1200;
 const LIVE_POLL_MS = 30000;
 
-function formatKickoff(value) {
-  if (!value) return 'TBD';
-  return new Intl.DateTimeFormat(undefined, {
+function formatKickoff(value, locale, t) {
+  if (!value) return t('picks.tbd');
+  return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: '2-digit',
     hour: '2-digit',
@@ -27,9 +29,9 @@ function formatKickoff(value) {
   }).format(new Date(value));
 }
 
-function formatMatchdayHeader(value) {
+function formatMatchdayHeader(value, locale) {
   if (!value) return '';
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
@@ -46,7 +48,7 @@ function verdictFor(pred, result) {
   return Math.sign(ph - pa) === Math.sign(rh - ra) ? 'outcome' : 'miss';
 }
 
-const VERDICT_LABEL = { exact: 'Exact', outcome: 'Outcome', miss: 'Miss' };
+const VERDICT_LABEL = { exact: 'picks.exact', outcome: 'picks.outcome', miss: 'picks.miss' };
 
 /* The competitions this page serves, in the order the cards render. Order is
    deliberate: the Champions League is the one with predictions and share. */
@@ -65,6 +67,7 @@ export default function RealDrawView({
   apiFetch,
   onOpenMatch,
 }) {
+  const { t, locale } = useI18n();
   const [data, setData] = useState(null);
   const [fixturesStatus, setFixturesStatus] = useState('idle');
   const [error, setError] = useState('');
@@ -96,7 +99,7 @@ export default function RealDrawView({
       setData(await apiFetch(`/ui/seasons/${seasonId}/real-fixtures/`));
       setFixturesStatus('success');
     } catch (err) {
-      setError(err.message);
+      setError(err.code || 'unknown');
       setFixturesStatus('error');
     }
   }, [seasonId]);
@@ -164,7 +167,7 @@ export default function RealDrawView({
         setSyncStatus('success'); 
         return;
       }
-      setSyncError(err.message);
+      setSyncError(err.code || 'unknown');
       setSyncStatus('error');
     }
   }
@@ -253,7 +256,7 @@ export default function RealDrawView({
     const name = (playerName || '').trim();
     if (!name) return;
     const fixtures = (matchdays[String(md)] || []).map((f) => ({ ...f, prediction: preds[f.id] }));
-    const canvas = await buildPredictionsImage({ playerName: name, matchday: md, fixtures, seasonName: data?.season?.name || '' });
+    const canvas = await buildPredictionsImage({ playerName: name, matchday: md, fixtures, seasonName: data?.season?.name || '', t, locale });
     canvas.toBlob((blob) => {
       if (!blob) return;
       const file = new File([blob], `ucl-md${md}-predictions.png`, { type: 'image/png' });
@@ -284,48 +287,50 @@ export default function RealDrawView({
             persistPlayerName(value);
           }}
         >
-          <h2 id="name-dialog-title">How do you want to be called?</h2>
+          <h2 id="name-dialog-title">{t('picks.namePrompt')}</h2>
           <p className="muted">
-            This labels your predictions. It is saved on this device, and only asked once.
+            {t('picks.namePromptText')}
           </p>
-          <input
-            className="name-dialog-input"
-            value={nameDraft}
-            maxLength={80}
-            placeholder="Your name"
-            aria-label="Your name"
-            autofocus
-            onInput={(event) => setNameDraft(event.currentTarget.value)}
-          />
+          <label className="name-dialog-label">
+            {t('picks.yourName')}
+            <input
+              className="name-dialog-input"
+              value={nameDraft}
+              maxLength={80}
+              autofocus
+              onInput={(event) => setNameDraft(event.currentTarget.value)}
+            />
+          </label>
           <div className="name-dialog-actions">
             <button type="submit" className="name-dialog-save" disabled={!nameDraft.trim()}>
-              Save
+              {t('picks.save')}
             </button>
           </div>
         </form>
       </dialog>
       <div className="command-band">
         <div>
-          <h1>{selectedCompetitionLabel || 'International'}</h1>
+          <h1>{selectedCompetitionLabel || t('realDraw.international')}</h1>
           <p>
-            Real league-phase fixtures. Predictions close 10 minutes before kickoff.
+            {t('realDraw.description')}
           </p>
         </div>
         <div className="draw-controls">
           <button
             type="button"
             className="playing-as"
+            aria-haspopup="dialog"
             onClick={() => {
               setNameDraft((playerName || readStoredPlayerName() || '').trim());
               const node = nameDialogRef.current;
               if (node && !node.open) node.showModal();
             }}
           >
-            Playing as <strong>{(playerName || '').trim() || 'Guest'}</strong>
+            {t('realDraw.playingAs')} <strong>{(playerName || '').trim() || t('realDraw.guest')}</strong>
           </button>
         </div>
       </div>
-      <div className="real-competition-cards" role="group" aria-label="Competition">
+      <div className="real-competition-cards" role="group" aria-label={t('realDraw.competition')}>
         {REAL_COMPETITIONS.map(({ code, label }) => {
           const season = seasonByCompetition.get(code);
           const active = selectedCompetition === code;
@@ -340,7 +345,7 @@ export default function RealDrawView({
             >
               <strong>{label}</strong>
               <span className="real-competition-season">
-                {season ? season.name : 'Not available'}
+                {season ? season.name : t('realDraw.notAvailable')}
               </span>
             </button>
           );
@@ -348,28 +353,28 @@ export default function RealDrawView({
       </div>
       {fixturesStatus === 'error' ? (
         <ErrorState
-          title="Real fixtures could not load"
-          detail={error}
+          title={t('realDraw.loadFailed')}
+          detail={errorText(t, error)}
           onRetry={loadFixtures}
-          retryLabel="Retry real fixtures"
+          retryLabel={t('realDraw.retryFixtures')}
         />
       ) : !data ? (
-        <Skeleton rows={6} variant="fixture" label="Loading real fixtures" />
+        <Skeleton rows={6} variant="fixture" label={t('realDraw.loadingFixtures')} />
       ) : (
         <>
           {syncError ? (
             <ErrorState
-              title="Your picks could not be saved"
-              detail={`${syncError}. Your picks are still on this device — retry to sync them.`}
+              title={t('picks.saveFailed')}
+              detail={t('picks.saveFailedText', { error: errorText(t, syncError) })}
               onRetry={() => syncNow(predsRef.current)}
-              retryLabel="Retry saving picks"
+              retryLabel={t('picks.retrySaving')}
             />
           ) : null}
         <div className="real-layout">
           <section className="matchday-card-wrap">
             {(() => {
               const fixtures = matchdays[String(currentMd)] || [];
-              const headerDate = formatMatchdayHeader(fixtures[0]?.kickoff);
+              const headerDate = formatMatchdayHeader(fixtures[0]?.kickoff, locale);
               const mdSummary = fixtures.reduce(
                 (acc, f) => {
                   const v = verdictFor(preds[f.id], f.result);
@@ -383,15 +388,19 @@ export default function RealDrawView({
                 <article className="matchday" key={currentMd}>
                   <div className="matchday-head">
                     <div>
-                      <strong>Matchday {currentMd}{headerDate ? `, ${headerDate}` : ''}</strong>
+                      <strong>
+                        {headerDate
+                          ? t('realDraw.matchdayWithDate', { md: currentMd, date: headerDate })
+                          : t('realDraw.matchday', { md: currentMd })}
+                      </strong>
                       {hasResults && (
                         <p className="md-results-summary">
-                          Your record this matchday:
-                          <b className="verdict-exact"> {mdSummary.exact} exact</b>
+                          {t('realDraw.recordThisMatchday')}
+                          <b className="verdict-exact"> {t('realDraw.exactCount', { n: mdSummary.exact })}</b>
                           <span> · </span>
-                          <b className="verdict-outcome">{mdSummary.outcome} right outcome</b>
+                          <b className="verdict-outcome">{t('realDraw.outcomeCount', { n: mdSummary.outcome })}</b>
                           <span> · </span>
-                          <b className="verdict-miss">{mdSummary.miss} wrong</b>
+                          <b className="verdict-miss">{t('realDraw.missCount', { n: mdSummary.miss })}</b>
                         </p>
                       )}
                     </div>
@@ -400,16 +409,16 @@ export default function RealDrawView({
                         className="md-nav-btn"
                         disabled={currentMd <= 1}
                         onClick={() => setCurrentMd((md) => md - 1)}
-                        aria-label={`Previous matchday`}
+                        aria-label={t('realDraw.previousMatchday')}
                       >
                         &lsaquo;
                       </Button>
-                      <span className="md-nav-label">MD {currentMd}/8</span>
+                      <span className="md-nav-label">{t('realDraw.matchdayLabel', { md: currentMd })}</span>
                       <Button
                         className="md-nav-btn"
                         disabled={currentMd >= 8}
                         onClick={() => setCurrentMd((md) => md + 1)}
-                        aria-label={`Next matchday`}
+                        aria-label={t('realDraw.nextMatchday')}
                       >
                         &rsaquo;
                       </Button>
@@ -418,7 +427,7 @@ export default function RealDrawView({
                         disabled={!(playerName || '').trim()}
                         onClick={() => { handleShareMatchday(currentMd); }}
                       >
-                        Share MD {currentMd}
+                        {t('realDraw.shareMatchday', { md: currentMd })}
                       </Button>
                     </div>
                   </div>
@@ -433,8 +442,8 @@ export default function RealDrawView({
                             <FixtureRow
                               key={fixture.id}
                               className="score-row"
-                              status="Final"
-                              statusTitle={formatKickoff(fixture.kickoff)}
+                              status={t('picks.final')}
+                              statusTitle={formatKickoff(fixture.kickoff, locale, t)}
                               home={fixture.home_team}
                               away={fixture.away_team}
                               nameMode="full"
@@ -444,13 +453,13 @@ export default function RealDrawView({
                                     <a
                                       className="real-row-link"
                                       href="#"
-                                      aria-label={`${fixture.home_team.name} vs ${fixture.away_team.name} — view match details`}
+                                      aria-label={t('realDraw.viewMatchDetails', { home: fixture.home_team.name, away: fixture.away_team.name })}
                                       onClick={(e) => { e.preventDefault(); onOpenMatch(fixture.id, seasonId); }}
                                     >
                                       <span className="real-score">{result.home_goals}&ndash;{result.away_goals}</span>
                                       {verdict && (
                                         <span className={`fx-verdict ${verdict}`}>
-                                          {VERDICT_LABEL[verdict]} &middot; your pick {pred.home_goals}&ndash;{pred.away_goals}
+                                          {t('realDraw.verdictPick', { verdict: t(VERDICT_LABEL[verdict]), pick: `${pred.home_goals}\u2013${pred.away_goals}` })}
                                         </span>
                                       )}
                                     </a>
@@ -459,7 +468,7 @@ export default function RealDrawView({
                                       <span className="real-score">{result.home_goals}&ndash;{result.away_goals}</span>
                                       {verdict && (
                                         <span className={`fx-verdict ${verdict}`}>
-                                          {VERDICT_LABEL[verdict]} &middot; your pick {pred.home_goals}&ndash;{pred.away_goals}
+                                          {t('realDraw.verdictPick', { verdict: t(VERDICT_LABEL[verdict]), pick: `${pred.home_goals}\u2013${pred.away_goals}` })}
                                         </span>
                                       )}
                                     </>
@@ -476,9 +485,9 @@ export default function RealDrawView({
                             <FixtureRow
                               key={fixture.id}
                               className="score-row"
-                              status={`LIVE ${liveScore.status}`}
+                              status={t('realDraw.liveStatus', { status: liveScore.status })}
                               statusTone="live"
-                              statusTitle={formatKickoff(fixture.kickoff)}
+                              statusTitle={formatKickoff(fixture.kickoff, locale, t)}
                               home={fixture.home_team}
                               away={fixture.away_team}
                               nameMode="full"
@@ -488,16 +497,16 @@ export default function RealDrawView({
                                     <a
                                       className="real-row-link"
                                       href="#"
-                                      aria-label={`${fixture.home_team.name} vs ${fixture.away_team.name} — view match details`}
+                                      aria-label={t('realDraw.viewMatchDetails', { home: fixture.home_team.name, away: fixture.away_team.name })}
                                       onClick={(e) => { e.preventDefault(); onOpenMatch(fixture.id, seasonId); }}
                                     >
                                       <span className="real-score">{liveScore.home_goals}&ndash;{liveScore.away_goals}</span>
-                                      <span className="fx-verdict live">Live</span>
+                                      <span className="fx-verdict live">{t('realDraw.live')}</span>
                                     </a>
                                   ) : (
                                     <>
                                       <span className="real-score">{liveScore.home_goals}&ndash;{liveScore.away_goals}</span>
-                                      <span className="fx-verdict live">Live</span>
+                                      <span className="fx-verdict live">{t('realDraw.live')}</span>
                                     </>
                                   )}
                                 </div>
@@ -509,9 +518,9 @@ export default function RealDrawView({
                           <FixtureRow
                             key={fixture.id}
                             className="score-row"
-                            status={disabled ? 'Awaiting result' : formatKickoff(fixture.kickoff)}
+                            status={disabled ? t('picks.awaitingResult') : formatKickoff(fixture.kickoff, locale, t)}
                             statusTone={disabled ? 'waiting' : undefined}
-                            statusTitle={formatKickoff(fixture.kickoff)}
+                            statusTitle={formatKickoff(fixture.kickoff, locale, t)}
                             home={fixture.home_team}
                             away={fixture.away_team}
                             nameMode="full"
@@ -537,8 +546,8 @@ export default function RealDrawView({
                       })
                     ) : (
                       <EmptyState
-                        title="No fixtures this matchday"
-                        text="Use the matchday arrows above to find a matchday with fixtures."
+                        title={t('realDraw.noFixtures')}
+                        text={t('realDraw.noFixturesText')}
                       />
                     )}
                   </div>
@@ -548,13 +557,13 @@ export default function RealDrawView({
           </section>
           <aside className="real-standings" aria-busy={syncStatus === 'saving'}>
             <div className="real-standings-head">
-              <strong>UCL standings</strong>
+              <strong>{t('realDraw.uclStandings')}</strong>
               <span role="status">
                 {syncStatus === 'saving'
-                  ? 'Saving your picks…'
+                  ? t('picks.saving')
                   : syncStatus === 'error'
-                    ? 'Your picks could not be saved'
-                    : 'Real results + your picks'}
+                    ? t('picks.saveFailed')
+                    : t('realDraw.resultsAndPicks')}
               </span>
             </div>
             <div className="real-standings-scroll">

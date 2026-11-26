@@ -55,6 +55,7 @@ export async function apiFetch(path, options = {}) {
       const failure = new Error(payload?.detail || `Request failed with ${response.status}`);
       failure.status = response.status;
       failure.code = payload?.code || codeForStatus(response.status);
+      failure.payload = payload;
       throw failure;
     }
     return payload;

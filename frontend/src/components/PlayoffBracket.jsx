@@ -3,6 +3,7 @@ import Crest from './Crest';
 import { StateMessage } from './States';
 import ScoreInput from './ScoreInput';
 import { computeAgg } from '../lib/tieUtils';
+import { useI18n } from '../i18n';
 
 function LegRow({ label, homeTeam, awayTeam, homeGoals, awayGoals, homeField, awayField, matchupIdx, onScoreChange }) {
   return (
@@ -61,6 +62,7 @@ function TiebreakerRow({ label, homeTeam, awayTeam, homeGoals, awayGoals, homeFi
 }
 
 function BracketMatch({ matchup, onScoreChange }) {
+  const { t } = useI18n();
   const {
     matchup_index, home_team, away_team,
     leg1_home_goals, leg1_away_goals,
@@ -88,9 +90,9 @@ function BracketMatch({ matchup, onScoreChange }) {
   let tieDesc = null;
   if (winner && aggTied) {
     if (penalties && pen_home_goals != null) {
-      tieDesc = `Pens ${pen_home_goals}–${pen_away_goals}`;
+      tieDesc = t('bracket.pens', { home: pen_home_goals, away: pen_away_goals });
     } else if (extra_time && et_home_goals != null) {
-      tieDesc = `ET agg ${etTotal.home}–${etTotal.away}`;
+      tieDesc = t('bracket.etAgg', { home: etTotal.home, away: etTotal.away });
     }
   }
 
@@ -102,17 +104,17 @@ function BracketMatch({ matchup, onScoreChange }) {
           <span className="playoff-winner">
             <Crest team={winner} size="sm" />
             <span>{winner.short_name}</span>
-            <span className="playoff-won-badge">W</span>
+            <span className="playoff-won-badge">{t('bracket.win')}</span>
           </span>
         ) : (
-          <span className="playoff-winner playoff-pending">Winner TBD</span>
+          <span className="playoff-winner playoff-pending">{t('bracket.winnerTbd')}</span>
         )}
-        {agg != null && <span className="playoff-agg">Agg {agg.home}–{agg.away}</span>}
+        {agg != null && <span className="playoff-agg">{t('bracket.agg', { home: agg.home, away: agg.away })}</span>}
         {tieDesc && <span className="playoff-tie-desc">{tieDesc}</span>}
       </div>
 
       <LegRow
-        label="Leg 1"
+        label={t('bracket.leg1')}
         homeTeam={away_team}
         awayTeam={home_team}
         homeGoals={leg1_away_goals}
@@ -123,7 +125,7 @@ function BracketMatch({ matchup, onScoreChange }) {
         onScoreChange={onScoreChange}
       />
       <LegRow
-        label="Leg 2"
+        label={t('bracket.leg2')}
         homeTeam={home_team}
         awayTeam={away_team}
         homeGoals={leg2_home_goals}
@@ -137,7 +139,7 @@ function BracketMatch({ matchup, onScoreChange }) {
       {/* Extra time row — shown when aggregate tied after both legs */}
       {aggTied && (
         <TiebreakerRow
-          label="ET"
+          label={t('bracket.et')}
           homeTeam={home_team}
           awayTeam={away_team}
           homeGoals={et_home_goals}
@@ -152,7 +154,7 @@ function BracketMatch({ matchup, onScoreChange }) {
       {/* Penalties row — shown when ET is played and still tied */}
       {etTied && (
         <TiebreakerRow
-          label="Pens"
+          label={t('bracket.pensLabel')}
           homeTeam={home_team}
           awayTeam={away_team}
           homeGoals={pen_home_goals}
@@ -168,21 +170,21 @@ function BracketMatch({ matchup, onScoreChange }) {
 }
 
 export default function PlayoffBracket({ matchups, onScoreChange }) {
+  const { t } = useI18n();
   if (!matchups || matchups.length === 0) {
     return (
       <StateMessage
-        title="Playoffs not yet available"
-        text="Complete your league phase predictions to unlock the playoff bracket."
+        title={t('bracket.playoffsUnavailable')}
+        text={t('bracket.playoffsUnavailableText')}
       />
     );
   }
 
   return (
     <div className="bracket-wrap">
-      <h3 className="section-title">Playoff Round</h3>
+      <h3 className="section-title">{t('bracket.playoffRound')}</h3>
       <p className="section-desc">
-        Positions 9–24 compete in two-legged ties. Higher seed plays leg 2 at home.
-        If the aggregate is tied, extra time is played in leg 2; if still tied, penalties.
+        {t('bracket.playoffRoundText')}
       </p>
       <div className="playoff-list">
         {matchups.map((m) => (

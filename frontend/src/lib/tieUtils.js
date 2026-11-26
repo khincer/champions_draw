@@ -50,10 +50,7 @@ function pairPlayoffTies(matchups) {
    locale; the caller owns `t` (useI18n() in the view). */
 function formatAggregate(agg, t) {
   const score = agg == null ? '–' : `${agg.home}–${agg.away}`;
-  /* ponytail: transitional — TeamsBrowser.jsx:59 (D2) is the only remaining
-     one-argument caller; D2 threads `t` from useI18n() and this branch goes
-     with it. Without it, D1 alone would throw in the standings tie card. */
-  return t == null ? `agg ${score}` : t('playoffs.aggregate', { score });
+  return t('playoffs.aggregate', { score });
 }
 
 export { computeAgg, pairPlayoffTies, formatAggregate };

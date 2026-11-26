@@ -58,3 +58,13 @@ test('a successful response still returns the parsed payload', async () => {
   globalThis.fetch = async () => jsonResponse(200, { teams: [] });
   assert.deepEqual(await apiFetch('/probe/'), { teams: [] });
 });
+
+test('league pick failures retain the structured rejected fixture ids', async () => {
+  const body = { detail: 'Prediction closed for some fixtures', closed: [41] };
+  globalThis.fetch = async () => jsonResponse(400, body);
+  await assert.rejects(apiFetch('/leagues/1/predictions/'), (err) => {
+    assert.equal(err.status, 400);
+    assert.deepEqual(err.payload, body);
+    return true;
+  });
+});
