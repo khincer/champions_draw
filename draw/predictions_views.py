@@ -16,6 +16,7 @@ from .models import (
 from .predictions_serializers import (
     KnockoutPredictionSerializer,
     MatchPredictionSerializer,
+    MatchPredictionSyncSerializer,
     MatchPredictionWriteSerializer,
     PlayoffPredictionSerializer,
     PredictionSerializer,
@@ -27,6 +28,7 @@ from .services.standings import compute_standings
 
 
 class PredictionCreateGetAPIView(APIView):
+    @transaction.atomic
     def post(self, request):
         season_id = request.data.get('season')
         player_name = request.data.get('player_name', '').strip()
@@ -35,7 +37,7 @@ class PredictionCreateGetAPIView(APIView):
         if not player_name:
             return Response({'detail': 'player_name is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        season = get_object_or_404(Season, pk=season_id)
+        season = get_object_or_404(Season.objects.select_for_update(), pk=season_id)
 
         prediction, created = Prediction.objects.get_or_create(
             season=season,
@@ -74,45 +76,50 @@ class PredictionDetailAPIView(APIView):
 
 
 class MatchPredictionUpdateAPIView(APIView):
+    @transaction.atomic
     def put(self, request, pk, matchup_pk):
         prediction = get_object_or_404(Prediction, pk=pk)
-        matchup = get_object_or_404(SeasonMatchup, pk=matchup_pk)
+        Season.objects.select_for_update().get(pk=prediction.season_id)
+        matchup = get_object_or_404(SeasonMatchup, pk=matchup_pk, season_id=prediction.season_id)
+
+        serializer = MatchPredictionWriteSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
 
         mp, _ = MatchPrediction.objects.get_or_create(
             prediction=prediction,
             matchup=matchup,
         )
 
-        serializer = MatchPredictionWriteSerializer(mp, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(MatchPredictionSerializer(mp).data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.update(mp, serializer.validated_data)
+        return Response(MatchPredictionSerializer(mp).data)
 
 
 class MatchPredictionBulkSyncAPIView(APIView):
+    @transaction.atomic
     def post(self, request, pk):
+        serializer = MatchPredictionSyncSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        rows = serializer.validated_data['predictions']
         prediction = get_object_or_404(Prediction, pk=pk)
-        predictions_data = request.data.get('predictions', [])
+        # Coordinate with draw replacement before resolving or writing fixtures.
+        Season.objects.select_for_update().get(pk=prediction.season_id)
 
-        updated = 0
-        for item in predictions_data:
-            matchup_id = item.get('matchup')
-            if not matchup_id:
-                continue
-            try:
-                mp = MatchPrediction.objects.get(
-                    prediction=prediction,
-                    matchup_id=matchup_id,
-                )
-            except MatchPrediction.DoesNotExist:
-                continue
-            mp.home_goals = item.get('home_goals', mp.home_goals)
-            mp.away_goals = item.get('away_goals', mp.away_goals)
-            mp.save()
-            updated += 1
+        matchup_ids = {row['matchup'] for row in rows}
+        current_ids = set(SeasonMatchup.objects.filter(
+            season_id=prediction.season_id, pk__in=matchup_ids,
+        ).values_list('pk', flat=True))
+        if current_ids != matchup_ids:
+            return Response(
+                {'detail': 'The fixture list has changed.'},
+                status=status.HTTP_409_CONFLICT,
+            )
 
-        return Response({'synced': updated})
+        for row in rows:
+            defaults = {field: row[field] for field in ('home_goals', 'away_goals') if field in row}
+            MatchPrediction.objects.update_or_create(
+                prediction=prediction, matchup_id=row['matchup'], defaults=defaults,
+            )
+        return Response({'synced': len(rows)})
 
 
 class StandingsAPIView(APIView):
