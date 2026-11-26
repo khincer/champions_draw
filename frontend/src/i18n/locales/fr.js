@@ -75,6 +75,8 @@ export default {
   'leagueManager.loginFailed': 'Connexion impossible. Vérifiez votre nom d’utilisateur et votre mot de passe.',
   'leagueManager.logoutFailed': 'Impossible de se déconnecter. Réessayez.',
   'leagueManager.matchday': 'Journée',
+  'leagueManager.nextMatchday': 'Suivante',
+  'leagueManager.previousMatchday': 'Précédente',
   'leagueManager.myLeagues': 'Mes ligues',
   'leagueManager.noFixtures': 'Aucun match disponible.',
   'leagueManager.noLeagues': 'Vous n’avez pas encore de ligue.',

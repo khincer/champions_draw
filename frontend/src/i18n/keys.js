@@ -87,6 +87,8 @@ export const KEYS = [
   'leagueManager.loginFailed',
   'leagueManager.logoutFailed',
   'leagueManager.matchday',
+  'leagueManager.nextMatchday',
+  'leagueManager.previousMatchday',
   'leagueManager.myLeagues',
   'leagueManager.noFixtures',
   'leagueManager.noLeagues',

@@ -45,6 +45,18 @@ test('an empty schedule has no initial matchday', () => {
   assert.equal(leagueManager.initialMatchday([]), null);
 });
 
+test('matchday navigation follows the schedule instead of assuming consecutive numbers', () => {
+  const schedule = [{ number: 1 }, { number: 3 }, { number: 5 }];
+  assert.deepEqual(leagueManager.adjacentMatchdays(schedule, 3), { previous: 1, next: 5 });
+});
+
+test('matchday navigation stops at either end of the schedule', () => {
+  const schedule = [{ number: 1 }, { number: 3 }];
+  assert.deepEqual(leagueManager.adjacentMatchdays(schedule, 1), { previous: null, next: 3 });
+  assert.deepEqual(leagueManager.adjacentMatchdays(schedule, 3), { previous: 1, next: null });
+  assert.deepEqual(leagueManager.adjacentMatchdays(schedule.slice(0, 1), 1), { previous: null, next: null });
+});
+
 test('recorded results include scoreless draws but exclude cleared and partial scores', () => {
   const fixtures = [
     { home_goals: 0, away_goals: 0 },

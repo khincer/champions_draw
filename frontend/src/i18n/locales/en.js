@@ -75,6 +75,8 @@ export default {
   'leagueManager.loginFailed': 'Could not sign in. Check your username and password.',
   'leagueManager.logoutFailed': 'Could not sign out. Try again.',
   'leagueManager.matchday': 'Matchday',
+  'leagueManager.nextMatchday': 'Next',
+  'leagueManager.previousMatchday': 'Previous',
   'leagueManager.myLeagues': 'My leagues',
   'leagueManager.noFixtures': 'No fixtures available.',
   'leagueManager.noLeagues': 'You have no leagues yet.',

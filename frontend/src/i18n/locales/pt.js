@@ -74,6 +74,8 @@ export default {
   'leagueManager.loginFailed': 'Não foi possível iniciar sessão. Verifique o nome de utilizador e a palavra-passe.',
   'leagueManager.logoutFailed': 'Não foi possível terminar a sessão. Tente novamente.',
   'leagueManager.matchday': 'Jornada',
+  'leagueManager.nextMatchday': 'Próxima',
+  'leagueManager.previousMatchday': 'Anterior',
   'leagueManager.myLeagues': 'As minhas ligas',
   'leagueManager.noFixtures': 'Não há jogos disponíveis.',
   'leagueManager.noLeagues': 'Ainda não tem ligas.',
