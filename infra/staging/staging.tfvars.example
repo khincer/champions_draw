@@ -1,0 +1,11 @@
+appwrite_project_id = "your-staging-project-id"
+vercel_project_name = "champions-draw-staging"
+
+# For a Vercel team, set its ID or slug.
+# vercel_team = "your-team"
+
+# Uncomment after Appwrite shows the deployed API function domain.
+# appwrite_api_origin = "https://your-function.appwrite.run"
+
+# Uncomment after you know the exact Vercel Preview origin.
+# vercel_staging_origin = "https://staging.example.com"
